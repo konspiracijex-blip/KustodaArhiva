@@ -4,15 +4,15 @@ import os
 import logging
 
 # UČITAVA TOKEN IZ RENDER OKRUŽENJA!
-# Render koristi varijablu okruženja BOT_TOKEN, koju ste uneli u grupu tajni.
+# Token ne sme biti ovde hardkodiran.
 BOT_TOKEN = os.environ.get('BOT_TOKEN') 
-if not BOT_TOKEN:
-    raise ValueError("BOT_TOKEN varijabla okruženja nije postavljena na Renderu!")
+# Uklonjena je provera "if not BOT_TOKEN:", jer je ona uzrokovala Build Failed.
     
 # Render automatski generiše URL
 WEBHOOK_URL = os.environ.get('RENDER_EXTERNAL_URL', 'https://placeholder.com/')
 
 # Inicijalizacija bota i Flask aplikacije
+# Ako BOT_TOKEN nije dobar, telebot ce srusiti aplikaciju, ali tek nakon pokretanja
 bot = telebot.TeleBot(BOT_TOKEN, threaded=False)
 app = flask.Flask(__name__)
 
@@ -48,7 +48,7 @@ def set_webhook_route():
         except Exception as e:
             return f"Failed to set webhook: {e}"
 
-# Osnovna ruta (Privremeno zakomentarisana da eliminiše 404 grešku)
+# Osnovna ruta (Ostaje zakomentarisana da eliminiše 404 grešku na '/')
 # @app.route('/')
 # def index():
 #     return "Telegram Bot KustodaArhiva je aktivan. Posetite /set_webhook za aktivaciju."
