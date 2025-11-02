@@ -2,6 +2,7 @@ import flask
 import telebot
 import os
 import logging
+import random # Dodajemo random modul za nasumičan izbor zagonetki
 
 # ----------------------------------------------------
 # 1. GLOBALNE VARIJABLE (STANJE IGRE I ZAGONETKE)
@@ -89,8 +90,8 @@ def handle_zagonetka(message):
         bot.reply_to(message, "Tvoj um je već zauzet. Predaj mi ključ pre nego što kreneš dalje. Odgovori na prethodni upit.")
         return
 
-    # 2. Bira prvu (ili nasumičnu) zagonetku
-    prva_zagonetka = list(ZAGONETKE.keys())[0]
+    # 2. Bira nasumičnu zagonetku
+    prva_zagonetka = random.choice(list(ZAGONETKE.keys()))
     
     # 3. Pamti stanje
     user_state[user_id] = prva_zagonetka
@@ -102,11 +103,11 @@ def handle_zagonetka(message):
 
 @bot.message_handler(func=lambda message: True)
 def handle_game_answer(message):
-    user_id = message.chat.id
+    user_id = message.chat.id # Koristimo ispravan user_id
     
     # Proverava da li je korisnik u igri
     if user_id in user_state:
-        trenutna_zagonetka = user_state[user_id]
+        trenutna_zagonetka = user_state[user_id] # ISPRAVLJEN RED: koristi user_id
         ispravan_odgovor = ZAGONETKE[trenutna_zagonetka]
         
         # Formatiranje odgovora: uklanjanje razmaka i prebacivanje u mala slova
