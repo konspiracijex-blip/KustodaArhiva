@@ -2,7 +2,7 @@ import flask
 import telebot
 import os
 import logging
-import random # Dodajemo random modul za nasumičan izbor zagonetki
+import random # Dodato za nasumičan izbor zagonetki
 
 # ----------------------------------------------------
 # 1. GLOBALNE VARIJABLE (STANJE IGRE I ZAGONETKE)
@@ -103,11 +103,11 @@ def handle_zagonetka(message):
 
 @bot.message_handler(func=lambda message: True)
 def handle_game_answer(message):
-    user_id = message.chat.id # Koristimo ispravan user_id
+    user_id = message.chat.id # KORIŠĆENJE CHAT ID-a UMESTO USER ID-a (SIGURNIJE)
     
     # Proverava da li je korisnik u igri
     if user_id in user_state:
-        trenutna_zagonetka = user_state[user_id] # ISPRAVLJEN RED: koristi user_id
+        trenutna_zagonetka = user_state[user_id]
         ispravan_odgovor = ZAGONETKE[trenutna_zagonetka]
         
         # Formatiranje odgovora: uklanjanje razmaka i prebacivanje u mala slova
