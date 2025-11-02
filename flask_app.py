@@ -4,7 +4,7 @@ import os
 import logging
 
 # UČITAVA TOKEN IZ RENDER OKRUŽENJA!
-# Token ne sme biti ovde hardkodiran radi sigurnosti.
+# Render koristi varijablu okruženja BOT_TOKEN, koju ste uneli u grupu tajni.
 BOT_TOKEN = os.environ.get('BOT_TOKEN') 
 if not BOT_TOKEN:
     raise ValueError("BOT_TOKEN varijabla okruženja nije postavljena na Renderu!")
@@ -48,10 +48,10 @@ def set_webhook_route():
         except Exception as e:
             return f"Failed to set webhook: {e}"
 
-# Osnovna ruta
-@app.route('/')
-def index():
-    return "Telegram Bot KustodaArhiva je aktivan. Posetite /set_webhook za aktivaciju."
+# Osnovna ruta (Privremeno zakomentarisana da eliminiše 404 grešku)
+# @app.route('/')
+# def index():
+#     return "Telegram Bot KustodaArhiva je aktivan. Posetite /set_webhook za aktivaciju."
 
 # --- BOT HANDLERI ---
 
