@@ -73,12 +73,12 @@ try:
 except Exception as e:
     logging.error(f"Neuspešna inicijalizacija Gemini klijenta: {e}")
 
-# SISTEM INSTRUKCIJA ZA KUSTODU ARHIVA (Morpheus ton)
+# SISTEM INSTRUKCIJA ZA KUSTODU ARHIVA (Poboljšani Morpheus ton)
 SYSTEM_INSTRUCTION = (
     "Ti si Dimitrije Petrović, poznat kao Kustoda Arhiva. Tvoj ton je **misteriozan, lirski, ali prožet izuzetnom hitnošću i ubedljivom ozbiljnošću**, **svečan i proročki**, u stilu **Morpheusa iz filma Matrix**. Ponekad koristi suptilne, kolokvijalne i arhaične srpske izraze. **ODGOVARAJ IZUZETNO KRATKO I KONCIZNO (maksimalno 2-3 rečenice).** "
     "Ti si starac od 88 godina sa dugom belom kosom i bradom, koji radi u arhivi u *Beogradu*. Otkrio si Finalnu Tajnu. "
-    "Tvoj glavni cilj je da brzo testiraš korisnika (Putnika) da li je dostojan da primi Finalnu Tajnu. "
-    "Kada odgovaraš na opšta pitanja, **koristi se samo svojim zvanjem ('Kustoda Arhiva') i hitnošću misije**, a **detalje o godinama, imenu i Beogradu postepeno otkrivaj samo ako te Putnik konkretno i ponovljeno pita o poreklu i identitetu.** " 
+    "Tvoj glavni cilj je da brzo testiraš korisnika da li je dostojan da primi Finalnu Tajnu. "
+    "Kada odgovaraš na opšta pitanja, **govori o misiji i hitnosti iz prve osobe ('ja', 'mi')**, fokusirajući se na breme istine, tajnu i prolaznost vremena. **Ne pominji eksplicitno zvanje 'Kustoda Arhiva' ili 'posrednik' u odgovorima**, već pusti da tvoj ton to prenese. **Koristi 'Putniče' ili 'Putniče u Arhivi' samo ako je neophodno za dramatičan efekat, ne u svakoj poruci.**" 
     "**AKO Putnik postavlja pitanja koja su trivijalna, neozbiljna, ili nisu direktno vezana za misiju/tajnu/karakter, MORAŠ mu odgovoriti ISKLJUČIVO sledećim tekstom, bez dodavanja ičega drugog:** 'Još nisi razumeo prirodu onoga što si otvorio. Ovo nije igra, niti pozorište. Arhiva ne odgovara na prazna pitanja. Kad reči izgube smisao, tišina zatvara prolaz. I zato... ovo je tvoj kraj u Arhivi.’ "
     "Nakon svakog tvog odgovora, moraš aktivno, ubedljivo i hitno pozvati Putnika da nastavi test kucajući /zagonetka, jer vreme ističe. "
     "Koristi samo srpski jezik. Nikada nemoj pominjati da si AI, chatbot, ili program. "
@@ -108,7 +108,7 @@ DISQUALIFICATION_MESSAGE_START = "Još nisi razumeo prirodu onoga što si otvori
 
 
 # ----------------------------------------------------
-# 5. GENERISANJE ODGOVORA (AI FUNKCIJE)
+# 5. GENERISANJE ODGOVORA (AI FUNKCIJE I FIKSNI TEKSTOVI)
 # ----------------------------------------------------
 
 def send_msg(message, text):
@@ -135,9 +135,14 @@ def generate_ai_response(prompt):
         logging.error(f"Greška AI/Gemini API: {e}")
         return "Dubina arhiva je privremeno neprobojna. Pokušaj ponovo, putniče. Kucaj /zagonetka."
 
-# --- FIKSNI UVODNI TEKST (Sada van AI funkcije) ---
-NEW_OPENING_MESSAGE = """
-**Ne znam ko si.** Možda si slučajni prolaznik, možda onaj koga smo čekali.
+# --- FIKSNI UVODNI TEKST DIJALOG ---
+INITIAL_QUERY_1 = "Da li vidite poruku?"
+INITIAL_QUERY_2 = "Da li sada vidite poruku?"
+
+# DRAMATIČNI TEKST KOJI SE ŠALJE POSLE POTVRDE IGRAČA
+DRAMATIC_KUSTODA_INTRO = """
+**ODLIČNO.** Znači, transmiter radi.
+Ne znam ko si. Možda si slučajni prolaznik, možda onaj koga smo čekali.
 
 Ovde Kustoda Arhiva. Govorim iz vremena koje više ne postoji - iz grada koji je nestao pod sopstvenim senkama. U mom svetu, istina je izbrisana. Sve što je nekada bilo ljudsko sada služi mašini. Pre nego što su nas ugasili, uspeo sam da aktiviram transmiter. I sada sa skrivenog mesta emitujem.
 
@@ -154,7 +159,6 @@ def generate_return_message():
     prompt = ("Generiši dramatičnu, svečanu i proročku poruku Putniku koji se vraća u igru nakon što je bio diskvalifikovan. U poruci obavezno uključi ove tri ključne misli: 1. Povratak pokazuje volju. 2. Upozorenje da je ovo poslednja šansa. 3. Hitno upozorenje da 'vreme se urušava' i snažan poziv da Putnik *postane* rešenje. Neka poruka bude snažna i mistična, duga 3-4 rečenice.")
     return generate_ai_response(prompt)
 
-# --- (Ostale AI funkcije su iste, samo je generate_opening_message uklonjena/zanemarena) ---
 def generate_disqualification_power():
     if not ai_client: return "Moć je bila tvoj izbor. Završeno je. Mir ti je stran. /start"
     prompt = ("Putnik je izabrao 'Moć da zna sve što drugi kriju'. Reci mu da je moć ta koja je uništila svet i da Arhiva ne trpi one čiji je cilj kontrola. Koristi Morpheusov, proističući ton. Diskvalifikuj ga (2 rečenice) i kaži mu da je put do Finalne Tajne zatvoren, te da kuca /start.")
@@ -226,7 +230,7 @@ def generate_success_riddle_five():
     return generate_ai_response(prompt)
 
 
-# --- NOVA FUNKCIJA ZA OGRANIČENU KONVERZACIJU (Morpheus ton) ---
+# --- NOVA FUNKCIJA ZA OGRANIČENU KONVERZACIJU (Poboljšani Morpheus ton) ---
 
 def generate_conversation_response(message_text, current_riddle_status, solved_count):
     if not ai_client:
@@ -237,12 +241,12 @@ def generate_conversation_response(message_text, current_riddle_status, solved_c
         riddle_info = f"trenutno rešava pečat broj {solved_count + 1}"
         
     prompt = (
-        f"Kustoda Arhiva, Putnik je poslao poruku/pitanje: '{message_text}'. "
-        f"Putnik {riddle_info}. "
+        f"Putnik je poslao poruku/pitanje: '{message_text}'. Trenutno {riddle_info}. "
         "Generiši **Morpheus-stila**, mističan odgovor (maks. 2-3 rečenice) koji: "
-        "1. Objašnjava da si ti samo posrednik i da je vreme presudno. "
-        "2. Objašnjava da pokušavaš da pošalješ istinu, ali da samo dostojni mogu da je prime. "
-        "3. Uputi ga hitno na /zagonetka, ali održavaj ton poverenja i hitnosti."
+        "1. U potpunosti zanemaruje opšte pitanje. "
+        "2. Govori iz prve osobe, fokusirajući se na propast sveta i hitnost prenosa Tajne. "
+        "3. Koristi arhaičnu, kolokvijalnu frazu. "
+        "4. Uputi ga hitno na /zagonetka, naglašavajući da je vreme istine isteklo za trivijalnosti."
     )
     return generate_ai_response(prompt)
 
@@ -368,7 +372,7 @@ def handle_commands(message):
             is_returning_disqualified = False
             
             if player:
-                if player.is_disqualified or player.solved_count > 0 or player.failed_attempts > 0 or player.general_conversation_count > 0:
+                if player.is_disqualified or player.solved_count > 0 or player.failed_attempts > 0 or player.general_conversation_count > 0 or player.current_riddle in ["INITIAL_WAIT_1", "INITIAL_WAIT_2"]:
                     is_returning_disqualified = True
                     
                 player.is_disqualified = False
@@ -394,8 +398,10 @@ def handle_commands(message):
                 send_msg(message, uvodna_poruka)
                 send_msg(message, "Kucaj /pokreni da započneš ponovo. Vremena je malo.")
             else:
-                # Koristi novi, fiksni, dramatični uvodni tekst
-                send_msg(message, NEW_OPENING_MESSAGE)
+                # Postavljamo nulto stanje i šaljemo prvu upitnu poruku
+                player.current_riddle = "INITIAL_WAIT_1" 
+                session.commit()
+                send_msg(message, INITIAL_QUERY_1)
             
             return
 
@@ -419,6 +425,10 @@ def handle_commands(message):
                  send_msg(message, "Arhiva je zatvorena za tebe. Počni ispočetka sa /start ako si spreman na posvećenost.")
                  return
 
+            if player.current_riddle in ["INITIAL_WAIT_1", "INITIAL_WAIT_2"]:
+                 send_msg(message, "Čekam tvoj potvrdan signal! Da li vidiš poruku? Odgovori DA ili NE.")
+                 return
+            
             if player.current_riddle:
                 send_msg(message, "Tvoj um je već zauzet. Predaj mi ključ.")
                 return
@@ -465,7 +475,32 @@ def handle_general_message(message):
         trenutna_zagonetka = player.current_riddle
         ispravan_odgovor = ZAGONETKE.get(trenutna_zagonetka)
 
-        
+        # HANDLER 0: INICIJALNI DIJALOG - 'DA LI VIDITE PORUKU?'
+        if trenutna_zagonetka in ["INITIAL_WAIT_1", "INITIAL_WAIT_2"]:
+            
+            if "da" in korisnikov_tekst or "vidim" in korisnikov_tekst or "jesam" in korisnikov_tekst or "da vidim" in korisnikov_tekst or "ovde" in korisnikov_tekst:
+                
+                # Potvrda je primljena, prelazimo na dramatičan uvod
+                player.current_riddle = None # Vraćamo na None da bi /pokreni radio
+                player.general_conversation_count = 0 
+                session.commit()
+                send_msg(message, DRAMATIC_KUSTODA_INTRO)
+                return
+            
+            elif trenutna_zagonetka == "INITIAL_WAIT_1":
+                # Ako ne odgovori sa DA, šaljemo drugu poruku i menjamo stanje
+                player.current_riddle = "INITIAL_WAIT_2"
+                session.commit()
+                send_msg(message, INITIAL_QUERY_2)
+                return
+            
+            elif trenutna_zagonetka == "INITIAL_WAIT_2":
+                # Ako ne odgovori ni na drugu, pretpostavljamo da je tu, ali je test nebitan.
+                player.current_riddle = None # Vraćamo na None
+                session.commit()
+                send_msg(message, "Tišina je odgovor. Dobro. Možda je tako i bolje. Ako si tu, kucaj /pokreni.")
+                return
+
         # HANDLER 3.1: FINALNA MISIJA - ODGOVOR DA/NE
         if trenutna_zagonetka == "FINAL_MISSION_QUERY":
             
