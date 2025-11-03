@@ -8,8 +8,15 @@ import random # Potrebno za biranje zagonetke
 # 2. RENDER KONFIGURACIJA
 # ----------------------------------------------------
 
-# HARDKODIRANI TOKEN ZA TESTIRANJE (OVAJ RED REŠAVA PROBLEM 500)
-BOT_TOKEN = '8294047796:AAF_L3rn1iz-kejebf2GFb8E--2ASS6LWSY' 
+# UČITAVA TOKEN IZ RENDER OKRUŽENJA (Environment Group)
+# TOKEN VIŠE NIJE HARDKODIRAN!
+BOT_TOKEN = os.environ.get('BOT_TOKEN') 
+if not BOT_TOKEN:
+    # Ako se Render sruši, bar nećemo objaviti tajnu!
+    logging.error("BOT_TOKEN varijabla okruženja nije postavljena na Renderu!")
+    # Koristimo dummy token za inicijalizaciju ako pravi nije tu
+    BOT_TOKEN = "DUMMY:TOKEN_FAIL" 
+
 # Render automatski generiše URL
 WEBHOOK_URL = os.environ.get('RENDER_EXTERNAL_URL', 'https://placeholder.com/')
 
@@ -27,6 +34,11 @@ def webhook():
     if flask.request.headers.get('content-type') == 'application/json':
         json_string = flask.request.get_data().decode('utf-8')
         update = telebot.types.Update.de_json(json_string)
+        
+        # PROVERA DA LI KORISTIMO DUMMY TOKEN (i ne obrađujemo poruke)
+        if BOT_TOKEN == "DUMMY:TOKEN_FAIL":
+            return "Bot nije konfigurisan. Token nedostaje."
+            
         bot.process_new_updates([update])
         return ''
     else:
@@ -41,28 +53,20 @@ def set_webhook_route():
     if s:
         return "Webhook successfully set! Bot je spreman za rad. Pošaljite /start!"
     else:
-        try:
-            bot.remove_webhook()
-            s = bot.set_webhook(url=webhook_url_with_token)
-            if s:
-                return "Webhook successfully RESET! Bot je spreman!"
-            else:
-                return "Failed to set webhook. Proverite Render logove."
-        except Exception as e:
-            return f"Failed to set webhook: {e}"
+        return f"Failed to set webhook. Proverite Render logove. (URL: {webhook_url_with_token})"
 
 # ----------------------------------------------------
 # 1. GLOBALNE VARIJABLE (STANJE IGRE I ZAGONETKE)
 # ----------------------------------------------------
 
-# BAZA ZAGONETKI (Ključ: Pitanje, Vrednost: Tačan odgovor, sve malim slovima)
+# BAZA ZAGONETKI 
 ZAGONETKE = {
     "Koja je jedina reč u srpskom jeziku koja se završava sa T?": "svet",
     "Šta se nalazi u sredini Pariza?": "r",
     "Što više uzmeš, to više ostaje. Šta je to?": "rupe",
 }
 
-# STANJE IGRE KORISNIKA (Ključ: ID korisnika, Vrednost: Ključ trenutne zagonetke)
+# STANJE IGRE KORISNIKA
 user_state = {} 
 
 # ----------------------------------------------------
@@ -82,18 +86,13 @@ def handle_zagonetka(message):
 
     user_id = message.chat.id
     
-    # 1. Proverava da li je korisnik već u igri
     if user_id in user_state:
         bot.reply_to(message, "Tvoj um je već zauzet. Predaj mi ključ pre nego što kreneš dalje. Odgovori na prethodni upit.")
         return
 
-    # 2. Bira nasumičnu zagonetku
     prva_zagonetka = random.choice(list(ZAGONETKE.keys()))
-    
-    # 3. Pamti stanje
     user_state[user_id] = prva_zagonetka
     
-    # 4. Šalje pitanje (Misteriozni ton)
     bot.reply_to(message, 
         f"Primi ovo, putniče. To je prvi pečat koji moraš slomiti:\n\n**{prva_zagonetka}**"
     )
@@ -104,12 +103,10 @@ def handle_game_answer(message):
 
     user_id = message.chat.id 
     
-    # Proverava da li je korisnik u igri
     if user_id in user_state:
         trenutna_zagonetka = user_state[user_id]
         ispravan_odgovor = ZAGONETKE[trenutna_zagonetka]
         
-        # Formatiranje odgovora
         korisnikov_odgovor = message.text.strip().lower()
 
         if korisnikov_odgovor == ispravan_odgovor:
@@ -124,7 +121,6 @@ def handle_game_answer(message):
                 "Kucaj /stop da se vratiš u tišinu."
             )
     else:
-        # Ponavlja poruku ako korisnik nije u igri
         bot.reply_to(message, 
             "Govoriš u prazno. Kucaj /zagonetka ako želiš da budeš testiran."
         )
