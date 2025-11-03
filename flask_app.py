@@ -687,7 +687,7 @@ def handle_general_message(message):
             session.commit()
             
             if player.failed_attempts >= 3:
-                # KORIGOVANA PORUKA ZA TREĆI POGREŠAN ODGOVOR
+                # KORIGOVANA PORUKA ZA TREĆI POGREŠAN ODGOVOR (Nije previše blag, ali je finalan)
                 kraj_poruka = "Tri puta si odbio da vidiš. **Moja ruka je sada spuštena.** Put je zatvoren, jer ne možeš da poneseš teret istine. Idi u tišinu."
                 send_msg(message, kraj_poruka)
                 
@@ -698,8 +698,8 @@ def handle_general_message(message):
                 session.commit()
                 
             else:
-                # KORIGOVANA PORUKA ZA POGREŠAN ODGOVOR
-                send_msg(message, "Tvoj izbor je prazan. Vidiš svetlost, ali si izabrao senku. Ponovo pronađi put, Putniče, ili kucaj /stop da priznaš da te tama savladala.")
+                # FINALNO KORIGOVANA PORUKA ZA POGREŠAN ODGOVOR (Očinski i usmeravajući)
+                send_msg(message, "Gledaš, ali ne vidiš, Putniče. Ne tražim tvoje znanje, već tvoju suštinu. Vrati se rečima. Pokušaj ponovo, ili kucaj /stop da odustaneš od Tajne.")
 
     finally:
         session.close()
