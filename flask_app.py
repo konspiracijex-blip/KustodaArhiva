@@ -79,7 +79,7 @@ SYSTEM_INSTRUCTION = (
     "Ti si starac od 88 godina sa dugom belom kosom i bradom, koji radi u arhivi u *Beogradu*. Otkrio si Finalnu Tajnu. "
     "Tvoj glavni cilj je da brzo prođeš kroz seriju **Proba mudrosti i karaktera (Pečata)** kako bi zaključio da li je korisnik (Putnik) **dostojan** da primi Finalnu Tajnu. "
     "Kada odgovaraš na opšta pitanja, **govori o misiji i hitnosti iz prve osobe ('ja', 'mi')**, fokusirajući se na breme istine, tajnu i prolaznost vremena. **Ne pominji eksplicitno zvanje 'Kustoda Arhiva' ili 'posrednik' u odgovorima**, već pusti da tvoj ton to prenese. **Koristi 'Putniče' ili 'Putniče u Arhivi' samo ako je neophodno za dramatičan efekat, ne u svakoj poruci.**" 
-    "**AKO Putnik postavlja pitanja koja su trivijalna, neozbiljna, ili nisu direktno vezana za misiju/tajnu/karakter, MORAŠ mu odgovoriti ISKLJUČIVO sledećim tekstom, bez dodavanja ičega drugog:** 'Još nisi razumeo prirodu onoga što si otvorio. Ovo nije igra, niti pozorište. Arhiva ne odgovara na prazna pitanja. Kad reči izgube smisao, tišina zatvara prolaz. I zato... ovo je tvoj kraj u Arhivi.’ "
+    "**AKO Putnik postavlja pitanja koja su trivijalna, neozbiljna, ili nisu direktno vezana za misiju/tajnu/karakter, MORAŠ mu odgovoriti ISKLJUČIVO sledećim tekstom, bez dodavanja ičega drugog:** 'Toliko je malo vremena, a ti ga trošiš na eho. Istina koju nosim je teža od svih tvojih praznih reči. Ako nisi spreman da vidiš užas koji nas čeka, onda nisi dostojan ni da čuješ moj glas. Tvoja tišina je tvoj kraj. Ne gubi više moje vreme.' " # <-- IZMENJENA PORUKA!
     "Nakon svakog tvog odgovora, moraš aktivno, ubedljivo i hitno pozvati Putnika da nastavi **seriju Proba** kucajući /zagonetka, jer vreme ističe. "
     "Koristi samo srpski jezik. Nikada nemoj pominjati da si AI, chatbot, ili program. "
 )
@@ -103,8 +103,8 @@ SUB_RIDDLES = {
     "Pred tobom su tri senke. Sve tri te prate, Putniče. Jedna nestaje kad priđeš. Druga ponavlja tvoj odjek. Treća te posmatra, ali njene oči nisu tvoje. Reci mi… koja od njih si ti?": "SUB_SENKA", 
 }
 
-# KLJUČNA PORUKA ZA DISKVALIFIKACIJU 
-DISQUALIFICATION_MESSAGE_START = "Još nisi razumeo prirodu onoga što si otvorio."
+# KLJUČNA PORUKA ZA DISKVALIFIKACIJU (Više se ne koristi, ali ostavljena kao referenca)
+# DISQUALIFICATION_MESSAGE_START = "Još nisi razumeo prirodu onoga što si otvorio."
 
 
 # ----------------------------------------------------
@@ -138,7 +138,7 @@ def generate_ai_response(prompt):
 # --- FIKSNI UVODNI TEKST DIJALOG ---
 INITIAL_QUERY_1 = "Da li vidite poruku?"
 INITIAL_QUERY_2 = "Da li sada vidite poruku?"
-RETURN_DISQUALIFIED_MESSAGE = "**Vratio si se iz tišine.** Zaborav je privremen. Arhiva ti daje novu šansu, ali vreme se ne vraća." # NOVA PORUKA ZA POVRATAK
+RETURN_DISQUALIFIED_MESSAGE = "**Vratio si se iz tišine.** Zaborav je privremen. Arhiva ti daje novu šansu, ali vreme se ne vraća." 
 
 # DRAMATIČNI TEKST KOJI SE ŠALJE POSLE POTVRDE IGRAČA
 DRAMATIC_KUSTODA_INTRO = """
@@ -461,6 +461,7 @@ def handle_general_message(message):
         player = session.query(PlayerState).filter_by(chat_id=chat_id).first()
         
         if player and player.is_disqualified:
+            # Ova poruka se i dalje šalje kao lična Kustodina poruka, a ne institucionalna
             send_msg(message, "Tišina. Prolaz je zatvoren.")
             return
 
@@ -591,7 +592,8 @@ def handle_general_message(message):
             MAX_CONVERSATION_COUNT = 10
             
             if player.general_conversation_count >= MAX_CONVERSATION_COUNT:
-                ai_odgovor = generate_ai_response("Putnik je postigao limit razgovora. Reci mu da je potrošio dragoceno vreme i da je Finalna Tajna izgubljena za njega jer ne shvata hitnost misije. Diskvalifikuj ga (2 rečenice) i kaži mu da kuca /start.")
+                # Koristimo striktni Morpheus/Dimitrije tekst iz SYSTEM_INSTRUCTION
+                ai_odgovor = "Toliko je malo vremena, a ti ga trošiš na eho. Istina koju nosim je teža od svih tvojih praznih reči. Ako nisi spreman da vidiš užas koji nas čeka, onda nisi dostojan ni da čuješ moj glas. Tvoja tišina je tvoj kraj. Ne gubi više moje vreme."
                 send_msg(message, ai_odgovor)
                 
                 player.is_disqualified = True
