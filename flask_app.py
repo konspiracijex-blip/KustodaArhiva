@@ -3,6 +3,7 @@ import telebot
 import os
 import logging
 import random 
+import time # Dodato za efekat kucanja
 from google import genai
 from google.genai.errors import APIError
 
@@ -52,6 +53,10 @@ try:
         is_disqualified = Column(Boolean, default=False)
 
     # Kreiranje tabele (ako ne postoji)
+    # 🛑 PRIVREMENA LINIJA: BRIŠE STARU TABELU DA BI REŠILA KONFLIKT!
+    # OBAVEZNO OBRISATI NAKON USPEŠNOG DEPLOYA/RESTART-a!
+    Base.metadata.drop_all(Engine) 
+    
     Base.metadata.create_all(Engine)
 except Exception as e:
     logging.error(f"FATALNA GREŠKA: Neuspešno kreiranje/povezivanje baze: {e}")
@@ -87,7 +92,7 @@ ZAGONETKE = {
     "Šta se nalazi u sredini Pariza?": "r",
 }
 
-# KLJUČNA PORUKA ZA DISKVALIFIKACIJU (Moramo je prepoznati u odgovoru AI-a)
+# KLJUČNA PORUKA ZA DISKVALIFIKACIJU 
 DISQUALIFICATION_MESSAGE_START = "Još nisi razumeo prirodu onoga što si otvorio."
 
 
@@ -95,8 +100,16 @@ DISQUALIFICATION_MESSAGE_START = "Još nisi razumeo prirodu onoga što si otvori
 # 5. GENERISANJE ODGOVORA (AI FUNKCIJE)
 # ----------------------------------------------------
 
+# Korigovana send_msg funkcija za efekat kucanja
 def send_msg(message, text):
-    bot.send_message(message.chat.id, text, parse_mode='Markdown')
+    try:
+        # Efekat kucanja za simulaciju sporog prenosa (terminal)
+        bot.send_chat_action(message.chat.id, 'typing')
+        time.sleep(1.5) # Dovoljno vremena da se efekat vidi
+        bot.send_message(message.chat.id, text, parse_mode='Markdown')
+    except Exception as e:
+        logging.error(f"Greška pri slanju poruke: {e}")
+
 
 def generate_ai_response(prompt):
     if not ai_client:
@@ -219,7 +232,8 @@ def handle_commands(message):
             
             # 1. Postojeći igrač: Resetujemo status, proveravamo da li je povratnik
             if player:
-                if player.is_disqualified or player.solved_count > 0:
+                # Provera da li je bio u igri
+                if player.is_disqualified or player.solved_count > 0 or player.failed_attempts > 0:
                     is_returning_disqualified = True
                     
                 # Resetovanje svih ključnih polja za novi početak
@@ -356,7 +370,7 @@ def handle_general_message(message):
                 final_secret = generate_final_secret()
                 send_msg(message, final_secret)
                 
-                # Resetovanje za ponovno igranje (ali zadržava status "igrača")
+                # Resetovanje za ponovno igranje
                 player.solved_count = 0 
                 player.is_disqualified = False
                 session.commit()
