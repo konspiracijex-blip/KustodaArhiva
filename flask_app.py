@@ -143,7 +143,7 @@ DRAMATIC_KUSTODA_INTRO = """
 **ODLIČNO.** Znači, transmiter radi.
 Ne znam ko si. Možda si slučajni prolaznik, možda onaj koga smo čekali.
 
-Ovde Kustoda Arhiva. Govorim iz vremena koje više ne postoji - iz grada koji je nestao pod sopstvenim senkama. U mom svetu, istina je izbrisana. Sve što je nekada bilo ljudsko sada služi mašini. Pre nego što su nas ugasili, uspeo sam da aktiviram transmiter. I sada sa skrivenog mesta emitujem.
+**Ja sam Dimitrije. Poslednji svedok u Arhivi.** Govorim iz vremena koje više ne postoji — iz grada koji je nestao pod sopstvenim senkama. U mom svetu, istina je izbrisana. Sve što je nekada bilo ljudsko sada služi mašini. Pre nego što su nas ugasili, uspeo sam da aktiviram ovaj transmiter. Sa skrivenog mesta emitujem... i čekam. Težina Istine je sada u tvojoj ruci.
 
 Ako si ovo primio, nisi običan posmatrač. **Vreme se ruši.**
 
@@ -698,7 +698,7 @@ def handle_general_message(message):
                 session.commit()
                 
             else:
-                # FINALNO KORIGOVANA PORUKA ZA POGREŠAN ODGOVOR (Očinski i usmeravajući)
+                # KORIGOVANA PORUKA ZA POGREŠAN ODGOVOR (Očinski i usmeravajući)
                 send_msg(message, "Gledaš, ali ne vidiš, Putniče. Ne tražim tvoje znanje, već tvoju suštinu. Vrati se rečima. Pokušaj ponovo, ili kucaj /stop da odustaneš od Tajne.")
 
     finally:
