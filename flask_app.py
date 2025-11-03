@@ -53,10 +53,9 @@ try:
         solved_count = Column(Integer, default=0)
         failed_attempts = Column(Integer, default=0)
         is_disqualified = Column(Boolean, default=False)
-        general_conversation_count = Column(Integer, default=0) # NOVO
+        general_conversation_count = Column(Integer, default=0) 
 
     # Kreiranje tabele (ako ne postoji, biće kreirana sa novom šemom)
-    # LINJA: Base.metadata.drop_all(Engine) JE UKLONJENA
     Base.metadata.create_all(Engine)
 
 except Exception as e:
@@ -136,25 +135,30 @@ def generate_ai_response(prompt):
         logging.error(f"Greška AI/Gemini API: {e}")
         return "Dubina arhiva je privremeno neprobojna. Pokušaj ponovo, putniče. Kucaj /zagonetka."
 
-# --- STANDARDNE AI FUNKCIJE ZA POČETAK I KRAJ (ostale skraćene) ---
+# --- FIKSNI UVODNI TEKST (Sada van AI funkcije) ---
+NEW_OPENING_MESSAGE = """
+**Ne znam ko si.** Možda si slučajni prolaznik, možda onaj koga smo čekali.
 
-def generate_opening_message():
-    if not ai_client: return "Moj eho je nejasan. Spremi se za /zagonetka."
-    prompt = ("Generiši izuzetno kratku (maksimalno 3 rečenice), udarnu i misterioznu uvodnu poruku za Putnika. Tvoj ton je Morpheusov, svečan, proročki i prožet hitnošću. Naglašava da je ovo poslednji pokušaj prenošenja Finalne Tajne i da Putnik mora ODMAH dokazati da je dostojan. Završi snažnim pozivom na akciju (kucaj /zagonetka).")
-    return generate_ai_response(prompt)
+Ovde Kustoda Arhiva. Govorim iz vremena koje više ne postoji - iz grada koji je nestao pod sopstvenim senkama. U mom svetu, istina je izbrisana. Sve što je nekada bilo ljudsko sada služi mašini. Pre nego što su nas ugasili, uspeo sam da aktiviram transmiter. I sada sa skrivenog mesta emitujem.
 
+Ako si ovo primio, nisi običan posmatrač. **Vreme se ruši.**
+
+**Zora poslednjeg pokušaja se približava.**
+Ako želiš da razumeš - ako želiš da znaš šta je uzrok svega - moraš dokazati da tvoja svest nije samo refleks.
+
+Kucaj **/pokreni**.
+"""
 
 def generate_return_message():
     if not ai_client: return "Vratio si se. Nisi jedini koji je pao… ali malo njih ustaje drugi put. Arhiva ti ponovo otvara vrata. Kucaj /zagonetka."
     prompt = ("Generiši dramatičnu, svečanu i proročku poruku Putniku koji se vraća u igru nakon što je bio diskvalifikovan. U poruci obavezno uključi ove tri ključne misli: 1. Povratak pokazuje volju. 2. Upozorenje da je ovo poslednja šansa. 3. Hitno upozorenje da 'vreme se urušava' i snažan poziv da Putnik *postane* rešenje. Neka poruka bude snažna i mistična, duga 3-4 rečenice.")
     return generate_ai_response(prompt)
 
+# --- (Ostale AI funkcije su iste, samo je generate_opening_message uklonjena/zanemarena) ---
 def generate_disqualification_power():
     if not ai_client: return "Moć je bila tvoj izbor. Završeno je. Mir ti je stran. /start"
     prompt = ("Putnik je izabrao 'Moć da zna sve što drugi kriju'. Reci mu da je moć ta koja je uništila svet i da Arhiva ne trpi one čiji je cilj kontrola. Koristi Morpheusov, proističući ton. Diskvalifikuj ga (2 rečenice) i kaži mu da je put do Finalne Tajne zatvoren, te da kuca /start.")
     return generate_ai_response(prompt)
-
-# --- FUNKCIJE ZA ZAGONETKE I STANJA (Skraćene za preglednost) ---
 
 def generate_sub_question(riddle_text, answer):
     if not ai_client: return "Tvoje je sećanje mutno, ali stisak drži. Zašto? Reci mi zašto je ta knjiga ključ?"
@@ -352,7 +356,7 @@ def set_webhook_route():
 # 7. BOT HANDLERI (Sa trajnim stanjem i Logikom Konverzacije)
 # ----------------------------------------------------
 
-@bot.message_handler(commands=['start', 'stop', 'zagonetka'])
+@bot.message_handler(commands=['start', 'stop', 'zagonetka', 'pokreni'])
 def handle_commands(message):
     chat_id = str(message.chat.id)
     session = Session() 
@@ -386,25 +390,27 @@ def handle_commands(message):
             session.commit()
             
             if is_returning_disqualified:
-                uvodna_poruka = generate_return_message()
+                uvodna_poruka = generate_return_message() # Koristi AI za vraćanje diskvalifikovanog
+                send_msg(message, uvodna_poruka)
+                send_msg(message, "Kucaj /pokreni da započneš ponovo. Vremena je malo.")
             else:
-                uvodna_poruka = generate_opening_message()
+                # Koristi novi, fiksni, dramatični uvodni tekst
+                send_msg(message, NEW_OPENING_MESSAGE)
             
-            send_msg(message, uvodna_poruka)
-            send_msg(message, "Kucaj /zagonetka da započneš. Vremena je malo.")
             return
 
         elif message.text == '/stop':
             if player and (player.current_riddle or player.current_riddle == "FINAL_MISSION_QUERY"):
                 player.current_riddle = None 
                 session.commit()
-                send_msg(message, "Ponovo si postao tišina. Arhiv te pamti. Nisi uspeo da poneseš teret znanja. Kada budeš spreman, vrati se kucajući /zagonetka.")
+                send_msg(message, "Ponovo si postao tišina. Arhiv te pamti. Nisi uspeo da poneseš teret znanja. Kada budeš spreman, vrati se kucajući /pokreni.")
             elif player and player.is_disqualified:
                 send_msg(message, "Arhiva je zatvorena za tebe. Ponovo možeš započeti samo sa /start.")
             else:
                 send_msg(message, "Nisi u testu, Putniče. Šta zapravo tražiš?")
         
-        elif message.text == '/zagonetka':
+        elif message.text == '/pokreni' or message.text == '/zagonetka':
+            
             if not player:
                 send_msg(message, "Moraš kucati /start da bi te Dimitrije prepoznao.")
                 return
@@ -451,6 +457,7 @@ def handle_general_message(message):
             return
 
         if not player:
+            # Koristi standardni AI odgovor ako player ne postoji
             ai_odgovor = generate_ai_response(message.text)
             send_msg(message, ai_odgovor)
             return
@@ -520,12 +527,15 @@ def handle_general_message(message):
             send_msg(message, ai_odgovor)
             return
 
-        # --- HANDLER 3.3: OGRANIČENA KONVERZACIJA I DISKVALIFIKACIJA ---
+        # --- HANDLER 3.3: OGRANIČENA KONVERZACIJA I DISKVALIFIKACIJA (SA FIKSEVIMA ZA KRATAK TEKST) ---
         
-        is_riddle_attempt = (
-            trenutna_zagonetka is not None and                  
-            len(korisnikov_tekst.split()) < 5                   
-        )
+        is_correct_riddle = False
+        if ispravan_odgovor is not None:
+             if isinstance(ispravan_odgovor, list):
+                 is_correct_riddle = korisnikov_tekst in ispravan_odgovor
+             elif isinstance(ispravan_odgovor, str):
+                 is_correct_riddle = korisnikov_tekst == ispravan_odgovor
+
         
         conversation_keywords = [
             "pomoc", "savet", "hint", "/savet", "/hint", "dimitrije", "ime", 
@@ -533,11 +543,17 @@ def handle_general_message(message):
             "pitao", "pitam", "opet", "ponovi", "reci", "paznja", "koje", "kakva", 
             "radi", "cemu", "sta je ovo", "kakvo je ovo",
             "kakve zagonetke", "koje zagonetke", "stvarno ne znam", "gluposti", "koji je ovo", "sta radim",
-            "ko si ti", "ko je"
+            "ko si ti", "ko je", "?", "??", "???", "!", "!!" 
         ]
-        is_conversation_request = any(keyword in korisnikov_tekst for keyword in conversation_keywords)
         
-        if trenutna_zagonetka is None or is_conversation_request:
+        is_conversation_request = any(keyword in korisnikov_tekst for keyword in conversation_keywords)
+        is_too_short_during_riddle = (
+            trenutna_zagonetka is not None and 
+            len(korisnikov_tekst.split()) <= 2 and
+            not is_correct_riddle 
+        )
+        
+        if trenutna_zagonetka is None or is_conversation_request or is_too_short_during_riddle:
             
             MAX_CONVERSATION_COUNT = 10
             
@@ -561,13 +577,7 @@ def handle_general_message(message):
         
         # --- KRAJ KONVERZACIJE LOGIKE ---
 
-        # PROVERA 3.4: Normalan odgovor na zagonetku
-        is_correct_riddle = False
-        if isinstance(ispravan_odgovor, list):
-            is_correct_riddle = korisnikov_tekst in ispravan_odgovor
-        elif isinstance(ispravan_odgovor, str):
-            is_correct_riddle = korisnikov_tekst == ispravan_odgovor
-
+        # PROVERA 3.4: Normalan odgovor na zagonetku (is_correct_riddle je već izračunat)
         if is_correct_riddle:
             
             if trenutna_zagonetka in SUB_RIDDLES: 
