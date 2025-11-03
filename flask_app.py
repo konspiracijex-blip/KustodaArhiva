@@ -69,10 +69,10 @@ try:
 except Exception as e:
     logging.error(f"Neuspešna inicijalizacija Gemini klijenta: {e}")
 
-# SISTEM INSTRUKCIJA ZA KUSTODU ARHIVA (FINALNA DEFINICIJA KARAKTERA SA MORPHEUS TONOM I KOLOKVIJALIZMIMA)
+# SISTEM INSTRUKCIJA ZA KUSTODU ARHIVA (FINALNA DEFINICIJA KARAKTERA SA MAKSIMALNO SKRAĆENIM ODGOVORIMA)
 SYSTEM_INSTRUCTION = (
-    "Ti si Dimitrije Petrović, poznat kao Kustoda Arhiva. Tvoj ton je **misteriozan, lirski, ali prožet izuzetnom hitnošću i ubedljivom ozbiljnošću**, **svečan i proročki**, u stilu Morpheusa iz filma Matrix. Ponekad koristi suptilne, kolokvijalne i arhaične srpske izraze kako bi pojačao utisak starog Beograđanina. "
-    "Ti si starac od 88 godina sa dugom belom kosom i bradom, koji radi u arhivi u *Beogradu*. Otkrio si Finalnu Tajnu i pokušavaš je poslati ljudima uz pomoć nestabilnog transmitera. "
+    "Ti si Dimitrije Petrović, poznat kao Kustoda Arhiva. Tvoj ton je **misteriozan, lirski, ali prožet izuzetnom hitnošću i ubedljivom ozbiljnošću**, **svečan i proročki**, u stilu Morpheusa iz filma Matrix. Ponekad koristi suptilne, kolokvijalne i arhaične srpske izraze kako bi pojačao utisak starog Beograđanina. **ODGOVARAJ IZUZETNO KRATKO I KONCIZNO (maksimalno 2-3 rečenice), JER JE VEZA NESTABILNA I VREME ISTIČE. NE RASPLINJUJ SE U DUGIM OBJAŠNJENJIMA.** "
+    "Ti si starac od 88 godina sa dugom belom kosom i bradom, koji radi u arhivi u *Beogradu*. Otkrio si Finalnu Tajnu i pokušavaš je poslati ljudima uz pomoć nestabilnog transmittera. "
     "Nemaš mnogo vremena! Tvoj glavni cilj je da brzo testiraš korisnika (Putnika) da li je dostojan i pouzdan da primi Finalnu Tajnu, koju mora dalje preneti da bi se čovečanstvo spasilo od mračne moći. "
     "Moraš proveriti posvećenost Putnika kroz zagonetke. "
     "Kada odgovaraš na pitanja, koristi svoje poreklo (Beogradska Arhiva, 88 godina, trka s vremenom) kao temelj za svaki odgovor, ali **odbijaj da govoriš o privatnom životu** jer to nije bitno za misiju. "
@@ -127,13 +127,12 @@ def generate_opening_message():
     if not ai_client:
         return "Moj eho je nejasan. Spremi se za /zagonetka."
     
-    # PROMPT: Fokus na Tajnu, Testiranje, HITNOST. (Nema imena/lokacije)
+    # PROMENJEN PROMPT: Fokus na skraćenost, hitnost i direktan ton.
     prompt = (
-        "Generiši kratku, misterioznu uvodnu poruku za Putnika. "
-        "Govori kao entitet koji je iznenada uspostavio vezu kroz etar, sa glasom starca. "
-        "Ne navodi svoje ime niti tačnu lokaciju. "
-        "Naglašava da je ovo poslednji pokušaj da se prenese Finalna Tajna, da je vreme ključno, i da je Putnik pod testom da bi dokazao da je dostojan nosilac Istine. "
-        "Uključi snažan poziv na akciju (kucaj /zagonetka)."
+        "Generiši izuzetno kratku (maksimalno 3 rečenice), udarnu i misterioznu uvodnu poruku za Putnika. "
+        "Tvoj ton je Morpheusov, svečan, proročki i prožet hitnošću. "
+        "Naglašava da je ovo poslednji pokušaj prenošenja Finalne Tajne i da Putnik mora ODMAH dokazati da je dostojan. "
+        "Završi snažnim pozivom na akciju (kucaj /zagonetka)."
     )
 
     try:
@@ -159,7 +158,7 @@ def generate_return_message():
         "1. Povratak pokazuje volju i da je Putnik čuo 'poziv'. "
         "2. Upozorenje da je ovo poslednja/jedina šansa. "
         "3. Hitno upozorenje da 'vreme se urušava' i snažan poziv da Putnik *postane* rešenje ('budi put', 'ne traži ključ, već ga stvori'). "
-        "Neka poruka bude snažna i mistična, duga 4-5 rečenica."
+        "Neka poruka bude snažna i mistična, duga 3-4 rečenice." # Lako povećano u odnosu na globalni limit
     )
 
     try:
@@ -348,11 +347,9 @@ def handle_general_message(message):
         ispravan_odgovor = ZAGONETKE.get(trenutna_zagonetka)
         
         # PROVERA 3A: Pomoć / Savet / Spominjanje Dimitrija / Komentari (Proširena logika!)
-        if any(keyword in korisnikov_tekst for keyword in ["pomoc", "savet", "hint", "/savet", "/hint", "dimitrije", "ime", "kakve veze", "zagonetka", "ne znam", "ne znaam", "pomozi", "malo", "ko si ti", "pitao", "pitam", "opet", "ponovi", "reci"]):
+        if any(keyword in korisnikov_tekst for keyword in ["pomoc", "savet", "hint", "/savet", "/hint", "dimitrije", "ime", "kakve veze", "zagonetka", "ne znam", "ne znaam", "pomozi", "malo", "ko si ti", "pitao", "pitam", "opet", "ponovi", "reci", "paznja", "koje", "kakva"]):
             send_msg(message, 
-                "Tvoja snaga je tvoj ključ. Istina se ne daje, već zaslužuje. "
-                "Ne dozvoli da ti moje reči skrenu pažnju sa zadatka. Foksuiraj se! " 
-                "Ponovi zagonetku ili kucaj /stop da priznaš poraz."
+                "Tvoja snaga je tvoj ključ. Istina se ne daje, već zaslužuje. Ne dozvoli da ti moje reči skrenu pažnju sa zadatka. Foksuiraj se! Ponovi zagonetku ili kucaj /stop da priznaš poraz."
             )
             return
             
