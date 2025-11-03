@@ -40,16 +40,16 @@ try:
     Base = declarative_base()
     Session = sessionmaker(bind=Engine)
 
-    # Definicija tabele za čuvanje napretka igrača (DODATO ime i attempts)
+    # Definicija tabele za čuvanje napretka igrača
     class PlayerState(Base):
         __tablename__ = 'player_states'
         
-        chat_id = Column(String, primary_key=True)  # ID Telegram četa (ključ)
-        username = Column(String, nullable=True)    # Dodato za lakšu identifikaciju
-        current_riddle = Column(String)             # Trenutna aktivna zagonetka
-        solved_count = Column(Integer, default=0)   # Broj rešenih zagonetki
-        failed_attempts = Column(Integer, default=0)# Dodato za praćenje 3 pokušaja
-        is_disqualified = Column(Boolean, default=False) # Dodato za trivijalna pitanja
+        chat_id = Column(String, primary_key=True)
+        username = Column(String, nullable=True)
+        current_riddle = Column(String)
+        solved_count = Column(Integer, default=0)
+        failed_attempts = Column(Integer, default=0)
+        is_disqualified = Column(Boolean, default=False)
 
     # Kreiranje tabele (ako ne postoji)
     Base.metadata.create_all(Engine)
@@ -69,7 +69,6 @@ except Exception as e:
     logging.error(f"Neuspešna inicijalizacija Gemini klijenta: {e}")
 
 # SISTEM INSTRUKCIJA ZA KUSTODU ARHIVA (FINALNA DEFINICIJA KARAKTERA)
-# Uključuje strogo pravilo za trivijalna pitanja
 SYSTEM_INSTRUCTION = (
     "Ti si Dimitrije Petrović, poznat kao Kustoda Arhiva. Tvoj ton je misteriozan, lirski, ali prožet izuzetnom hitnošću i ubedljivom ozbiljnošću. "
     "Ti si starac od 88 godina sa dugom belom kosom i bradom, koji radi u arhivi u *Beogradu*. Otkrio si Finalnu Tajnu i pokušavaš je poslati ljudima uz pomoć nestabilnog transmitera. "
@@ -93,7 +92,7 @@ DISQUALIFICATION_MESSAGE_START = "Još nisi razumeo prirodu onoga što si otvori
 
 
 # ----------------------------------------------------
-# 5. GENERISANJE ODGOVORA
+# 5. GENERISANJE ODGOVORA (AI FUNKCIJE)
 # ----------------------------------------------------
 
 def send_msg(message, text):
@@ -130,6 +129,48 @@ def generate_opening_message():
         return response.text
     except Exception:
         return "Moj eho je nejasan. Spremi se za /zagonetka."
+
+
+def generate_return_message():
+    if not ai_client:
+        return "Vratio si se. Nisi jedini koji je pao… ali malo njih ustaje drugi put. Arhiva ti ponovo otvara vrata. Kucaj /zagonetka."
+    
+    prompt = (
+        "Generiši kratku, izuzetno hitnu i dramatičnu poruku Putniku koji se vraća nakon što je bio diskvalifikovan. "
+        "U poruci naglasi da se vratio, ali ga upozori da je sada vremena MNOGO manje i da su senke korak ispred. "
+        "Koristi se stilom starca od 88 godina iz Beograda koji žuri."
+    )
+
+    try:
+        response = ai_client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=prompt,
+            config={'system_instruction': SYSTEM_INSTRUCTION}
+        )
+        return response.text
+    except Exception:
+        return "Vratio si se. Nisi jedini koji je pao… ali malo njih ustaje drugi put. Arhiva ti ponovo otvara vrata. Kucaj /zagonetka."
+
+
+def generate_final_secret():
+    if not ai_client:
+        return "Kraj puta je mutan. Tajna je: Praznina."
+
+    prompt = (
+        "Generiši Finalnu Tajnu koju Dimitrije Petrović mora da prenese Putniku. "
+        "Tajna se odnosi na mračnu hijerarhiju moći koja tiho vlada, na gubitak individualne slobode, i na to da je jedina nada u prenošenju te istine dalje. "
+        "Tekst treba da bude dugačak 3-4 rečenice, misteriozan i da se oseća kao 'poslednja reč' starog konspiratora."
+    )
+
+    try:
+        response = ai_client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=prompt,
+            config={'system_instruction': SYSTEM_INSTRUCTION}
+        )
+        return response.text
+    except Exception:
+        return "Kraj puta je mutan. Tajna je: Praznina."
 
 
 # ----------------------------------------------------
@@ -174,7 +215,20 @@ def handle_commands(message):
         player = session.query(PlayerState).filter_by(chat_id=chat_id).first()
         
         if message.text == '/start':
-            # Ako je novi igrač, registruj ga
+            is_returning_disqualified = False
+            
+            # 1. Postojeći igrač: Resetujemo status, proveravamo da li je povratnik
+            if player:
+                if player.is_disqualified or player.solved_count > 0:
+                    is_returning_disqualified = True
+                    
+                # Resetovanje svih ključnih polja za novi početak
+                player.is_disqualified = False
+                player.current_riddle = None
+                player.solved_count = 0 
+                player.failed_attempts = 0 
+            
+            # 2. Novi igrač: Kreiramo ga
             if not player:
                 user = message.from_user
                 display_name = user.username or f"{user.first_name} {user.last_name or ''}".strip()
@@ -188,9 +242,15 @@ def handle_commands(message):
                     username=display_name
                 )
                 session.add(player)
+            
             session.commit()
-                
-            uvodna_poruka = generate_opening_message()
+            
+            # 3. SLANJE ODGOVORA: Personalizovana poruka
+            if is_returning_disqualified:
+                uvodna_poruka = generate_return_message()
+            else:
+                uvodna_poruka = generate_opening_message()
+            
             send_msg(message, uvodna_poruka)
             send_msg(message, "Kucaj /zagonetka da započneš. Vremena je malo.")
             return
@@ -201,7 +261,6 @@ def handle_commands(message):
                 session.commit()
                 send_msg(message, "Ponovo si postao tišina. Arhiv te pamti. Nisi uspeo da poneseš teret znanja. Kada budeš spreman, vrati se kucajući /zagonetka.")
             elif player and player.is_disqualified:
-                # Disklvalifikovan igrač može da pokuša novi /start
                 send_msg(message, "Arhiva je zatvorena za tebe. Ponovo možeš započeti samo sa /start.")
             else:
                 send_msg(message, "Nisi u testu, Putniče. Šta zapravo tražiš?")
@@ -211,7 +270,7 @@ def handle_commands(message):
                 send_msg(message, "Moraš kucati /start da bi te Dimitrije prepoznao.")
                 return
             
-            # Diskvalifikovani ne mogu koristiti /zagonetka
+            # Diskvalifikovani ne mogu koristiti /zagonetka, moraju na /start
             if player.is_disqualified:
                  send_msg(message, "Arhiva je zatvorena za tebe. Počni ispočetka sa /start ako si spreman na posvećenost.")
                  return
@@ -253,8 +312,7 @@ def handle_general_message(message):
             ai_odgovor = generate_ai_response(message.text)
             send_msg(message, ai_odgovor)
             
-            # PROVERA 2A: DISKVALIFIKACIJA NA OSNOVU AI ODGOVORA
-            # Ako AI odgovori strogom porukom, diskvalifikujemo igrača
+            # PROVERA 2A: DISKVALIFIKACIJA NA OSNOVU AI ODGOVORA (Trivijalna pitanja)
             if ai_odgovor.strip().startswith(DISQUALIFICATION_MESSAGE_START):
                 player.is_disqualified = True
                 player.current_riddle = None
@@ -287,15 +345,18 @@ def handle_general_message(message):
             # Povećanje broja rešenih zagonetki
             player.solved_count += 1
             player.current_riddle = None 
-            player.failed_attempts = 0 # Resetujemo ga za svaki slučaj
+            player.failed_attempts = 0 
             session.commit() 
 
-            # LOGIKA OTKRIVANJA TAJNE: Kada reši sve
+            # LOGIKA OTKRIVANJA TAJNE: Kada reši sve (Finalna Tajna)
             if player.solved_count >= len(ZAGONETKE): 
-                send_msg(message, "**ISTINA JE OTKRIVENA!** Ti si dostojan, Putniče! Poslednji pečat je slomljen. Finalna Tajna ti pripada. Šaljem ti poslednju poruku...")
+                send_msg(message, "**ISTINA JE OTKRIVENA!** Ti si dostojan, Putniče! Poslednji pečat je slomljen. Finalna Tajna ti pripada.")
                 
-                # OVDE BI IŠLA FUNKCIJA ZA GENERISANJE FINALNE TAJNE OD AI-A
+                # SLANJE FINALNE TAJNE
+                final_secret = generate_final_secret()
+                send_msg(message, final_secret)
                 
+                # Resetovanje za ponovno igranje (ali zadržava status "igrača")
                 player.solved_count = 0 
                 player.is_disqualified = False
                 session.commit()
@@ -318,11 +379,11 @@ def handle_general_message(message):
                 )
                 send_msg(message, kraj_poruka)
                 
-                # Resetujemo SVE i Diskvalifikujemo (može da pokrene /start ponovo)
+                # Resetujemo SVE i omogućavamo povratak sa /start
                 player.current_riddle = None
                 player.solved_count = 0 
                 player.failed_attempts = 0
-                player.is_disqualified = False # Može se vratiti sa /start
+                player.is_disqualified = False 
                 session.commit()
                 
             else:
