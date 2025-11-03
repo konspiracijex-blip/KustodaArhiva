@@ -2,28 +2,14 @@ import flask
 import telebot
 import os
 import logging
-import random # Dodato za nasumičan izbor zagonetki
-
-# ----------------------------------------------------
-# 1. GLOBALNE VARIJABLE (STANJE IGRE I ZAGONETKE)
-# ----------------------------------------------------
-
-# BAZA ZAGONETKI (Ključ: Pitanje, Vrednost: Tačan odgovor, sve malim slovima)
-ZAGONETKE = {
-    "Koja je jedina reč u srpskom jeziku koja se završava sa T?": "svet",
-    "Šta se nalazi u sredini Pariza?": "r",
-    "Što više uzmeš, to više ostaje. Šta je to?": "rupe",
-}
-
-# STANJE IGRE KORISNIKA (Ključ: ID korisnika, Vrednost: Ključ trenutne zagonetke)
-user_state = {} 
+import random # Potrebno za biranje zagonetke
 
 # ----------------------------------------------------
 # 2. RENDER KONFIGURACIJA
 # ----------------------------------------------------
 
-# UČITAVA TOKEN IZ RENDER OKRUŽENJA (Environment Group)
-BOT_TOKEN = os.environ.get('BOT_TOKEN') 
+# HARDKODIRANI TOKEN ZA TESTIRANJE (OVAJ RED REŠAVA PROBLEM 500)
+BOT_TOKEN = '8294047796:AAF_L3rn1iz-kejebf2GFb8E--2ASS6LWSY' 
 # Render automatski generiše URL
 WEBHOOK_URL = os.environ.get('RENDER_EXTERNAL_URL', 'https://placeholder.com/')
 
@@ -65,10 +51,19 @@ def set_webhook_route():
         except Exception as e:
             return f"Failed to set webhook: {e}"
 
-# Osnovna ruta (Ostaje zakomentarisana da se izbegnu 404 greške na Renderu)
-# @app.route('/')
-# def index():
-#     return "Telegram Bot KustodaArhiva je aktivan. Posetite /set_webhook za aktivaciju."
+# ----------------------------------------------------
+# 1. GLOBALNE VARIJABLE (STANJE IGRE I ZAGONETKE)
+# ----------------------------------------------------
+
+# BAZA ZAGONETKI (Ključ: Pitanje, Vrednost: Tačan odgovor, sve malim slovima)
+ZAGONETKE = {
+    "Koja je jedina reč u srpskom jeziku koja se završava sa T?": "svet",
+    "Šta se nalazi u sredini Pariza?": "r",
+    "Što više uzmeš, to više ostaje. Šta je to?": "rupe",
+}
+
+# STANJE IGRE KORISNIKA (Ključ: ID korisnika, Vrednost: Ključ trenutne zagonetke)
+user_state = {} 
 
 # ----------------------------------------------------
 # 4. BOT HANDLERI (Logika igre i komunikacija)
@@ -83,6 +78,8 @@ def handle_start(message):
 
 @bot.message_handler(commands=['zagonetka'])
 def handle_zagonetka(message):
+    global user_state 
+
     user_id = message.chat.id
     
     # 1. Proverava da li je korisnik već u igri
@@ -103,14 +100,16 @@ def handle_zagonetka(message):
 
 @bot.message_handler(func=lambda message: True)
 def handle_game_answer(message):
-    user_id = message.chat.id # KORIŠĆENJE CHAT ID-a UMESTO USER ID-a (SIGURNIJE)
+    global user_state 
+
+    user_id = message.chat.id 
     
     # Proverava da li je korisnik u igri
     if user_id in user_state:
         trenutna_zagonetka = user_state[user_id]
         ispravan_odgovor = ZAGONETKE[trenutna_zagonetka]
         
-        # Formatiranje odgovora: uklanjanje razmaka i prebacivanje u mala slova
+        # Formatiranje odgovora
         korisnikov_odgovor = message.text.strip().lower()
 
         if korisnikov_odgovor == ispravan_odgovor:
@@ -118,7 +117,7 @@ def handle_game_answer(message):
                 "Istina je otkrivena. Ključ je tvoj. "
                 "Možeš nastaviti kucajući /zagonetka, ali upozoravam te, arhiv je dubok."
             )
-            del user_state[user_id] # Briše stanje
+            del user_state[user_id] 
         else:
             bot.reply_to(message, 
                 "Netačan je tvoj eho. Pokušaj ponovo, ili tvoje sećanje neće proći. "
