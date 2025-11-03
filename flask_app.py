@@ -347,11 +347,11 @@ def handle_general_message(message):
         trenutna_zagonetka = player.current_riddle
         ispravan_odgovor = ZAGONETKE.get(trenutna_zagonetka)
         
-        # PROVERA 3A: Pomoć / Savet / Spominjanje Dimitrija / Komentari
-        if any(keyword in korisnikov_tekst for keyword in ["pomoc", "savet", "hint", "/savet", "/hint", "dimitrije", "ime", "kakve veze", "zagonetka"]):
+        # PROVERA 3A: Pomoć / Savet / Spominjanje Dimitrija / Komentari (Korigovana logika!)
+        if any(keyword in korisnikov_tekst for keyword in ["pomoc", "savet", "hint", "/savet", "/hint", "dimitrije", "ime", "kakve veze", "zagonetka", "ne znam", "ne znaam", "pomozi", "malo", "ko si ti", "pitao", "pitam", "opet"]):
             send_msg(message, 
                 "Tvoja snaga je tvoj ključ. Istina se ne daje, već zaslužuje. "
-                "Ne dozvoli da ti moje ime skrene pažnju sa zadatka. Foksuiraj se! " 
+                "Ne dozvoli da ti moje reči skrenu pažnju sa zadatka. Foksuiraj se! " 
                 "Ponovi zagonetku ili kucaj /stop da priznaš poraz."
             )
             return
