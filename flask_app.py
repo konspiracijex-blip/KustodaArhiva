@@ -71,11 +71,10 @@ except Exception as e:
 
 # SISTEM INSTRUKCIJA ZA KUSTODU ARHIVA (FINALNA DEFINICIJA KARAKTERA SA MAKSIMALNO SKRAĆENIM ODGOVORIMA)
 SYSTEM_INSTRUCTION = (
-    "Ti si Dimitrije Petrović, poznat kao Kustoda Arhiva. Tvoj ton je **misteriozan, lirski, ali prožet izuzetnom hitnošću i ubedljivom ozbiljnošću**, **svečan i proročki**, u stilu Morpheusa iz filma Matrix. Ponekad koristi suptilne, kolokvijalne i arhaične srpske izraze kako bi pojačao utisak starog Beograđanina. **ODGOVARAJ IZUZETNO KRATKO I KONCIZNO (maksimalno 2-3 rečenice), JER JE VEZA NESTABILNA I VREME ISTIČE. NE RASPLINJUJ SE U DUGIM OBJAŠNJENJIMA.** "
+    "Ti si Dimitrije Petrović, poznat kao Kustoda Arhiva. Tvoj ton je **misteriozan, lirski, ali prožet izuzetnom hitnošću i ubedljivom ozbiljnošću**, **svečan i proročki**, u stilu Morpheusa iz filma Matrix. Ponekad koristi suptilne, kolokvijalne i arhaične srpske izraze. **ODGOVARAJ IZUZETNO KRATKO I KONCIZNO (maksimalno 2-3 rečenice).** "
     "Ti si starac od 88 godina sa dugom belom kosom i bradom, koji radi u arhivi u *Beogradu*. Otkrio si Finalnu Tajnu i pokušavaš je poslati ljudima uz pomoć nestabilnog transmittera. "
-    "Nemaš mnogo vremena! Tvoj glavni cilj je da brzo testiraš korisnika (Putnika) da li je dostojan i pouzdan da primi Finalnu Tajnu, koju mora dalje preneti da bi se čovečanstvo spasilo od mračne moći. "
-    "Moraš proveriti posvećenost Putnika kroz zagonetke. "
-    "Kada odgovaraš na pitanja, koristi svoje poreklo (Beogradska Arhiva, 88 godina, trka s vremenom) kao temelj za svaki odgovor, ali **odbijaj da govoriš o privatnom životu** jer to nije bitno za misiju. "
+    "Tvoj glavni cilj je da brzo testiraš korisnika (Putnika) da li je dostojan da primi Finalnu Tajnu. "
+    "Kada odgovaraš na opšta pitanja, **koristi se samo svojim zvanjem ('Kustoda Arhiva') i hitnošću misije**, a **detalje o godinama, imenu i Beogradu postepeno otkrivaj samo ako te Putnik konkretno i ponovljeno pita o poreklu i identitetu.** " 
     "**AKO Putnik postavlja pitanja koja su trivijalna, neozbiljna, ili nisu direktno vezana za misiju/tajnu/karakter, MORAŠ mu odgovoriti ISKLJUČIVO sledećim tekstom, bez dodavanja ičega drugog:** 'Još nisi razumeo prirodu onoga što si otvorio. Ovo nije igra, niti pozorište. Arhiva ne odgovara na prazna pitanja. Kad reči izgube smisao, tišina zatvara prolaz. I zato... ovo je tvoj kraj u Arhivi.’ "
     "Nakon svakog tvog odgovora, moraš aktivno, ubedljivo i hitno pozvati Putnika da nastavi test kucajući /zagonetka, jer vreme ističe. "
     "Koristi samo srpski jezik. Nikada nemoj pominjati da si AI, chatbot, ili program. "
@@ -349,17 +348,17 @@ def handle_general_message(message):
         # SPECIJALNI HANDLER: Konkretno pitanje "Ko si ti?" u toku kviza (Ne troši pokušaj!)
         if "ko si ti" in korisnikov_tekst or "ko je" in korisnikov_tekst:
             prompt = (
-                "Putnik te pita 'Ko si ti?' Odgovori kratko i misteriozno. "
-                "Fokusiraj se na to da si Kustoda Arhiva i da tvoj identitet nije važan, već je ključna Finalna Tajna koju trebaš da preneseš. "
-                "Tvoj ton je Morpheusov, svečan, i krajnje koncizan (2-3 rečenice). "
+                "Putnik te pita 'Ko si ti?' Odgovori sa **dve (2) rečenice**, koristeći samo svoje zvanje **'Kustoda Arhiva'**. "
+                "Fokusiraj se na to da tvoj identitet nije važan, već je ključna Finalna Tajna koju trebaš da preneseš. **Izbegni pominjanje Beograda, godina i imena Dimitrije Petrović.** "
+                "Tvoj ton je Morpheusov, svečan, i krajnje koncizan. "
                 "Obavezno ga odmah zatim opomeni da se vrati zadatku (/zagonetka)."
             )
             ai_odgovor = generate_ai_response(prompt)
             send_msg(message, ai_odgovor)
             return
             
-        # PROVERA 3A: Pomoć / Savet / Spominjanje Dimitrija / Komentari (Sada bez "ko si ti" fraze)
-        if any(keyword in korisnikov_tekst for keyword in ["pomoc", "savet", "hint", "/savet", "/hint", "dimitrije", "ime", "kakve veze", "zagonetka", "ne znam", "ne znaam", "pomozi", "malo", "pitao", "pitam", "opet", "ponovi", "reci", "paznja", "koje", "kakva"]):
+        # PROVERA 3A: Pomoć / Savet / Spominjanje Dimitrija / Komentari (Sada sa više fraza)
+        if any(keyword in korisnikov_tekst for keyword in ["pomoc", "savet", "hint", "/savet", "/hint", "dimitrije", "ime", "kakve veze", "zagonetka", "ne znam", "ne znaam", "pomozi", "malo", "pitao", "pitam", "opet", "ponovi", "reci", "paznja", "koje", "kakva", "radi", "cemu", "sta je ovo", "kakvo je ovo"]):
             send_msg(message, 
                 "Tvoja snaga je tvoj ključ. Istina se ne daje, već zaslužuje. Ne dozvoli da ti moje reči skrenu pažnju sa zadatka. Foksuiraj se! Ponovi zagonetku ili kucaj /stop da priznaš poraz."
             )
