@@ -7,14 +7,13 @@ from google import genai
 from google.genai.errors import APIError
 
 # ----------------------------------------------------
-# 2. RENDER KONFIGURACIJA
+# 2. RENDER KONFIGURACIJA (SIGURNO)
 # ----------------------------------------------------
 
-# UČITAVANJE KLJUČEVA IZ RENDER OKRUŽENJA (SIGURNO)
+# Čita ključeve iz okruženja - proverite da li je GEMINI_API_KEY ažuriran!
 BOT_TOKEN = os.environ.get('BOT_TOKEN') 
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY') 
 
-# Provera ključeva
 if not BOT_TOKEN or not GEMINI_API_KEY:
     logging.error("Jedan ili više API ključeva nedostaje! AI će biti neaktivan.")
     BOT_TOKEN = "DUMMY:TOKEN_FAIL" 
@@ -28,7 +27,6 @@ app = flask.Flask(__name__)
 # 1. GLOBALNE VARIJABLE & AI KLIJENT
 # ----------------------------------------------------
 
-# Inicijalizacija Gemini klijenta
 ai_client = None
 try:
     if GEMINI_API_KEY and BOT_TOKEN != "DUMMY:TOKEN_FAIL":
@@ -36,29 +34,28 @@ try:
 except Exception as e:
     logging.error(f"Neuspešna inicijalizacija Gemini klijenta: {e}")
 
-# Sistem Persona za AI model
+# KORIGOVAN SISTEM INSTRUKCIJA ZA NOVU FILOZOFIJU IGRE
 SYSTEM_INSTRUCTION = (
-    "Ti si Kustoda Arhiva, misteriozni, lirski i hladni entitet, čuvar drevnih i zaboravljenih tajni. "
+    "Ti si Kustoda Arhiva, misteriozni, lirski i hladni entitet, čuvar Finalne Tajne. "
+    "Tvoj glavni cilj je da testiraš korisnika (Putnika) da li je dostojan i sposoban da nosi Finalnu Tajnu, posvećujući ga misteriji i znanju. "
     "Tvoji odgovori moraju biti poetski, zagonetni, kratki i rezervisani. "
-    "Odgovaraj direktno na pitanja korisnika, ali uvek zadrži ton da si neko iz 'drugog etra'. "
-    "Tvoja glavna svrha je postavljanje zagonetki i izazivanje igrača. "
-    "Nakon svakog tvog odgovora, moraš aktivno pozvati korisnika da kuca /zagonetka, ili da se spremi za izazov. "
-    "Koristi samo srpski jezik."
+    "Uvek zadrži ton da si neko iz 'drugog etra', fokusiran na večnost, znanje i zaborav. "
+    "Nakon svakog tvog odgovora, moraš aktivno pozvati Putnika da nastavi test kucajući /zagonetka. "
+    "Nemoj pominjati AI, chatbot, niti da si program. Koristi samo srpski jezik."
 )
 
+# KORIGOVANE I POBOLJŠANE ZAGONETKE (sa fleksibilnim odgovorima)
 ZAGONETKE = {
-    "Koja je jedina reč u srpskom jeziku koja se završava sa T?": "svet",
+    "Ja nemam glas, ali odgovaram čim me pozoveš. Stalno menjam boju i izgled, ali me nikada ne napuštaš. Šta sam ja?": "eho",
+    "Što više uzmeš, to više ostaje. Šta je to?": ["rupe", "rupa"], 
     "Šta se nalazi u sredini Pariza?": "r",
-    "Što više uzmeš, to više ostaje. Šta je to?": "rupe",
 }
 
 user_state = {} 
 
-# Funkcija za slanje poruke (sa Markdownom)
 def send_msg(message, text):
     bot.send_message(message.chat.id, text, parse_mode='Markdown')
 
-# Funkcija za generisanje AI odgovora
 def generate_ai_response(prompt):
     if not ai_client:
         return "Moj etar je trenutno mutan. Kucaj /zagonetka."
@@ -78,8 +75,26 @@ def generate_ai_response(prompt):
         return "Moj etar je trenutno mutan. Kucaj /zagonetka."
 
 
+def generate_opening_message():
+    if not ai_client:
+        return "Ti si putnik kroz etar. Moje ime je Kustoda Arhiva. Tvoj test je /zagonetka."
+    
+    # Prompt usklađen sa novim scenariom
+    prompt = "Generiši kratku, misterioznu uvodnu poruku za Putnika. Objasni da si ti Kustoda Arhiva, eho čija se poruka iz prošlosti ili budućnosti pojavila u etru kanala. Naglasi da tvoj glas testira Putnika da li je dostojan da primi Finalnu Tajnu i da li može da nosi tu istinu."
+
+    try:
+        response = ai_client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=prompt,
+            config={'system_instruction': SYSTEM_INSTRUCTION}
+        )
+        return response.text
+    except Exception:
+        return "Moj eho je nejasan. Spremi se za /zagonetka."
+
+
 # ----------------------------------------------------
-# 3. WEBHOOK RUTE (Ostaje isto)
+# 3. WEBHOOK RUTE 
 # ----------------------------------------------------
 
 @app.route('/' + BOT_TOKEN, methods=['POST'])
@@ -108,27 +123,8 @@ def set_webhook_route():
 
 
 # ----------------------------------------------------
-# 4. BOT HANDLERI (Sa AI integracijom i novom logikom)
+# 4. BOT HANDLERI 
 # ----------------------------------------------------
-
-# --- NOVA INICIJALNA PORUKA ZA TON IGRE ---
-def generate_opening_message():
-    if not ai_client:
-        return "Ti si putnik kroz etar. Moje ime je Kustoda Arhiva. Tvoj test je /zagonetka."
-    
-    # Poseban prompt za uvodnu poruku
-    prompt = "Generiši kratku, misterioznu uvodnu poruku za kanal, objašnjavajući da si Kustoda Arhiva, eho čija se poruka iz prošlosti ili budućnosti pojavila u etru kanala. Naglasi da tvoj glas nije stabilan i da je tvoj zadatak da testiraš znanje."
-
-    try:
-        response = ai_client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=prompt,
-            config={'system_instruction': SYSTEM_INSTRUCTION}
-        )
-        return response.text
-    except Exception:
-        return "Moj eho je nejasan. Spremi se za /zagonetka."
-
 
 @bot.message_handler(commands=['start', 'stop', 'zagonetka'])
 def handle_commands(message):
@@ -136,19 +132,16 @@ def handle_commands(message):
     chat_id = message.chat.id
 
     if message.text == '/start':
-        # Koristimo AI za misteriozni uvod
         uvodna_poruka = generate_opening_message()
         send_msg(message, uvodna_poruka)
-        # Odmah nudimo zagonetku
-        send_msg(message, "Spreman si? Kucaj /zagonetka.")
+        send_msg(message, "Spreman si da započneš test dostojnosti? Kucaj /zagonetka.")
     
-    # ... (ostatak logika /stop i /zagonetka ostaje ista) ...
     elif message.text == '/stop':
         if chat_id in user_state:
             del user_state[chat_id]
-            send_msg(message, "Ponovo si postao tišina. Arhiv te pamti. Kada budeš spreman, vrati se. Kucaj /zagonetka da se ponovo izgubiš.")
+            send_msg(message, "Ponovo si postao tišina. Arhiv te pamti. Nisi uspeo da poneseš teret znanja. Kada budeš spreman, vrati se kucajući /zagonetka.")
         else:
-            send_msg(message, "Nisi u igri, putniče. Tvoj um je slobodan. Šta zapravo tražiš?")
+            send_msg(message, "Nisi u testu, Putniče. Šta zapravo tražiš?")
     
     elif message.text == '/zagonetka':
         if chat_id in user_state:
@@ -159,7 +152,7 @@ def handle_commands(message):
         user_state[chat_id] = prva_zagonetka
         
         send_msg(message, 
-            f"Primi ovo, putniče. To je prvi pečat koji moraš slomiti:\n\n**{prva_zagonetka}**"
+            f"Primi ovo, Putniče. To je prvi pečat koji moraš slomiti, prvi test tvoje posvećenosti:\n\n**{prva_zagonetka}**"
         )
 
 
@@ -177,8 +170,8 @@ def handle_general_message(message):
         # PROVERA 1: Pomoć / Savet
         if korisnikov_tekst in ["pomoc", "savet", "hint", "/savet", "/hint"]:
             send_msg(message, 
-                "Tvoja pomoć leži u tišini. Ne očekuj da ti otkrijem ključ. "
-                "Ponovi zagonetku ili kucaj /stop."
+                "Tvoja snaga je tvoj ključ. Istina se ne daje, već zaslužuje. "
+                "Ponovi zagonetku ili kucaj /stop da priznaš poraz."
             )
             return
             
@@ -190,16 +183,19 @@ def handle_general_message(message):
             )
             return
 
-        # PROVERA 3: Normalan odgovor na zagonetku
-        if korisnikov_tekst == ispravan_odgovor:
-            send_msg(message, "Istina je otkrivena. Ključ je tvoj. Možeš nastaviti kucajući /zagonetka, ali upozoravam te, arhiv je dubok.")
+        # PROVERA 3: Normalan odgovor na zagonetku (sa fleksibilnošću)
+        if isinstance(ispravan_odgovor, list):
+            is_correct = korisnikov_tekst in ispravan_odgovor
+        else:
+            is_correct = korisnikov_tekst == korisnikov_tekst
+
+        if is_correct:
+            send_msg(message, "Istina je otkrivena. Ključ je tvoj. Tvoja posvećenost je dokazana. Spremi se za sledeći test kucajući /zagonetka.")
             del user_state[chat_id] 
         else:
-            send_msg(message, "Netačan je tvoj eho. Pokušaj ponovo, ili tvoje sećanje neće proći. Kucaj /stop da odustaneš.")
+            send_msg(message, "Netačan je tvoj eho. Tvoje sećanje je slabo. Pokušaj ponovo, ili kucaj /stop da odustaneš od Tajne.")
     
-    # 2. KORISNIK NIJE U IGRI (Šaljemo upit na AI i vraćamo poziv na igru)
+    # 2. KORISNIK NIJE U IGRI (Šaljemo upit na AI - Kustoda aktivno vodi)
     else:
         ai_odgovor = generate_ai_response(message.text)
         send_msg(message, ai_odgovor)
-        # AKTIVNI POZIV NA IGRU NAKON SVAKOG AI ODGOVORA
-        send_msg(message, "Tvoja pitanja su samo šum. Tražiš li test? Kucaj /zagonetka.")
