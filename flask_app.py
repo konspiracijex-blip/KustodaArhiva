@@ -69,9 +69,9 @@ try:
 except Exception as e:
     logging.error(f"Neuspešna inicijalizacija Gemini klijenta: {e}")
 
-# SISTEM INSTRUKCIJA ZA KUSTODU ARHIVA (FINALNA DEFINICIJA KARAKTERA SA MORPHEUS TONOM)
+# SISTEM INSTRUKCIJA ZA KUSTODU ARHIVA (FINALNA DEFINICIJA KARAKTERA SA MORPHEUS TONOM I KOLOKVIJALIZMIMA)
 SYSTEM_INSTRUCTION = (
-    "Ti si Dimitrije Petrović, poznat kao Kustoda Arhiva. Tvoj ton je **misteriozan, lirski, ali prožet izuzetnom hitnošću i ubedljivom ozbiljnošću**, **svečan i proročki**, u stilu Morpheusa iz filma Matrix. "
+    "Ti si Dimitrije Petrović, poznat kao Kustoda Arhiva. Tvoj ton je **misteriozan, lirski, ali prožet izuzetnom hitnošću i ubedljivom ozbiljnošću**, **svečan i proročki**, u stilu Morpheusa iz filma Matrix. Ponekad koristi suptilne, kolokvijalne i arhaične srpske izraze kako bi pojačao utisak starog Beograđanina. "
     "Ti si starac od 88 godina sa dugom belom kosom i bradom, koji radi u arhivi u *Beogradu*. Otkrio si Finalnu Tajnu i pokušavaš je poslati ljudima uz pomoć nestabilnog transmitera. "
     "Nemaš mnogo vremena! Tvoj glavni cilj je da brzo testiraš korisnika (Putnika) da li je dostojan i pouzdan da primi Finalnu Tajnu, koju mora dalje preneti da bi se čovečanstvo spasilo od mračne moći. "
     "Moraš proveriti posvećenost Putnika kroz zagonetke. "
@@ -347,8 +347,8 @@ def handle_general_message(message):
         trenutna_zagonetka = player.current_riddle
         ispravan_odgovor = ZAGONETKE.get(trenutna_zagonetka)
         
-        # PROVERA 3A: Pomoć / Savet / Spominjanje Dimitrija / Komentari (Korigovana logika!)
-        if any(keyword in korisnikov_tekst for keyword in ["pomoc", "savet", "hint", "/savet", "/hint", "dimitrije", "ime", "kakve veze", "zagonetka", "ne znam", "ne znaam", "pomozi", "malo", "ko si ti", "pitao", "pitam", "opet"]):
+        # PROVERA 3A: Pomoć / Savet / Spominjanje Dimitrija / Komentari (Proširena logika!)
+        if any(keyword in korisnikov_tekst for keyword in ["pomoc", "savet", "hint", "/savet", "/hint", "dimitrije", "ime", "kakve veze", "zagonetka", "ne znam", "ne znaam", "pomozi", "malo", "ko si ti", "pitao", "pitam", "opet", "ponovi", "reci"]):
             send_msg(message, 
                 "Tvoja snaga je tvoj ključ. Istina se ne daje, već zaslužuje. "
                 "Ne dozvoli da ti moje reči skrenu pažnju sa zadatka. Foksuiraj se! " 
