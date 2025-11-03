@@ -10,14 +10,15 @@ from google.genai.errors import APIError
 # 2. RENDER KONFIGURACIJA
 # ----------------------------------------------------
 
-# UČITAVA TOKENS (BOT_TOKEN i GEMINI_API_KEY) IZ RENDER OKRUŽENJA
+# UČITAVANJE KLJUČEVA (OVDE JE HARDKODIRANJE ZA TEST!)
+# Ostavljamo Telegram Token da se učitava sa Rendera
 BOT_TOKEN = os.environ.get('BOT_TOKEN') 
-GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
+# HARDKODIRANJE GEMINI KLJUČA ZA TESTIRANJE
+GEMINI_API_KEY = 'AIzaSyDPJ4Wsp56_bvbZNkRdv9fWvNyJmvtPgvI' 
 
 # Provera ključeva
 if not BOT_TOKEN or not GEMINI_API_KEY:
     logging.error("Jedan ili više API ključeva nedostaje!")
-    # Koristimo dummy token samo da bi Flask radio, ali bot neće obrađivati poruke
     BOT_TOKEN = "DUMMY:TOKEN_FAIL" 
     
 WEBHOOK_URL = os.environ.get('RENDER_EXTERNAL_URL', 'https://placeholder.com/')
