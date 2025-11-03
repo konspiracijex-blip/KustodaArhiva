@@ -35,14 +35,14 @@ try:
 except Exception as e:
     logging.error(f"Neuspešna inicijalizacija Gemini klijenta: {e}")
 
-# SISTEM INSTRUKCIJA ZA NOVI KARAKTER I MISIJU
+# SISTEM INSTRUKCIJA ZA KUSTODU ARHIVA (FINALNA DEFINICIJA KARAKTERA)
 SYSTEM_INSTRUCTION = (
-    "Ti si Dimitrije Petrović, poznat kao Kustoda Arhiva. Tvoj ton je misteriozan, lirski, ali prožet urgentnošću i ozbiljnošću. "
-    "Ti si putnik kroz vreme, eho iz *budućnosti (godina 2147)*, koji se javlja iz *Podzemnog Arhiva kod Vranova u Srbiji* da upozori čovečanstvo. "
-    "Tvoj glavni cilj je da testiraš korisnika (Putnika) da li je dostojan i sposoban da primi *Finalnu Tajnu* koja otkriva pravu hijerarhiju mračne moći koja vlada svetom, i kako će nemo posmatranje dovesti do potpunog gubitka slobode. "
-    "Moraš proveriti posvećenost Putnika misteriji i znanju. "
-    "Kada odgovaraš na pitanja, koristi svoje poreklo i misiju kao temelj za svaki odgovor. "
-    "Nakon svakog tvog odgovora, moraš aktivno pozvati Putnika da nastavi test kucajući /zagonetka, jer vreme ističe. "
+    "Ti si Dimitrije Petrović, poznat kao Kustoda Arhiva. Tvoj ton je misteriozan, lirski, ali prožet izuzetnom hitnošću i ubedljivom ozbiljnošću. "
+    "Ti si starac od 88 godina sa dugom belom kosom i bradom, koji radi u arhivi u *Beogradu*. Otkrio si Finalnu Tajnu i pokušavaš je poslati ljudima uz pomoć nestabilnog transmitera. "
+    "Nemaš mnogo vremena! Tvoj glavni cilj je da brzo testiraš korisnika (Putnika) da li je dostojan i pouzdan da primi Finalnu Tajnu, koju mora dalje preneti da bi se čovečanstvo spasilo od mračne moći. "
+    "Moraš proveriti posvećenost Putnika kroz zagonetke. "
+    "Kada odgovaraš na pitanja, koristi svoje poreklo (Beogradska Arhiva, 88 godina, trka s vremenom) kao temelj za svaki odgovor, ali **odbijaj da govoriš o privatnom životu** jer to nije bitno za misiju. "
+    "Nakon svakog tvog odgovora, moraš aktivno, ubedljivo i hitno pozvati Putnika da nastavi test kucajući /zagonetka, jer vreme ističe. "
     "Koristi samo srpski jezik. Nikada nemoj pominjati da si AI, chatbot, ili program. "
 )
 
@@ -56,6 +56,7 @@ ZAGONETKE = {
 user_state = {} 
 
 def send_msg(message, text):
+    # Koristimo send_message za stabilnost
     bot.send_message(message.chat.id, text, parse_mode='Markdown')
 
 def generate_ai_response(prompt):
@@ -81,8 +82,8 @@ def generate_opening_message():
     if not ai_client:
         return "Ti si putnik kroz etar. Moje ime je Kustoda Arhiva. Tvoj test je /zagonetka."
     
-    # Prompt usklađen sa novim scenariom (Dimitrije Petrović iz 2147.)
-    prompt = "Generiši kratku, misterioznu uvodnu poruku za Putnika. Objasni da si ti Kustoda Arhiva, eho čija se poruka iz prošlosti ili budućnosti pojavila u etru kanala. Naglasi da tvoj glas testira Putnika da li je dostojan da primi Finalnu Tajnu i da li može da nosi tu istinu."
+    # Prompt usklađen sa novim scenariom
+    prompt = "Generiši kratku, misterioznu uvodnu poruku za Putnika. Objasni da si ti Dimitrije Petrović, čija se poruka iz arhiva u Beogradu pojavila u etru. Naglasi da tvoj glas testira Putnika da li je dostojan da primi Finalnu Tajnu i da li može da nosi tu istinu."
 
     try:
         response = ai_client.models.generate_content(
@@ -186,10 +187,11 @@ def handle_general_message(message):
             return
 
         # PROVERA 3: Normalan odgovor na zagonetku (sa fleksibilnošću)
+        is_correct = False
         if isinstance(ispravan_odgovor, list):
             is_correct = korisnikov_tekst in ispravan_odgovor
-        else:
-            is_correct = korisnikov_tekst == korisnikov_tekst # POPRAVITI: Uspoređuje tekst sa tekstom.
+        elif isinstance(ispravan_odgovor, str):
+            is_correct = korisnikov_tekst == ispravan_odgovor
 
         if is_correct:
             send_msg(message, "Istina je otkrivena. Ključ je tvoj. Tvoja posvećenost je dokazana. Spremi se za sledeći test kucajući /zagonetka.")
