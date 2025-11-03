@@ -53,10 +53,7 @@ try:
         is_disqualified = Column(Boolean, default=False)
 
     # Kreiranje tabele (ako ne postoji)
-    # 🛑 PRIVREMENA LINIJA: BRIŠE STARU TABELU DA BI REŠILA KONFLIKT!
-    # OBAVEZNO OBRISATI NAKON USPEŠNOG DEPLOYA/RESTART-a!
-    Base.metadata.drop_all(Engine) 
-    
+    # 🚨 Linija za DROP_ALL JE OVDE UKLONJENA!
     Base.metadata.create_all(Engine)
 except Exception as e:
     logging.error(f"FATALNA GREŠKA: Neuspešno kreiranje/povezivanje baze: {e}")
@@ -327,7 +324,7 @@ def handle_general_message(message):
             send_msg(message, ai_odgovor)
             
             # PROVERA 2A: DISKVALIFIKACIJA NA OSNOVU AI ODGOVORA (Trivijalna pitanja)
-            if ai_odgovor.strip().startswith(DISQUALIFICATION_MESSAGE_START):
+            if player and ai_odgovor.strip().startswith(DISQUALIFICATION_MESSAGE_START):
                 player.is_disqualified = True
                 player.current_riddle = None
                 player.solved_count = 0 
