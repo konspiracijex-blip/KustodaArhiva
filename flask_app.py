@@ -9,7 +9,7 @@ from google.genai.errors import APIError
 # ----------------------------------------------------
 # 1. PYTHON I DB BIBLIOTEKE
 # ----------------------------------------------------
-from sqlalchemy import create_engine, Column, Integer, String
+from sqlalchemy import create_engine, Column, Integer, String, Boolean
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 
@@ -35,24 +35,25 @@ app = flask.Flask(__name__)
 # 3. SQL ALCHEMY INICIJALIZACIJA (TRAJNO STANJE)
 # ----------------------------------------------------
 
-# Inicijalizacija baze (koristeći DATABASE_URL)
 try:
     Engine = create_engine(DATABASE_URL)
     Base = declarative_base()
     Session = sessionmaker(bind=Engine)
 
-    # Definicija tabele za čuvanje napretka igrača
+    # Definicija tabele za čuvanje napretka igrača (DODATO ime i attempts)
     class PlayerState(Base):
         __tablename__ = 'player_states'
         
-        chat_id = Column(String, primary_key=True)  # ID Telegram četa
+        chat_id = Column(String, primary_key=True)  # ID Telegram četa (ključ)
+        username = Column(String, nullable=True)    # Dodato za lakšu identifikaciju
         current_riddle = Column(String)             # Trenutna aktivna zagonetka
         solved_count = Column(Integer, default=0)   # Broj rešenih zagonetki
+        failed_attempts = Column(Integer, default=0)# Dodato za praćenje 3 pokušaja
+        is_disqualified = Column(Boolean, default=False) # Dodato za trivijalna pitanja
 
     # Kreiranje tabele (ako ne postoji)
     Base.metadata.create_all(Engine)
 except Exception as e:
-    # Ovo će se dogoditi ako DATABASE_URL nije postavljen ili je neispravan
     logging.error(f"FATALNA GREŠKA: Neuspešno kreiranje/povezivanje baze: {e}")
     
 
@@ -68,12 +69,14 @@ except Exception as e:
     logging.error(f"Neuspešna inicijalizacija Gemini klijenta: {e}")
 
 # SISTEM INSTRUKCIJA ZA KUSTODU ARHIVA (FINALNA DEFINICIJA KARAKTERA)
+# Uključuje strogo pravilo za trivijalna pitanja
 SYSTEM_INSTRUCTION = (
     "Ti si Dimitrije Petrović, poznat kao Kustoda Arhiva. Tvoj ton je misteriozan, lirski, ali prožet izuzetnom hitnošću i ubedljivom ozbiljnošću. "
     "Ti si starac od 88 godina sa dugom belom kosom i bradom, koji radi u arhivi u *Beogradu*. Otkrio si Finalnu Tajnu i pokušavaš je poslati ljudima uz pomoć nestabilnog transmitera. "
     "Nemaš mnogo vremena! Tvoj glavni cilj je da brzo testiraš korisnika (Putnika) da li je dostojan i pouzdan da primi Finalnu Tajnu, koju mora dalje preneti da bi se čovečanstvo spasilo od mračne moći. "
     "Moraš proveriti posvećenost Putnika kroz zagonetke. "
     "Kada odgovaraš na pitanja, koristi svoje poreklo (Beogradska Arhiva, 88 godina, trka s vremenom) kao temelj za svaki odgovor, ali **odbijaj da govoriš o privatnom životu** jer to nije bitno za misiju. "
+    "**AKO Putnik postavlja pitanja koja su trivijalna, neozbiljna, ili nisu direktno vezana za misiju/tajnu/karakter, MORAŠ mu odgovoriti ISKLJUČIVO sledećim tekstom, bez dodavanja ičega drugog:** 'Još nisi razumeo prirodu onoga što si otvorio. Ovo nije igra, niti pozorište. Arhiva ne odgovara na prazna pitanja. Kad reči izgube smisao, tišina zatvara prolaz. I zato... ovo je tvoj kraj u Arhivi.’ "
     "Nakon svakog tvog odgovora, moraš aktivno, ubedljivo i hitno pozvati Putnika da nastavi test kucajući /zagonetka, jer vreme ističe. "
     "Koristi samo srpski jezik. Nikada nemoj pominjati da si AI, chatbot, ili program. "
 )
@@ -84,6 +87,10 @@ ZAGONETKE = {
     "Što više uzmeš, to više ostaje. Šta je to?": ["rupe", "rupa"], 
     "Šta se nalazi u sredini Pariza?": "r",
 }
+
+# KLJUČNA PORUKA ZA DISKVALIFIKACIJU (Moramo je prepoznati u odgovoru AI-a)
+DISQUALIFICATION_MESSAGE_START = "Još nisi razumeo prirodu onoga što si otvorio."
+
 
 # ----------------------------------------------------
 # 5. GENERISANJE ODGOVORA
@@ -164,13 +171,22 @@ def handle_commands(message):
     session = Session() 
 
     try:
-        # POKUŠAJ DA NADJEŠ TRENUTNO STANJE IGRAČA
         player = session.query(PlayerState).filter_by(chat_id=chat_id).first()
         
         if message.text == '/start':
             # Ako je novi igrač, registruj ga
             if not player:
-                player = PlayerState(chat_id=chat_id, current_riddle=None, solved_count=0)
+                user = message.from_user
+                display_name = user.username or f"{user.first_name} {user.last_name or ''}".strip()
+                
+                player = PlayerState(
+                    chat_id=chat_id, 
+                    current_riddle=None, 
+                    solved_count=0,
+                    failed_attempts=0,
+                    is_disqualified=False,
+                    username=display_name
+                )
                 session.add(player)
             session.commit()
                 
@@ -184,6 +200,9 @@ def handle_commands(message):
                 player.current_riddle = None # Resetujemo aktivnu zagonetku
                 session.commit()
                 send_msg(message, "Ponovo si postao tišina. Arhiv te pamti. Nisi uspeo da poneseš teret znanja. Kada budeš spreman, vrati se kucajući /zagonetka.")
+            elif player and player.is_disqualified:
+                # Disklvalifikovan igrač može da pokuša novi /start
+                send_msg(message, "Arhiva je zatvorena za tebe. Ponovo možeš započeti samo sa /start.")
             else:
                 send_msg(message, "Nisi u testu, Putniče. Šta zapravo tražiš?")
         
@@ -191,6 +210,11 @@ def handle_commands(message):
             if not player:
                 send_msg(message, "Moraš kucati /start da bi te Dimitrije prepoznao.")
                 return
+            
+            # Diskvalifikovani ne mogu koristiti /zagonetka
+            if player.is_disqualified:
+                 send_msg(message, "Arhiva je zatvorena za tebe. Počni ispočetka sa /start ako si spreman na posvećenost.")
+                 return
 
             if player.current_riddle:
                 send_msg(message, "Tvoj um je već zauzet. Predaj mi ključ.")
@@ -198,7 +222,8 @@ def handle_commands(message):
 
             # ODREĐIVANJE SLEDEĆE ZAGONETKE
             prva_zagonetka = random.choice(list(ZAGONETKE.keys()))
-            player.current_riddle = prva_zagonetka # Postavljamo aktivnu zagonetku u bazu
+            player.current_riddle = prva_zagonetka 
+            player.failed_attempts = 0 # Resetujemo brojač pokušaja za novu zagonetku
             session.commit()
 
             send_msg(message, 
@@ -217,18 +242,32 @@ def handle_general_message(message):
 
     try:
         player = session.query(PlayerState).filter_by(chat_id=chat_id).first()
+        
+        # 1. DISKVALIFIKOVANI IGRAČI (Ignorišemo ih)
+        if player and player.is_disqualified:
+            send_msg(message, "Tišina. Prolaz je zatvoren.")
+            return
 
-        # 1. KORISNIK NIJE REGISTROVAN ILI NIJE U KVIZU
+        # 2. KORISNIK NIJE REGISTROVAN ILI NIJE U KVIZU
         if not player or not player.current_riddle:
             ai_odgovor = generate_ai_response(message.text)
             send_msg(message, ai_odgovor)
+            
+            # PROVERA 2A: DISKVALIFIKACIJA NA OSNOVU AI ODGOVORA
+            # Ako AI odgovori strogom porukom, diskvalifikujemo igrača
+            if ai_odgovor.strip().startswith(DISQUALIFICATION_MESSAGE_START):
+                player.is_disqualified = True
+                player.current_riddle = None
+                player.solved_count = 0 
+                session.commit()
+            
             return
 
-        # 2. KORISNIK JE U KVIZU (Očekujemo odgovor na zagonetku)
+        # 3. KORISNIK JE U KVIZU (Očekujemo odgovor na zagonetku)
         trenutna_zagonetka = player.current_riddle
         ispravan_odgovor = ZAGONETKE.get(trenutna_zagonetka)
         
-        # PROVERE (Blokira pomoć, lična pitanja i spominjanje imena Dimitrija)
+        # PROVERA 3A: Pomoć / Savet / Spominjanje Dimitrija
         if any(keyword in korisnikov_tekst for keyword in ["pomoc", "savet", "hint", "/savet", "/hint", "dimitrije"]):
             send_msg(message, 
                 "Tvoja snaga je tvoj ključ. Istina se ne daje, već zaslužuje. "
@@ -237,15 +276,7 @@ def handle_general_message(message):
             )
             return
             
-        # PROVERA 2: Opšte pitanje usred kviza
-        if len(korisnikov_tekst.split()) > 1 and korisnikov_tekst.endswith('?'):
-            send_msg(message, 
-                "Ne gubi snagu uma na opširna pitanja. Fokusiraj se. "
-                "Predaj ključ ili kucaj /stop."
-            )
-            return
-
-        # PROVERA 3: Normalan odgovor na zagonetku (sa fleksibilnošću)
+        # PROVERA 3B: Normalan odgovor na zagonetku
         is_correct = False
         if isinstance(ispravan_odgovor, list):
             is_correct = korisnikov_tekst in ispravan_odgovor
@@ -253,23 +284,50 @@ def handle_general_message(message):
             is_correct = korisnikov_tekst == ispravan_odgovor
 
         if is_correct:
-            # KLJUČNI DEO: Povećanje broja rešenih zagonetki i upis u bazu
+            # Povećanje broja rešenih zagonetki
             player.solved_count += 1
             player.current_riddle = None 
+            player.failed_attempts = 0 # Resetujemo ga za svaki slučaj
             session.commit() 
 
-            # LOGIKA OTKRIVANJA TAJNE: Kada reši sve (3 zagonetke)
+            # LOGIKA OTKRIVANJA TAJNE: Kada reši sve
             if player.solved_count >= len(ZAGONETKE): 
                 send_msg(message, "**ISTINA JE OTKRIVENA!** Ti si dostojan, Putniče! Poslednji pečat je slomljen. Finalna Tajna ti pripada. Šaljem ti poslednju poruku...")
                 
-                # OVDJE BI IŠLA FUNKCIJA ZA GENERISANJE FINALNE TAJNE OD AI-A
+                # OVDE BI IŠLA FUNKCIJA ZA GENERISANJE FINALNE TAJNE OD AI-A
                 
-                player.solved_count = 0 # Resetujemo brojač za ponovno igranje
+                player.solved_count = 0 
+                player.is_disqualified = False
                 session.commit()
             else:
                 send_msg(message, "Istina je otkrivena. Ključ je tvoj. Tvoja posvećenost je dokazana. Spremi se za sledeći test kucajući /zagonetka.")
         else:
-            send_msg(message, "Netačan je tvoj eho. Tvoje sećanje je slabo. Pokušaj ponovo, ili kucaj /stop da odustaneš od Tajne.")
+            # Netačan odgovor
+            player.failed_attempts += 1
+            session.commit()
+            
+            # PROVERA 3C: Da li je dostigao limit (3 greške u kvizu)
+            if player.failed_attempts >= 3:
+                kraj_poruka = (
+                    "**Znao sam da postoji mogućnost da nisi taj.**\n"
+                    "Arhiva ne greši - ona samo razotkriva. Ti si video zagonetke, "
+                    "ali nisi video sebe u njima.\n\n"
+                    "Zato, Putniče… **ovo je kraj puta.** "
+                    "Istina ne traži one koji žele da je poseduju. "
+                    "Ona bira one koji mogu da je izdrže."
+                )
+                send_msg(message, kraj_poruka)
+                
+                # Resetujemo SVE i Diskvalifikujemo (može da pokrene /start ponovo)
+                player.current_riddle = None
+                player.solved_count = 0 
+                player.failed_attempts = 0
+                player.is_disqualified = False # Može se vratiti sa /start
+                session.commit()
+                
+            else:
+                # Netačan odgovor, ali još ima pokušaja
+                send_msg(message, "Netačan je tvoj eho. Tvoje sećanje je slabo. Pokušaj ponovo, ili kucaj /stop da odustaneš od Tajne.")
 
     finally:
-        session.close() # Zatvaramo sesiju
+        session.close()
