@@ -135,7 +135,6 @@ def generate_ai_response(prompt):
 # --- FIKSNI UVODNI TEKST DIJALOG ---
 INITIAL_QUERY_1 = "Da li vidite poruku?"
 INITIAL_QUERY_2 = "Da li sada vidite poruku?"
-# Korigovana poruka!
 RETURN_DISQUALIFIED_MESSAGE = "**Vratio si se iz tišine.** Zaborav je privremen. **Moja volja** otvara prolaz za novu šansu, ali vreme se ne vraća." 
 
 # DINAMIČKI GENERISAN DRAMATIČNI TEKST KOJI SE ŠALJE POSLE POTVRDE IGRAČA
@@ -161,6 +160,7 @@ def generate_disqualification_power():
     prompt = ("Putnik je izabrao 'Moć da zna sve što drugi kriju'. Reci mu da je moć ta koja je uništila svet i da Arhiva ne trpi one čiji je cilj kontrola. Koristi Morpheusov, proističući ton. Diskvalifikuj ga (2 rečenice) i kaži mu da je put do Finalne Tajne zatvoren, te da kuca /start.")
     return generate_ai_response(prompt)
 
+# KORIGOVANO: Uklonjen poziv na /zagonetka (KORAK 1)
 def generate_sub_question(riddle_text, answer):
     if not ai_client: return "Tvoje je sećanje mutno, ali stisak drži. Zašto? Reci mi zašto je ta knjiga ključ?"
     prompt = (f"Putnik je tačno odgovorio na pečat: '{riddle_text}' sa odgovorom: '{answer}'. Postavi mu udarno, Morpheus-stila podpitanje. Pitaj ga **Zašto** baš Treća knjiga? Zašto je ta istina zapečaćena? Budi kratak (2 rečenice) i hitan. **Ne troši vreme, samo pitaj 'Zašto' i zahtevaj odgovor.**")
@@ -176,6 +176,7 @@ def generate_sub_partial_success(player_answer):
     prompt = (f"Putnik je dao objašnjenje: '{player_answer}' na podpitanje. Objašnjenje nije savršeno, ali pokazuje volju. Daj mu blagu Morpheus-stila potvrdu (2 rečenice) i poziv na /zagonetka.")
     return generate_ai_response(prompt)
 
+# KORIGOVANO: Uklonjen poziv na /zagonetka
 def generate_sub_question_mir(riddle_text, answer):
     if not ai_client: return "Mir je tvoj odabir. Ali zašto? Objasni hitno, jer tvoje reči su tvoj ključ."
     prompt = (f"Putnik je tačno odgovorio na pečat: '{riddle_text}' sa odgovorom: '{answer}'. Postavi mu udarno, Morpheus-stila potpitanje. Pitaj ga **Zašto** je Mir važniji od Moći? Zašto je znanje bez mira prokletstvo? Budi kratak (2 rečenice) i hitan.")
@@ -191,6 +192,7 @@ def generate_sub_partial_mir(player_answer):
     prompt = (f"Putnik je dao objašnjenje za drugi pečat: '{player_answer}'. Objašnjenje nije savršeno, ali pokazuje da nije izabrao moć. Daj mu blagu Morpheus-stila potvrdu (2 rečenice) i poziv na /zagonetka.")
     return generate_ai_response(prompt)
 
+# KORIGOVANO: Uklonjen poziv na /zagonetka
 def generate_sub_question_senka(riddle_text, answer):
     if not ai_client: return "Treća senka? Ali Zašto te posmatra, a ne ogleda? Dokaži da razumeš sebe. Odgovori odmah!"
     prompt = (f"Putnik je tačno odgovorio na pečat: '{riddle_text}' sa odgovorom: '{answer}'. Postavi mu udarno, Morpheus-stila potpitanje. Pitaj ga **Zašto** te treća senka posmatra, a ne ponavlja? Dokaži da razume da istina nije u egu. Budi kratak (2 rečenice) i hitan.")
@@ -428,9 +430,14 @@ def handle_commands(message):
                  send_msg(message, "Čekam tvoj potvrdan signal! Da li vidiš poruku? Odgovori DA ili NE.")
                  return
             
-            if player.current_riddle:
+            # KLJUČNA PROVERA: Sprečavanje ulaska u novu zagonetku dok traje pot-pitanje.
+            if player.current_riddle and player.current_riddle in SUB_RIDDLES.values():
+                send_msg(message, "Tvoj odgovor na poslednje pitanje još uvek visi u etru. Moraš da mi objasniš svoju suštinu pre nego što nastavimo.")
+                return
+            elif player.current_riddle:
                 send_msg(message, "Tvoj um je već zauzet. Predaj mi ključ.")
                 return
+
 
             riddle_keys = list(ZAGONETKE.keys())
             
@@ -478,26 +485,23 @@ def handle_general_message(message):
             
             if "da" in korisnikov_tekst or "vidim" in korisnikov_tekst or "jesam" in korisnikov_tekst or "da vidim" in korisnikov_tekst or "ovde" in korisnikov_tekst:
                 
-                # Potvrda je primljena, prelazimo na dramatičan uvod (AI generisan)
                 player_name = player.username if player.username else "Putniče"
                 ai_intro = generate_dramatic_intro(player_name)
                 
-                player.current_riddle = None # Vraćamo na None da bi /pokreni radio
+                player.current_riddle = None 
                 player.general_conversation_count = 0 
                 session.commit()
-                send_msg(message, ai_intro + "\n\nKucaj **/pokreni**.") # Dodajemo komandu
+                send_msg(message, ai_intro + "\n\nKucaj **/pokreni**.") 
                 return
             
             elif trenutna_zagonetka == "INITIAL_WAIT_1":
-                # Ako ne odgovori sa DA, šaljemo drugu poruku i menjamo stanje
                 player.current_riddle = "INITIAL_WAIT_2"
                 session.commit()
                 send_msg(message, INITIAL_QUERY_2)
                 return
             
             elif trenutna_zagonetka == "INITIAL_WAIT_2":
-                # Ako ne odgovori ni na drugu, pretpostavljamo da je tu, ali je test nebitan.
-                player.current_riddle = None # Vraćamo na None
+                player.current_riddle = None 
                 session.commit()
                 send_msg(message, "Tišina je odgovor. Dobro. Možda je tako i bolje. Ako si tu, kucaj /pokreni.")
                 return
@@ -527,41 +531,39 @@ def handle_general_message(message):
                 return
 
 
-        # HANDLER 3.2: ODGOVOR NA POTPITANJE 
+        # HANDLER 3.2: ODGOVOR NA POTPITANJE (KORAK 2)
+        is_full_success_check = False
         if trenutna_zagonetka in SUB_RIDDLES.values():
             
+            # Definicija ključnih reči za uspeh
             if trenutna_zagonetka == "SUB_TRECA":
                 keywords_full_success = ["zapecacena", "vosak", "spremnost", "posvecenost", "zatvorena", "istina se ne daje", "volja", "ne cita se"]
                 ai_full_success = generate_sub_correct_response
-                ai_partial_success = generate_sub_partial_success
             elif trenutna_zagonetka == "SUB_MIR":
                 keywords_full_success = ["prokletstvo", "teret", "mir", "spokoj", "ne kontrola", "cisto srce", "prokletstvo", "ne moram", "ne znam"]
                 ai_full_success = generate_sub_correct_mir
-                ai_partial_success = generate_sub_partial_mir
             else: 
                 keywords_full_success = ["posmatra", "ne ogleda", "samosvest", "istinski", "dublje", "dalje od odraza", "nije ego", "svest"]
                 ai_full_success = generate_sub_correct_senka
-                ai_partial_success = generate_sub_partial_senka
-            
-            is_help_request = any(keyword in korisnikov_tekst for keyword in ["pomoc", "savet", "hint", "ne znam", "pomozi", "ponovi", "cemu", "radi"]) 
-
-            if is_help_request:
-                send_msg(message, "Tvoja snaga je tvoj ključ. Istina se ne daje, već zaslužuje. Ne dozvoli da ti moje reči skrenu pažnju sa zadatka. Foksuiraj se! Ponovi Probu ili kucaj /stop da priznaš poraz.")
-                return
             
             is_full_success_check = any(keyword in korisnikov_tekst for keyword in keywords_full_success)
             
             if is_full_success_check:
+                # USPEH U POTPITANJU
                 ai_odgovor = ai_full_success(korisnikov_tekst)
-            else:
-                ai_odgovor = ai_partial_success(korisnikov_tekst)
 
-            player.solved_count += 1
-            player.current_riddle = None 
-            player.failed_attempts = 0 
-            session.commit()
-            send_msg(message, ai_odgovor)
-            return
+                player.solved_count += 1
+                player.current_riddle = None 
+                player.failed_attempts = 0 
+                player.general_conversation_count = 0 
+                session.commit()
+                send_msg(message, ai_odgovor)
+                return
+            else:
+                # NEUSPEH/POMOĆ. Ne vraćamo se odmah, već puštamo da uđe u Handler 3.3 (Konverzacija)
+                # OVO JE KRITIČNA PROMENA
+                pass 
+
 
         # --- PROVERE TAČNOSTI (Koristi se kasnije) ---
         is_correct_riddle = False
@@ -572,7 +574,7 @@ def handle_general_message(message):
                  is_correct_riddle = korisnikov_tekst == ispravan_odgovor
 
 
-        # --- NOVI HANDLER 3.3: OGRANIČENA KONVERZACIJA I DISKVALIFIKACIJA ---
+        # HANDLER 3.3: OGRANIČENA KONVERZACIJA I DISKVALIFIKACIJA
         
         conversation_keywords = [
             "pomoc", "savet", "hint", "/savet", "/hint", "dimitrije", "ime", 
@@ -583,8 +585,10 @@ def handle_general_message(message):
             "ko si ti", "ko je", "?", "??", "???", "!", "!!" 
         ]
         
+        # Provera da li je zahtev za konverzaciju/pomoć
         is_conversation_request = (
             (trenutna_zagonetka is None) or 
+            (trenutna_zagonetka in SUB_RIDDLES.values() and not is_full_success_check) or # KLJUČNA LOGIKA: Ako je u pot-pitanju i nije uspeo
             (trenutna_zagonetka is not None and any(keyword in korisnikov_tekst for keyword in conversation_keywords))
         )
         
@@ -693,7 +697,6 @@ def handle_general_message(message):
             session.commit()
             
             if player.failed_attempts >= 3:
-                # KORIGOVANA PORUKA ZA TREĆI POGREŠAN ODGOVOR (Nije previše blag, ali je finalan)
                 kraj_poruka = "Tri puta si odbio da vidiš. **Moja ruka je sada spuštena.** Put je zatvoren, jer ne možeš da poneseš teret istine. Idi u tišinu."
                 send_msg(message, kraj_poruka)
                 
@@ -704,7 +707,6 @@ def handle_general_message(message):
                 session.commit()
                 
             else:
-                # KORIGOVANA PORUKA ZA POGREŠAN ODGOVOR (Očinski i usmeravajući)
                 send_msg(message, "Gledaš, ali ne vidiš, Putniče. Ne tražim tvoje znanje, već tvoju suštinu. Vrati se rečima. Pokušaj ponovo, ili kucaj /stop da odustaneš od Tajne.")
 
     finally:
