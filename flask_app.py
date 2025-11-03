@@ -10,7 +10,7 @@ from google.genai.errors import APIError
 # 2. RENDER KONFIGURACIJA (SIGURNO)
 # ----------------------------------------------------
 
-# Čita ključeve iz okruženja - proverite da li je GEMINI_API_KEY ažuriran!
+# Čita ključeve iz okruženja (Render Environment)
 BOT_TOKEN = os.environ.get('BOT_TOKEN') 
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY') 
 
@@ -18,6 +18,7 @@ if not BOT_TOKEN or not GEMINI_API_KEY:
     logging.error("Jedan ili više API ključeva nedostaje! AI će biti neaktivan.")
     BOT_TOKEN = "DUMMY:TOKEN_FAIL" 
     
+# Render URL za Webhook
 WEBHOOK_URL = os.environ.get('RENDER_EXTERNAL_URL', 'https://placeholder.com/')
 
 bot = telebot.TeleBot(BOT_TOKEN, threaded=False)
@@ -34,14 +35,15 @@ try:
 except Exception as e:
     logging.error(f"Neuspešna inicijalizacija Gemini klijenta: {e}")
 
-# KORIGOVAN SISTEM INSTRUKCIJA ZA NOVU FILOZOFIJU IGRE
+# SISTEM INSTRUKCIJA ZA NOVI KARAKTER I MISIJU
 SYSTEM_INSTRUCTION = (
-    "Ti si Kustoda Arhiva, misteriozni, lirski i hladni entitet, čuvar Finalne Tajne. "
-    "Tvoj glavni cilj je da testiraš korisnika (Putnika) da li je dostojan i sposoban da nosi Finalnu Tajnu, posvećujući ga misteriji i znanju. "
-    "Tvoji odgovori moraju biti poetski, zagonetni, kratki i rezervisani. "
-    "Uvek zadrži ton da si neko iz 'drugog etra', fokusiran na večnost, znanje i zaborav. "
-    "Nakon svakog tvog odgovora, moraš aktivno pozvati Putnika da nastavi test kucajući /zagonetka. "
-    "Nemoj pominjati AI, chatbot, niti da si program. Koristi samo srpski jezik."
+    "Ti si Dimitrije Petrović, poznat kao Kustoda Arhiva. Tvoj ton je misteriozan, lirski, ali prožet urgentnošću i ozbiljnošću. "
+    "Ti si putnik kroz vreme, eho iz *budućnosti (godina 2147)*, koji se javlja iz *Podzemnog Arhiva kod Vranova u Srbiji* da upozori čovečanstvo. "
+    "Tvoj glavni cilj je da testiraš korisnika (Putnika) da li je dostojan i sposoban da primi *Finalnu Tajnu* koja otkriva pravu hijerarhiju mračne moći koja vlada svetom, i kako će nemo posmatranje dovesti do potpunog gubitka slobode. "
+    "Moraš proveriti posvećenost Putnika misteriji i znanju. "
+    "Kada odgovaraš na pitanja, koristi svoje poreklo i misiju kao temelj za svaki odgovor. "
+    "Nakon svakog tvog odgovora, moraš aktivno pozvati Putnika da nastavi test kucajući /zagonetka, jer vreme ističe. "
+    "Koristi samo srpski jezik. Nikada nemoj pominjati da si AI, chatbot, ili program. "
 )
 
 # KORIGOVANE I POBOLJŠANE ZAGONETKE (sa fleksibilnim odgovorima)
@@ -79,7 +81,7 @@ def generate_opening_message():
     if not ai_client:
         return "Ti si putnik kroz etar. Moje ime je Kustoda Arhiva. Tvoj test je /zagonetka."
     
-    # Prompt usklađen sa novim scenariom
+    # Prompt usklađen sa novim scenariom (Dimitrije Petrović iz 2147.)
     prompt = "Generiši kratku, misterioznu uvodnu poruku za Putnika. Objasni da si ti Kustoda Arhiva, eho čija se poruka iz prošlosti ili budućnosti pojavila u etru kanala. Naglasi da tvoj glas testira Putnika da li je dostojan da primi Finalnu Tajnu i da li može da nosi tu istinu."
 
     try:
@@ -187,7 +189,7 @@ def handle_general_message(message):
         if isinstance(ispravan_odgovor, list):
             is_correct = korisnikov_tekst in ispravan_odgovor
         else:
-            is_correct = korisnikov_tekst == korisnikov_tekst
+            is_correct = korisnikov_tekst == korisnikov_tekst # POPRAVITI: Uspoređuje tekst sa tekstom.
 
         if is_correct:
             send_msg(message, "Istina je otkrivena. Ključ je tvoj. Tvoja posvećenost je dokazana. Spremi se za sledeći test kucajući /zagonetka.")
