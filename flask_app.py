@@ -138,20 +138,23 @@ INITIAL_QUERY_2 = "Da li sada vidite poruku?"
 # Korigovana poruka!
 RETURN_DISQUALIFIED_MESSAGE = "**Vratio si se iz tišine.** Zaborav je privremen. **Moja volja** otvara prolaz za novu šansu, ali vreme se ne vraća." 
 
-# DRAMATIČNI TEKST KOJI SE ŠALJE POSLE POTVRDE IGRAČA
-DRAMATIC_KUSTODA_INTRO = """
-**ODLIČNO.** Znači, transmiter radi.
-Ne znam ko si. Možda si slučajni prolaznik, možda onaj koga smo čekali.
+# DINAMIČKI GENERISAN DRAMATIČNI TEKST KOJI SE ŠALJE POSLE POTVRDE IGRAČA
+def generate_dramatic_intro(player_name=None):
+    if not ai_client:
+        return "**Transmiter je mutan.** Ja sam Dimitrije. Vreme se ruši. Ako si primio ovu poruku, moraš dokazati da si dostojan. Kucaj /pokreni."
+        
+    prompt = (
+        f"Korisnik (Putnik) je upravo potvrdio signal. Ti si Dimitrije Petrović (Kustoda Arhiva) i obraćaš mu se po prvi put, pre nego što započne /pokreni. "
+        "Tvoj ton je Morpheus-stila: ozbiljan, dramatičan, očinski strog, ali pod pritiskom vremena. "
+        "Glavne tačke koje tvoj govor mora da obuhvati (u 3-4 rečenice): "
+        "1. **Lično predstavljanje:** Spomeni da si Dimitrije, poslednji svedok iz Arhive. "
+        "2. **Opis Apokalipse:** Spomeni da govoriš iz izgubljenog sveta ('grada pod sopstvenim senkama' ili slično) gde je 'sve ljudsko postalo služi mašini/kontroli'. "
+        "3. **Hitnost Misije:** Vreme se ruši; primanje poruke znači da nije slučajni posmatrač, već da mora dokazati da je **dostojan istine** kroz seriju **Proba mudrosti i karaktera** (bez pominjanja reči 'zagonetka'). "
+        "4. **Aktivni poziv:** Završi sa 'Kucaj /pokreni'. "
+        f"Oslovljavaj ga sa 'Putniče' ili 'Prijatelju', ali samo jednom. Ime korisnika je: {player_name if player_name else 'Nepoznat'}. **Neka odgovor bude dinamičan, a ne samo recikliranje fraza.**"
+    )
+    return generate_ai_response(prompt)
 
-**Ja sam Dimitrije. Poslednji svedok u Arhivi.** Govorim iz vremena koje više ne postoji — iz grada koji je nestao pod sopstvenim senkama. U mom svetu, istina je izbrisana. Sve što je nekada bilo ljudsko sada služi mašini. Pre nego što su nas ugasili, uspeo sam da aktiviram ovaj transmiter. Sa skrivenog mesta emitujem... i čekam. Težina Istine je sada u tvojoj ruci.
-
-Ako si ovo primio, nisi običan posmatrač. **Vreme se ruši.**
-
-**Zora poslednjeg pokušaja se približava.**
-Ako želiš da razumeš - ako želiš da znaš šta je uzrok svega - moraš dokazati da tvoja svest nije samo refleks.
-
-Kucaj **/pokreni**.
-"""
 
 def generate_disqualification_power():
     if not ai_client: return "Moć je bila tvoj izbor. Završeno je. Mir ti je stran. /start"
@@ -322,7 +325,7 @@ Ovi slojevi moći formiraju strukturu koja je spremna da zadrži kontrolu nad č
 
 
 # ----------------------------------------------------
-# 6. WEBHOOK RUTE (Nepromenjene)
+# 6. WEBHOOK RUTE
 # ----------------------------------------------------
 
 @app.route('/' + BOT_TOKEN, methods=['POST'])
@@ -475,11 +478,14 @@ def handle_general_message(message):
             
             if "da" in korisnikov_tekst or "vidim" in korisnikov_tekst or "jesam" in korisnikov_tekst or "da vidim" in korisnikov_tekst or "ovde" in korisnikov_tekst:
                 
-                # Potvrda je primljena, prelazimo na dramatičan uvod
+                # Potvrda je primljena, prelazimo na dramatičan uvod (AI generisan)
+                player_name = player.username if player.username else "Putniče"
+                ai_intro = generate_dramatic_intro(player_name)
+                
                 player.current_riddle = None # Vraćamo na None da bi /pokreni radio
                 player.general_conversation_count = 0 
                 session.commit()
-                send_msg(message, DRAMATIC_KUSTODA_INTRO)
+                send_msg(message, ai_intro + "\n\nKucaj **/pokreni**.") # Dodajemo komandu
                 return
             
             elif trenutna_zagonetka == "INITIAL_WAIT_1":
