@@ -56,7 +56,6 @@ ZAGONETKE = {
 user_state = {} 
 
 def send_msg(message, text):
-    # Koristimo send_message za stabilnost
     bot.send_message(message.chat.id, text, parse_mode='Markdown')
 
 def generate_ai_response(prompt):
@@ -82,8 +81,7 @@ def generate_opening_message():
     if not ai_client:
         return "Ti si putnik kroz etar. Moje ime je Kustoda Arhiva. Tvoj test je /zagonetka."
     
-    # Prompt usklađen sa novim scenariom
-    prompt = "Generiši kratku, misterioznu uvodnu poruku za Putnika. Objasni da si ti Dimitrije Petrović, čija se poruka iz arhiva u Beogradu pojavila u etru. Naglasi da tvoj glas testira Putnika da li je dostojan da primi Finalnu Tajnu i da li može da nosi tu istinu."
+    prompt = "Generiši kratku, misterioznu uvodnu poruku za Putnika. Objasni da si ti Dimitrije Petrović, čija se poruka iz arhiva u Beogradu pojavila u etru. Naglasi da tvoj glas testira Putnika da li je dostojan da primi Finalnu Tajnu i da li može da nosi tu istinu. Uključi snažan poziv na akciju (kucaj /zagonetka)."
 
     try:
         response = ai_client.models.generate_content(
@@ -135,9 +133,12 @@ def handle_commands(message):
     chat_id = message.chat.id
 
     if message.text == '/start':
+        # UKLANJANJE DUPLIRANJA: Duga poruka (AI) + kratka poruka (hardkodirana)
         uvodna_poruka = generate_opening_message()
         send_msg(message, uvodna_poruka)
-        send_msg(message, "Spreman si da započneš test dostojnosti? Kucaj /zagonetka.")
+        # Smatramo da AI poziva na /zagonetka. Da osiguramo stabilnost:
+        send_msg(message, "Kucaj /zagonetka da započneš. Vremena je malo.")
+        return # DODAVANJE RETURN DA SPREČI VIŠESTRUKU OBRADU
     
     elif message.text == '/stop':
         if chat_id in user_state:
@@ -170,10 +171,11 @@ def handle_general_message(message):
         trenutna_zagonetka = user_state[chat_id]
         ispravan_odgovor = ZAGONETKE[trenutna_zagonetka]
         
-        # PROVERA 1: Pomoć / Savet
-        if korisnikov_tekst in ["pomoc", "savet", "hint", "/savet", "/hint"]:
+        # PROVERA 1: Pomoć / Savet ILI spominjanje imena Dimitrija
+        if any(keyword in korisnikov_tekst for keyword in ["pomoc", "savet", "hint", "/savet", "/hint", "dimitrije"]):
             send_msg(message, 
                 "Tvoja snaga je tvoj ključ. Istina se ne daje, već zaslužuje. "
+                "Ne dozvoli da ti moje ime skrene pažnju sa zadatka. Foksuiraj se! " 
                 "Ponovi zagonetku ili kucaj /stop da priznaš poraz."
             )
             return
