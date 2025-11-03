@@ -2,40 +2,33 @@ import flask
 import telebot
 import os
 import logging
-import random # Potrebno za biranje zagonetke
+import random 
 
 # ----------------------------------------------------
 # 2. RENDER KONFIGURACIJA
 # ----------------------------------------------------
 
 # UČITAVA TOKEN IZ RENDER OKRUŽENJA (Environment Group)
-# TOKEN VIŠE NIJE HARDKODIRAN!
 BOT_TOKEN = os.environ.get('BOT_TOKEN') 
 if not BOT_TOKEN:
-    # Ako se Render sruši, bar nećemo objaviti tajnu!
     logging.error("BOT_TOKEN varijabla okruženja nije postavljena na Renderu!")
-    # Koristimo dummy token za inicijalizaciju ako pravi nije tu
     BOT_TOKEN = "DUMMY:TOKEN_FAIL" 
 
-# Render automatski generiše URL
 WEBHOOK_URL = os.environ.get('RENDER_EXTERNAL_URL', 'https://placeholder.com/')
 
-# Inicijalizacija bota i Flask aplikacije
 bot = telebot.TeleBot(BOT_TOKEN, threaded=False)
 app = flask.Flask(__name__)
 
 # ----------------------------------------------------
-# 3. WEBHOOK RUTE (Za komunikaciju sa Renderom)
+# 3. WEBHOOK RUTE 
 # ----------------------------------------------------
 
-# Glavna Webhook ruta (Prima poruke od Telegrama)
 @app.route('/' + BOT_TOKEN, methods=['POST'])
 def webhook():
     if flask.request.headers.get('content-type') == 'application/json':
         json_string = flask.request.get_data().decode('utf-8')
         update = telebot.types.Update.de_json(json_string)
         
-        # PROVERA DA LI KORISTIMO DUMMY TOKEN (i ne obrađujemo poruke)
         if BOT_TOKEN == "DUMMY:TOKEN_FAIL":
             return "Bot nije konfigurisan. Token nedostaje."
             
@@ -44,7 +37,6 @@ def webhook():
     else:
         flask.abort(403)
 
-# Ruta za postavljanje Webhooka (Aktivira vezu sa Telegramom)
 @app.route('/set_webhook', methods=['GET'])
 def set_webhook_route():
     webhook_url_with_token = WEBHOOK_URL.rstrip('/') + '/' + BOT_TOKEN
@@ -59,18 +51,16 @@ def set_webhook_route():
 # 1. GLOBALNE VARIJABLE (STANJE IGRE I ZAGONETKE)
 # ----------------------------------------------------
 
-# BAZA ZAGONETKI 
 ZAGONETKE = {
     "Koja je jedina reč u srpskom jeziku koja se završava sa T?": "svet",
     "Šta se nalazi u sredini Pariza?": "r",
     "Što više uzmeš, to više ostaje. Šta je to?": "rupe",
 }
 
-# STANJE IGRE KORISNIKA
 user_state = {} 
 
 # ----------------------------------------------------
-# 4. BOT HANDLERI (Logika igre i komunikacija)
+# 4. BOT HANDLERI 
 # ----------------------------------------------------
 
 @bot.message_handler(commands=['start'])
@@ -84,14 +74,14 @@ def handle_start(message):
 def handle_zagonetka(message):
     global user_state 
 
-    user_id = message.chat.id
+    chat_id = message.chat.id # KOREKCIJA: Koristimo chat_id
     
-    if user_id in user_state:
+    if chat_id in user_state:
         bot.reply_to(message, "Tvoj um je već zauzet. Predaj mi ključ pre nego što kreneš dalje. Odgovori na prethodni upit.")
         return
 
     prva_zagonetka = random.choice(list(ZAGONETKE.keys()))
-    user_state[user_id] = prva_zagonetka
+    user_state[chat_id] = prva_zagonetka # Koristimo chat_id
     
     bot.reply_to(message, 
         f"Primi ovo, putniče. To je prvi pečat koji moraš slomiti:\n\n**{prva_zagonetka}**"
@@ -101,10 +91,10 @@ def handle_zagonetka(message):
 def handle_game_answer(message):
     global user_state 
 
-    user_id = message.chat.id 
+    chat_id = message.chat.id # KOREKCIJA: Koristimo chat_id
     
-    if user_id in user_state:
-        trenutna_zagonetka = user_state[user_id]
+    if chat_id in user_state:
+        trenutna_zagonetka = user_state[chat_id] # Koristimo chat_id
         ispravan_odgovor = ZAGONETKE[trenutna_zagonetka]
         
         korisnikov_odgovor = message.text.strip().lower()
@@ -114,7 +104,7 @@ def handle_game_answer(message):
                 "Istina je otkrivena. Ključ je tvoj. "
                 "Možeš nastaviti kucajući /zagonetka, ali upozoravam te, arhiv je dubok."
             )
-            del user_state[user_id] 
+            del user_state[chat_id] # Koristimo chat_id
         else:
             bot.reply_to(message, 
                 "Netačan je tvoj eho. Pokušaj ponovo, ili tvoje sećanje neće proći. "
