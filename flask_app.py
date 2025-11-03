@@ -5,10 +5,9 @@ import logging
 import random 
 
 # ----------------------------------------------------
-# 2. RENDER KONFIGURACIJA
+# 2. RENDER KONFIGURACIJA (Ostaje ista, koristi Environment Group)
 # ----------------------------------------------------
 
-# UČITAVA TOKEN IZ RENDER OKRUŽENJA (Token je u Render Environment Group)
 BOT_TOKEN = os.environ.get('BOT_TOKEN') 
 if not BOT_TOKEN:
     logging.error("BOT_TOKEN varijabla okruženja nije postavljena na Renderu!")
@@ -20,7 +19,7 @@ bot = telebot.TeleBot(BOT_TOKEN, threaded=False)
 app = flask.Flask(__name__)
 
 # ----------------------------------------------------
-# 3. WEBHOOK RUTE 
+# 3. WEBHOOK RUTE (Ostaje isto)
 # ----------------------------------------------------
 
 @app.route('/' + BOT_TOKEN, methods=['POST'])
@@ -57,15 +56,16 @@ ZAGONETKE = {
     "Što više uzmeš, to više ostaje. Šta je to?": "rupe",
 }
 
+# [chat_id] = trenutna_zagonetka
 user_state = {} 
 
-# ----------------------------------------------------
-# 4. BOT HANDLERI 
-# ----------------------------------------------------
-
-# SVUDA KORISTIMO bot.send_message
+# Uvek koristimo send_message
 def send_msg(message, text):
-    bot.send_message(message.chat.id, text)
+    bot.send_message(message.chat.id, text, parse_mode='Markdown')
+
+# ----------------------------------------------------
+# 4. BOT HANDLERI (Nova logika)
+# ----------------------------------------------------
 
 @bot.message_handler(commands=['start'])
 def handle_start(message):
@@ -74,13 +74,32 @@ def handle_start(message):
         "Možeš li da podneseš težinu znanja? Tvoj test je /zagonetka."
     )
 
+# --- NOVA KOMANDA: /stop ---
+@bot.message_handler(commands=['stop'])
+def handle_stop(message):
+    global user_state 
+    chat_id = message.chat.id
+
+    if chat_id in user_state:
+        del user_state[chat_id]
+        send_msg(message, 
+            "Ponovo si postao tišina. Arhiv te pamti. Kada budeš spreman, vrati se. "
+            "Kucaj /zagonetka da se ponovo izgubiš."
+        )
+    else:
+        send_msg(message, 
+            "Nisi u igri, putniče. Tvoj um je slobodan. Šta zapravo tražiš?"
+        )
+
+# --- LOGIKA KVIZA ---
 @bot.message_handler(commands=['zagonetka'])
 def handle_zagonetka(message):
     global user_state 
     chat_id = message.chat.id
 
     if chat_id in user_state:
-        send_msg(message, "Tvoj um je već zauzet. Predaj mi ključ pre nego što kreneš dalje. Odgovori na prethodni upit.")
+        # POBOLJŠANO: Sada ne kaže "Odgovori na prethodni upit."
+        send_msg(message, "Tvoj um je već zauzet. Predaj mi ključ.")
         return
 
     prva_zagonetka = random.choice(list(ZAGONETKE.keys()))
@@ -96,6 +115,7 @@ def handle_game_answer(message):
     chat_id = message.chat.id 
     
     if chat_id in user_state:
+        # A. KORISNIK JE U IGRI (Očekujemo odgovor na zagonetku)
         trenutna_zagonetka = user_state[chat_id]
         ispravan_odgovor = ZAGONETKE[trenutna_zagonetka]
         
@@ -113,6 +133,14 @@ def handle_game_answer(message):
                 "Kucaj /stop da se vratiš u tišinu."
             )
     else:
-        send_msg(message, 
-            "Govoriš u prazno. Kucaj /zagonetka ako želiš da budeš testiran."
-        )
+        # B. KORISNIK NIJE U IGRI (Očekujemo opšti upit)
+        if message.text.strip().lower() in ["ko si ti", "o cemu se radi", "objasni", "help"]:
+            send_msg(message, 
+                "Ja sam samo senka u arhivu sećanja. Ne gubi vreme na pitanja o meni. "
+                "Tražiš li izazov? Kucaj /zagonetka. "
+                "Ako si se izgubio, kucaj /stop."
+            )
+        else:
+            send_msg(message, 
+                "Tvoja reč ne odjekuje ovde. Kucaj /zagonetka ako želiš da budeš testiran."
+            )
