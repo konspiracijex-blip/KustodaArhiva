@@ -8,7 +8,7 @@ import random
 # 2. RENDER KONFIGURACIJA
 # ----------------------------------------------------
 
-# UČITAVA TOKEN IZ RENDER OKRUŽENJA (Environment Group)
+# UČITAVA TOKEN IZ RENDER OKRUŽENJA (Token je u Render Environment Group)
 BOT_TOKEN = os.environ.get('BOT_TOKEN') 
 if not BOT_TOKEN:
     logging.error("BOT_TOKEN varijabla okruženja nije postavljena na Renderu!")
@@ -63,9 +63,13 @@ user_state = {}
 # 4. BOT HANDLERI 
 # ----------------------------------------------------
 
+# SVUDA KORISTIMO bot.send_message
+def send_msg(message, text):
+    bot.send_message(message.chat.id, text)
+
 @bot.message_handler(commands=['start'])
 def handle_start(message):
-    bot.reply_to(message, 
+    send_msg(message, 
         "Ti si putnik kroz etar. Moje ime je Kustoda Arhiva. "
         "Možeš li da podneseš težinu znanja? Tvoj test je /zagonetka."
     )
@@ -73,44 +77,42 @@ def handle_start(message):
 @bot.message_handler(commands=['zagonetka'])
 def handle_zagonetka(message):
     global user_state 
+    chat_id = message.chat.id
 
-    chat_id = message.chat.id # KOREKCIJA: Koristimo chat_id
-    
     if chat_id in user_state:
-        bot.reply_to(message, "Tvoj um je već zauzet. Predaj mi ključ pre nego što kreneš dalje. Odgovori na prethodni upit.")
+        send_msg(message, "Tvoj um je već zauzet. Predaj mi ključ pre nego što kreneš dalje. Odgovori na prethodni upit.")
         return
 
     prva_zagonetka = random.choice(list(ZAGONETKE.keys()))
-    user_state[chat_id] = prva_zagonetka # Koristimo chat_id
+    user_state[chat_id] = prva_zagonetka
     
-    bot.reply_to(message, 
+    send_msg(message, 
         f"Primi ovo, putniče. To je prvi pečat koji moraš slomiti:\n\n**{prva_zagonetka}**"
     )
 
 @bot.message_handler(func=lambda message: True)
 def handle_game_answer(message):
     global user_state 
-
-    chat_id = message.chat.id # KOREKCIJA: Koristimo chat_id
+    chat_id = message.chat.id 
     
     if chat_id in user_state:
-        trenutna_zagonetka = user_state[chat_id] # Koristimo chat_id
+        trenutna_zagonetka = user_state[chat_id]
         ispravan_odgovor = ZAGONETKE[trenutna_zagonetka]
         
         korisnikov_odgovor = message.text.strip().lower()
 
         if korisnikov_odgovor == ispravan_odgovor:
-            bot.reply_to(message, 
+            send_msg(message, 
                 "Istina je otkrivena. Ključ je tvoj. "
                 "Možeš nastaviti kucajući /zagonetka, ali upozoravam te, arhiv je dubok."
             )
-            del user_state[chat_id] # Koristimo chat_id
+            del user_state[chat_id] 
         else:
-            bot.reply_to(message, 
+            send_msg(message, 
                 "Netačan je tvoj eho. Pokušaj ponovo, ili tvoje sećanje neće proći. "
                 "Kucaj /stop da se vratiš u tišinu."
             )
     else:
-        bot.reply_to(message, 
+        send_msg(message, 
             "Govoriš u prazno. Kucaj /zagonetka ako želiš da budeš testiran."
         )
