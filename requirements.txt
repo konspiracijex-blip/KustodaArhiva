@@ -1,5 +1,6 @@
 Flask
 pyTelegramBotAPI
 google-genai
-psycopg2-binary  # Potrebno za PostgreSQL konekciju
-SQLAlchemy       # Biblioteka koja nedostaje!
+psycopg2-binary
+SQLAlchemy
+gunicorn      # OVO JE NOVI, KRITIČNI RED!
