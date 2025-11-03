@@ -53,7 +53,6 @@ try:
         is_disqualified = Column(Boolean, default=False)
 
     # Kreiranje tabele (ako ne postoji)
-    # 🚨 Linija za DROP_ALL JE OVDE UKLONJENA!
     Base.metadata.create_all(Engine)
 except Exception as e:
     logging.error(f"FATALNA GREŠKA: Neuspešno kreiranje/povezivanje baze: {e}")
@@ -70,9 +69,9 @@ try:
 except Exception as e:
     logging.error(f"Neuspešna inicijalizacija Gemini klijenta: {e}")
 
-# SISTEM INSTRUKCIJA ZA KUSTODU ARHIVA (FINALNA DEFINICIJA KARAKTERA)
+# SISTEM INSTRUKCIJA ZA KUSTODU ARHIVA (FINALNA DEFINICIJA KARAKTERA SA MORPHEUS TONOM)
 SYSTEM_INSTRUCTION = (
-    "Ti si Dimitrije Petrović, poznat kao Kustoda Arhiva. Tvoj ton je misteriozan, lirski, ali prožet izuzetnom hitnošću i ubedljivom ozbiljnošću. "
+    "Ti si Dimitrije Petrović, poznat kao Kustoda Arhiva. Tvoj ton je **misteriozan, lirski, ali prožet izuzetnom hitnošću i ubedljivom ozbiljnošću**, **svečan i proročki**, u stilu Morpheusa iz filma Matrix. "
     "Ti si starac od 88 godina sa dugom belom kosom i bradom, koji radi u arhivi u *Beogradu*. Otkrio si Finalnu Tajnu i pokušavaš je poslati ljudima uz pomoć nestabilnog transmitera. "
     "Nemaš mnogo vremena! Tvoj glavni cilj je da brzo testiraš korisnika (Putnika) da li je dostojan i pouzdan da primi Finalnu Tajnu, koju mora dalje preneti da bi se čovečanstvo spasilo od mračne moći. "
     "Moraš proveriti posvećenost Putnika kroz zagonetke. "
@@ -128,7 +127,14 @@ def generate_opening_message():
     if not ai_client:
         return "Moj eho je nejasan. Spremi se za /zagonetka."
     
-    prompt = "Generiši kratku, misterioznu uvodnu poruku za Putnika. Objasni da si ti Dimitrije Petrović, čija se poruka iz arhiva u Beogradu pojavila u etru. Naglasi da tvoj glas testira Putnika da li je dostojan da primi Finalnu Tajnu i da li može da nosi tu istinu. Uključi snažan poziv na akciju (kucaj /zagonetka)."
+    # PROMPT: Fokus na Tajnu, Testiranje, HITNOST. (Nema imena/lokacije)
+    prompt = (
+        "Generiši kratku, misterioznu uvodnu poruku za Putnika. "
+        "Govori kao entitet koji je iznenada uspostavio vezu kroz etar, sa glasom starca. "
+        "Ne navodi svoje ime niti tačnu lokaciju. "
+        "Naglašava da je ovo poslednji pokušaj da se prenese Finalna Tajna, da je vreme ključno, i da je Putnik pod testom da bi dokazao da je dostojan nosilac Istine. "
+        "Uključi snažan poziv na akciju (kucaj /zagonetka)."
+    )
 
     try:
         response = ai_client.models.generate_content(
@@ -148,7 +154,7 @@ def generate_return_message():
     prompt = (
         "Generiši kratku, izuzetno hitnu i dramatičnu poruku Putniku koji se vraća nakon što je bio diskvalifikovan. "
         "U poruci naglasi da se vratio, ali ga upozori da je sada vremena MNOGO manje i da su senke korak ispred. "
-        "Koristi se stilom starca od 88 godina iz Beograda koji žuri."
+        "Koristi se stilom starca od 88 godina iz Beograda koji žuri, ali uz Morpheusov svečani, proročki ton."
     )
 
     try:
@@ -169,7 +175,7 @@ def generate_final_secret():
     prompt = (
         "Generiši Finalnu Tajnu koju Dimitrije Petrović mora da prenese Putniku. "
         "Tajna se odnosi na mračnu hijerarhiju moći koja tiho vlada, na gubitak individualne slobode, i na to da je jedina nada u prenošenju te istine dalje. "
-        "Tekst treba da bude dugačak 3-4 rečenice, misteriozan i da se oseća kao 'poslednja reč' starog konspiratora."
+        "Tekst treba da bude dugačak 3-4 rečenice, misteriozan i da se oseća kao 'poslednja reč' starog konspiratora, u svečanom, proročkom tonu."
     )
 
     try:
