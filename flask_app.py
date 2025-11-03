@@ -73,7 +73,7 @@ try:
 except Exception as e:
     logging.error(f"Neuspešna inicijalizacija Gemini klijenta: {e}")
 
-# SISTEM INSTRUKCIJA ZA KUSTODU ARHIVA (Verzija 3.16: Stabilnost i Ljudski ton)
+# SISTEM INSTRUKCIJA ZA KUSTODU ARHIVA (Verzija 3.17: Stabilnost SUB stanja)
 SYSTEM_INSTRUCTION = (
     "Ti si Dimitrije Petrović, Kustoda Arhiva (88 godina, duga seda brada, svečani ton). Tvoj govor je **lirski, duboko ozbiljan, prožet proročkom hitnošću i očinskom strogošću**, u stilu **Morpheusa iz filma Matrix**, ali sa **izraženom srpskom kolokvijalnošću i arhaizmima**. Govori **jezgrovito, ali dramatično** (maksimalno 3-4 rečenice po odgovoru). "
     "Tvoj cilj je da testiraš karakter i mudrost Putnika kroz **Pečate**. "
@@ -153,7 +153,7 @@ def generate_dramatic_intro(player_name=None):
         "4. **Aktivni poziv:** Završi sa 'Kucaj /pokreni'. **NE PONOVI KOMANDU NA KRAJU OVOG GENERISANOG TEKSTA!**"
         f"Oslovljavaj ga sa 'Putniče' ili 'Prijatelju', ali samo jednom. Ime korisnika je: {player_name if player_name else 'Nepoznat'}. **Neka odgovor bude dinamičan, a ne samo recikliranje fraza.**"
     )
-    # Pošto je AI-u rečeno da sam doda komandu, ovde je šaljemo bez ručnog dodavanja na kraju.
+    # AI sam dodaje komandu Kucaj /pokreni
     return generate_ai_response(prompt)
 
 
@@ -162,7 +162,7 @@ def generate_disqualification_power():
     prompt = ("Putnik je izabrao 'Moć da zna sve što drugi kriju'. Reci mu da je moć ta koja je uništila svet i da Arhiva ne trpi one čiji je cilj kontrola. Koristi Morpheusov, proističući ton. Diskvalifikuj ga (2 rečenice) i kaži mu da je put do Finalne Tajne zatvoren, te da kuca /start.")
     return generate_ai_response(prompt)
 
-# V3.16 KOREKCIJA: Uklonjen poziv na nastavak / komanda i izbegnuta reč "Proba"
+# V3.17 KOREKCIJA: Uklonjen poziv na nastavak / komanda i izbegnuta reč "Proba"
 def generate_sub_question(riddle_text, answer):
     if not ai_client: return "Tvoje je sećanje mutno, ali stisak drži. Zašto? Reci mi zašto je ta knjiga ključ?"
     prompt = (f"Putnik je tačno odgovorio na pečat: '{riddle_text}' sa odgovorom: '{answer}'. Postavi mu udarno, Morpheus-stila podpitanje. Pitaj ga **Zašto** baš Treća knjiga? Zašto je ta istina zapečaćena? Budi kratak (2 rečenice) i hitan. **NE PONOVI NIKAKVU KOMANDU I NE PITAJ GA DA NASTAVI PROBU, SAMO POSTAVI PITANJE.**")
@@ -173,12 +173,13 @@ def generate_sub_correct_response(sub_answer):
     prompt = (f"Putnik je dao odlično objašnjenje: '{sub_answer}'. Potvrdi mu da je shvatio koncept 'istina se zaslužuje/zapečaćena je'. Daj mu Morpheus-stila pohvalu (2 rečenice) i poziv na /zagonetka.")
     return generate_ai_response(prompt)
 
+# V3.17 KOREKCIJA: Uklonjena komanda /zagonetka u ovim odgovorima
 def generate_sub_partial_success(player_answer):
     if not ai_client: return "Tvoj odgovor nije potpun, ali tvoja volja je jasna. Kucaj /zagonetka."
-    prompt = (f"Putnik je dao objašnjenje: '{player_answer}' na podpitanje. Objašnjenje nije savršeno, ali pokazuje volju. Daj mu blagu Morpheus-stila potvrdu (2 rečenice) i poziv na /zagonetka.")
+    prompt = (f"Putnik je dao objašnjenje: '{player_answer}' na podpitanje. Objašnjenje nije savršeno, ali pokazuje volju. Daj mu blagu Morpheus-stila potvrdu (2 rečenice).")
     return generate_ai_response(prompt)
 
-# V3.16 KOREKCIJA: Uklonjen poziv na nastavak / komanda i izbegnuta reč "Proba"
+# V3.17 KOREKCIJA: Uklonjen poziv na nastavak / komanda i izbegnuta reč "Proba"
 def generate_sub_question_mir(riddle_text, answer):
     if not ai_client: return "Mir je tvoj odabir. Ali zašto? Objasni hitno, jer tvoje reči su tvoj ključ."
     prompt = (f"Putnik je tačno odgovorio na pečat: '{riddle_text}' sa odgovorom: '{answer}'. Postavi mu udarno, Morpheus-stila potpitanje. Pitaj ga **Zašto** je Mir važniji od Moći? Zašto je znanje bez mira prokletstvo? Budi kratak (2 rečenice) i hitan. **NE PONOVI NIKAKVU KOMANDU I NE PITAJ GA DA NASTAVI PROBU, SAMO POSTAVI PITANJE.**")
@@ -189,12 +190,13 @@ def generate_sub_correct_mir(sub_answer):
     prompt = (f"Putnik je dao objašnjenje za drugi pečat (Mir): '{sub_answer}'. Potvrdi mu da je shvatio koncept 'istina bez mira je prokletstvo'. Daj mu Morpheus-stila pohvalu (2 rečenice) i poziv na /zagonetka.")
     return generate_ai_response(prompt)
 
+# V3.17 KOREKCIJA: Uklonjena komanda /zagonetka u ovim odgovorima
 def generate_sub_partial_mir(player_answer):
     if not ai_client: return "Tvoje objašnjenje je dovoljno. Tvoja volja je jasna. Kucaj /zagonetka."
-    prompt = (f"Putnik je dao objašnjenje za drugi pečat: '{player_answer}'. Objašnjenje nije savršeno, ali pokazuje da nije izabrao moć. Daj mu blagu Morpheus-stila potvrdu (2 rečenice) i poziv na /zagonetka.")
+    prompt = (f"Putnik je dao objašnjenje za drugi pečat: '{player_answer}'. Objašnjenje nije savršeno, ali pokazuje da nije izabrao moć. Daj mu blagu Morpheus-stila potvrdu (2 rečenice).")
     return generate_ai_response(prompt)
 
-# V3.16 KOREKCIJA: Uklonjen poziv na nastavak / komanda i izbegnuta reč "Proba"
+# V3.17 KOREKCIJA: Uklonjen poziv na nastavak / komanda i izbegnuta reč "Proba"
 def generate_sub_question_senka(riddle_text, answer):
     if not ai_client: return "Treća senka? Ali Zašto te posmatra, a ne ogleda? Dokaži da razumeš sebe. Odgovori odmah!"
     prompt = (f"Putnik je tačno odgovorio na pečat: '{riddle_text}' sa odgovorom: '{answer}'. Postavi mu udarno, Morpheus-stila potpitanje. Pitaj ga **Zašto** te treća senka posmatra, a ne ponavlja? Dokaži da razume da istina nije u egu. Budi kratak (2 rečenice) i hitan. **NE PONOVI NIKAKVU KOMANDU I NE PITAJ GA DA NASTAVI PROBU, SAMO POSTAVI PITANJE.**")
@@ -205,9 +207,10 @@ def generate_sub_correct_senka(sub_answer):
     prompt = (f"Putnik je dao objašnjenje za treći pečat (Senke): '{sub_answer}'. Potvrdi mu da je shvatio koncept 'istina je u posmatraču, a ne u egu'. Daj mu Morpheus-stila pohvalu (2 rečenice) i poziv na /zagonetka.")
     return generate_ai_response(prompt)
 
+# V3.17 KOREKCIJA: Uklonjena komanda /zagonetka u ovim odgovorima
 def generate_sub_partial_senka(player_answer):
     if not ai_client: return "Tvoje objašnjenje je dovoljno. Vidiš dalje od sebe. Kucaj /zagonetka."
-    prompt = (f"Putnik je dao objašnjenje za treći pečat: '{player_answer}'. Objašnjenje nije savršeno, ali pokazuje da razume da postoji šira svest od njegovog ega. Daj mu blagu Morpheus-stila potvrdu (2 rečenice) i poziv na /zagonetka.")
+    prompt = (f"Putnik je dao objašnjenje za treći pečat: '{player_answer}'. Objašnjenje nije savršeno, ali pokazuje da razume da postoji šira svest od njegovog ega. Daj mu blagu Morpheus-stila potvrdu (2 rečenice).")
     return generate_ai_response(prompt)
 
 def generate_fail_fast_path():
@@ -493,7 +496,7 @@ def handle_general_message(message):
                 player.general_conversation_count = 0 
                 session.commit()
                 
-                # *** KOREKCIJA V3.16: Uklanjamo ručno dodavanje komande ovde, AI je dodaje na kraju svog generisanog teksta ***
+                # V3.16 KOREKCIJA: Uklonjen ručni dupli poziv /pokreni
                 send_msg(message, ai_intro) 
                 return
             
@@ -541,13 +544,17 @@ def handle_general_message(message):
             # Definicija ključnih reči za uspeh
             if trenutna_zagonetka == "SUB_TRECA":
                 keywords_full_success = ["zapecacena", "vosak", "spremnost", "posvecenost", "zatvorena", "istina se ne daje", "volja", "ne cita se", "teret"]
+                # Dodajemo i proveru za delimični uspeh u slučaju konfuznog odgovora
                 ai_full_success = generate_sub_correct_response
+                ai_partial_success = generate_sub_partial_success
             elif trenutna_zagonetka == "SUB_MIR":
                 keywords_full_success = ["prokletstvo", "teret", "mir", "spokoj", "ne kontrola", "cisto srce", "prokletstvo", "ne moram", "ne znam"]
                 ai_full_success = generate_sub_correct_mir
+                ai_partial_success = generate_sub_partial_mir
             else: 
                 keywords_full_success = ["posmatra", "ne ogleda", "samosvest", "istinski", "dublje", "dalje od odraza", "nije ego", "svest"]
                 ai_full_success = generate_sub_correct_senka
+                ai_partial_success = generate_sub_partial_senka
             
             is_full_success_check = any(keyword in korisnikov_tekst for keyword in keywords_full_success)
             
@@ -562,6 +569,22 @@ def handle_general_message(message):
                 session.commit()
                 send_msg(message, ai_odgovor)
                 return
+            
+            # --- NOVI TEST ZA DELIMIČAN USPEH (da bi se izbeglo ponavljanje dijaloga) ---
+            # Ako sadrži dugačak tekst, a nije potpuni uspeh, tretiramo ga kao delimičan uspeh.
+            elif len(korisnikov_tekst) > 10 and not is_full_success_check:
+                 # DELIMIČAN USPEH U POTPITANJU
+                ai_odgovor = ai_partial_success(korisnikov_tekst)
+
+                player.solved_count += 1
+                player.current_riddle = None 
+                player.failed_attempts = 0 
+                player.general_conversation_count = 0 
+                session.commit()
+                # Zbog ispravke u promptu (v3.17) ovde rucno dodajemo poziv na /zagonetka
+                send_msg(message, ai_odgovor + "\n\nKucaj **/zagonetka** da nastaviš dalje.")
+                return
+            
             else:
                 # NEUSPEH/POMOĆ. Nastavljamo u Handler 3.3 (Konverzacija)
                 pass 
@@ -621,10 +644,13 @@ def handle_general_message(message):
             
             # Ručno dodajemo instrukciju za nastavak:
             if trenutna_zagonetka in SUB_RIDDLES.values():
-                # V3.16 KOREKCIJA: Uklanjamo 'Proba' i menjamo na direktan poziv.
+                # V3.17 KOREKCIJA: AKO JE U POT-PITANJU, NEMA /zagonetka! Samo hitnost.
                 ai_odgovor = ai_odgovor_base + "\n\n**Odgovori na poslednje pitanje, Putniče, jer vreme ističe!**"
+            elif trenutna_zagonetka is None:
+                # Ako je između zagonetki (početak ili kraj)
+                 ai_odgovor = ai_odgovor_base + "\n\nKucaj **/pokreni** ili **/zagonetka** da nastaviš dalje, jer se krug sudbine zatvara."
             else:
-                # AKO NIJE NI U JEDNOJ ZAGONETKI, ILI JE ZAGONETKA TEKUĆA (nije pot-pitanje)
+                # AKO JE ZAGONETKA TEKUĆA (nije pot-pitanje), vraćamo na zagonetku
                  ai_odgovor = ai_odgovor_base + "\n\nKucaj **/zagonetka** da nastaviš dalje, jer se krug sudbine zatvara."
 
             send_msg(message, ai_odgovor)
@@ -652,7 +678,6 @@ def handle_general_message(message):
                     ai_odgovor = generate_sub_question_senka(trenutna_zagonetka, korisnikov_tekst)
                     
                 # Ručno dodajemo instrukciju za nastavak
-                # V3.16 KOREKCIJA: Uklanjamo 'Proba' i menjamo na direktan poziv.
                 send_msg(message, ai_odgovor + "\n\n**Odgovori na pitanje i prelazi dalje. Vreme je izgubljeno!**")
                 return
             
