@@ -687,7 +687,8 @@ def handle_general_message(message):
             session.commit()
             
             if player.failed_attempts >= 3:
-                kraj_poruka = "**Znao sam da postoji mogućnost da nisi taj.**\nZato, Putniče… **ovo je kraj puta.** Istina ne traži one koji žele da je poseduju. Ona bira one koji mogu da je izdrže."
+                # KORIGOVANA PORUKA ZA TREĆI POGREŠAN ODGOVOR
+                kraj_poruka = "Tri puta si odbio da vidiš. **Moja ruka je sada spuštena.** Put je zatvoren, jer ne možeš da poneseš teret istine. Idi u tišinu."
                 send_msg(message, kraj_poruka)
                 
                 player.current_riddle = None
@@ -697,7 +698,8 @@ def handle_general_message(message):
                 session.commit()
                 
             else:
-                send_msg(message, "Netačan je tvoj eho. Tvoje sećanje je slabo. Pokušaj ponovo, ili kucaj /stop da odustaneš od Tajne.")
+                # KORIGOVANA PORUKA ZA POGREŠAN ODGOVOR
+                send_msg(message, "Tvoj izbor je prazan. Vidiš svetlost, ali si izabrao senku. Ponovo pronađi put, Putniče, ili kucaj /stop da priznaš da te tama savladala.")
 
     finally:
         session.close()
