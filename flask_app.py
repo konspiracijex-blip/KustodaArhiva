@@ -53,13 +53,10 @@ try:
         solved_count = Column(Integer, default=0)
         failed_attempts = Column(Integer, default=0)
         is_disqualified = Column(Boolean, default=False)
-        general_conversation_count = Column(Integer, default=0) # <--- NOVO
+        general_conversation_count = Column(Integer, default=0) # NOVO
 
-    # AKCIJA ZA BRISANJE I PONOVO KREIRANJE TABELE (SAMO JEDNOM!)
-    logging.warning("Brisanje postojeće tabele i ponovno kreiranje zbog promene šeme!")
-    Base.metadata.drop_all(Engine) # <--- OVO BRIŠE STARU TABELU
-    
-    # Kreiranje tabele (sa novom kolonom)
+    # Kreiranje tabele (ako ne postoji, biće kreirana sa novom šemom)
+    # LINJA: Base.metadata.drop_all(Engine) JE UKLONJENA
     Base.metadata.create_all(Engine)
 
 except Exception as e:
@@ -158,14 +155,51 @@ def generate_disqualification_power():
     return generate_ai_response(prompt)
 
 # --- FUNKCIJE ZA ZAGONETKE I STANJA (Skraćene za preglednost) ---
-# Ostatak ovih funkcija je isti kao u prethodnom kodu
 
 def generate_sub_question(riddle_text, answer):
     if not ai_client: return "Tvoje je sećanje mutno, ali stisak drži. Zašto? Reci mi zašto je ta knjiga ključ?"
     prompt = (f"Putnik je tačno odgovorio na zagonetku: '{riddle_text}' sa odgovorom: '{answer}'. Postavi mu udarno, Morpheus-stila podpitanje. Pitaj ga **Zašto** baš Treća knjiga? Zašto je ta istina zapečaćena? Budi kratak (2 rečenice) i hitan. **Ne troši vreme, samo pitaj 'Zašto' i zahtevaj odgovor.**")
     return generate_ai_response(prompt)
 
-# ... (Ostale generate_sub_... funkcije su iste) ...
+def generate_sub_correct_response(sub_answer):
+    if not ai_client: return "Razumeo si. Kucaj /zagonetka."
+    prompt = (f"Putnik je dao odlično objašnjenje: '{sub_answer}'. Potvrdi mu da je shvatio koncept 'istina se zaslužuje/zapečaćena je'. Daj mu Morpheus-stila pohvalu (2 rečenice) i poziv na /zagonetka.")
+    return generate_ai_response(prompt)
+
+def generate_sub_partial_success(player_answer):
+    if not ai_client: return "Tvoj odgovor nije potpun, ali tvoja volja je jasna. Kucaj /zagonetka."
+    prompt = (f"Putnik je dao objašnjenje: '{player_answer}' na podpitanje. Objašnjenje nije savršeno, ali pokazuje volju. Daj mu blagu Morpheus-stila potvrdu (2 rečenice) i poziv na /zagonetka.")
+    return generate_ai_response(prompt)
+
+def generate_sub_question_mir(riddle_text, answer):
+    if not ai_client: return "Mir je tvoj odabir. Ali zašto? Objasni hitno, jer tvoje reči su tvoj ključ."
+    prompt = (f"Putnik je tačno odgovorio na zagonetku: '{riddle_text}' sa odgovorom: '{answer}'. Postavi mu udarno, Morpheus-stila potpitanje. Pitaj ga **Zašto** je Mir važniji od Moći? Zašto je znanje bez mira prokletstvo? Budi kratak (2 rečenice) i hitan.")
+    return generate_ai_response(prompt)
+
+def generate_sub_correct_mir(sub_answer):
+    if not ai_client: return "Shvatio si. Kucaj /zagonetka."
+    prompt = (f"Putnik je dao objašnjenje za drugi pečat (Mir): '{sub_answer}'. Potvrdi mu da je shvatio koncept 'istina bez mira je prokletstvo'. Daj mu Morpheus-stila pohvalu (2 rečenice) i poziv na /zagonetka.")
+    return generate_ai_response(prompt)
+
+def generate_sub_partial_mir(player_answer):
+    if not ai_client: return "Tvoje objašnjenje je dovoljno. Tvoja volja je jasna. Kucaj /zagonetka."
+    prompt = (f"Putnik je dao objašnjenje za drugi pečat: '{player_answer}'. Objašnjenje nije savršeno, ali pokazuje da nije izabrao moć. Daj mu blagu Morpheus-stila potvrdu (2 rečenice) i poziv na /zagonetka.")
+    return generate_ai_response(prompt)
+
+def generate_sub_question_senka(riddle_text, answer):
+    if not ai_client: return "Treća senka? Ali Zašto te posmatra, a ne ogleda? Dokaži da razumeš sebe. Odgovori odmah!"
+    prompt = (f"Putnik je tačno odgovorio na zagonetku: '{riddle_text}' sa odgovorom: '{answer}'. Postavi mu udarno, Morpheus-stila potpitanje. Pitaj ga **Zašto** te treća senka posmatra, a ne ponavlja? Dokaži da razume da istina nije u egu. Budi kratak (2 rečenice) i hitan.")
+    return generate_ai_response(prompt)
+
+def generate_sub_correct_senka(sub_answer):
+    if not ai_client: return "Shvatio si. Kucaj /zagonetka."
+    prompt = (f"Putnik je dao objašnjenje za treći pečat (Senke): '{sub_answer}'. Potvrdi mu da je shvatio koncept 'istina je u posmatraču, a ne u egu'. Daj mu Morpheus-stila pohvalu (2 rečenice) i poziv na /zagonetka.")
+    return generate_ai_response(prompt)
+
+def generate_sub_partial_senka(player_answer):
+    if not ai_client: return "Tvoje objašnjenje je dovoljno. Vidiš dalje od sebe. Kucaj /zagonetka."
+    prompt = (f"Putnik je dao objašnjenje za treći pečat: '{player_answer}'. Objašnjenje nije savršeno, ali pokazuje da razume da postoji šira svest od njegovog ega. Daj mu blagu Morpheus-stila potvrdu (2 rečenice) i poziv na /zagonetka.")
+    return generate_ai_response(prompt)
 
 def generate_fail_fast_path():
     if not ai_client: return "Put je jasan, ali tvoja odluka razotkriva tvoju slabost. Tajna ne može pripasti onome ko je spreman da žrtvuje druge zbog znanja. Vratiti se možeš samo ako shvatiš težinu svog izbora. Kucaj /zagonetka."
