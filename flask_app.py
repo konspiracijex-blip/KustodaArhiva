@@ -3,7 +3,7 @@ import telebot
 import os
 import logging
 import random 
-import time # Dodato za efekat kucanja
+import time
 from google import genai
 from google.genai.errors import APIError
 
@@ -53,6 +53,7 @@ try:
         is_disqualified = Column(Boolean, default=False)
 
     # Kreiranje tabele (ako ne postoji)
+    # LINJA ZA BRISANJE BAZE JE UKLONJENA - OVO JE PRODUKCIONA VERZIJA!
     Base.metadata.create_all(Engine)
 except Exception as e:
     logging.error(f"FATALNA GREŠKA: Neuspešno kreiranje/povezivanje baze: {e}")
@@ -151,10 +152,15 @@ def generate_return_message():
     if not ai_client:
         return "Vratio si se. Nisi jedini koji je pao… ali malo njih ustaje drugi put. Arhiva ti ponovo otvara vrata. Kucaj /zagonetka."
     
+    # PROMPT: Baziran na Morpheusovom tonu i Vašem tekstu, naglašavajući drugu šansu
     prompt = (
-        "Generiši kratku, izuzetno hitnu i dramatičnu poruku Putniku koji se vraća nakon što je bio diskvalifikovan. "
-        "U poruci naglasi da se vratio, ali ga upozori da je sada vremena MNOGO manje i da su senke korak ispred. "
-        "Koristi se stilom starca od 88 godina iz Beograda koji žuri, ali uz Morpheusov svečani, proročki ton."
+        "Generiši dramatičnu, svečanu i proročku poruku Putniku koji se vraća u igru nakon što je bio diskvalifikovan (tri greške ili neozbiljna pitanja). "
+        "Koristi ton Morpheusa iz Matrixa i stil starca od 88 godina iz Beograda. "
+        "U poruci obavezno uključi ove tri ključne misli, ali ih izrazi na nov i unikatan način svaki put: "
+        "1. Povratak pokazuje volju i da je Putnik čuo 'poziv'. "
+        "2. Upozorenje da je ovo poslednja/jedina šansa. "
+        "3. Hitno upozorenje da 'vreme se urušava' i snažan poziv da Putnik *postane* rešenje ('budi put', 'ne traži ključ, već ga stvori'). "
+        "Neka poruka bude snažna i mistična, duga 4-5 rečenica."
     )
 
     try:
