@@ -53,7 +53,6 @@ try:
         is_disqualified = Column(Boolean, default=False)
 
     # Kreiranje tabele (ako ne postoji)
-    # LINJA ZA BRISANJE BAZE JE UKLONJENA - OVO JE PRODUKCIONA VERZIJA!
     Base.metadata.create_all(Engine)
 except Exception as e:
     logging.error(f"FATALNA GREŠKA: Neuspešno kreiranje/povezivanje baze: {e}")
@@ -348,8 +347,8 @@ def handle_general_message(message):
         trenutna_zagonetka = player.current_riddle
         ispravan_odgovor = ZAGONETKE.get(trenutna_zagonetka)
         
-        # PROVERA 3A: Pomoć / Savet / Spominjanje Dimitrija
-        if any(keyword in korisnikov_tekst for keyword in ["pomoc", "savet", "hint", "/savet", "/hint", "dimitrije"]):
+        # PROVERA 3A: Pomoć / Savet / Spominjanje Dimitrija / Komentari
+        if any(keyword in korisnikov_tekst for keyword in ["pomoc", "savet", "hint", "/savet", "/hint", "dimitrije", "ime", "kakve veze", "zagonetka"]):
             send_msg(message, 
                 "Tvoja snaga je tvoj ključ. Istina se ne daje, već zaslužuje. "
                 "Ne dozvoli da ti moje ime skrene pažnju sa zadatka. Foksuiraj se! " 
