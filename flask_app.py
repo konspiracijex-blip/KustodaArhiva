@@ -459,12 +459,10 @@ def handle_general_message(message):
         player = session.query(PlayerState).filter_by(chat_id=chat_id).first()
         
         if player and player.is_disqualified:
-            # Ova poruka se i dalje šalje kao lična Kustodina poruka, a ne institucionalna
             send_msg(message, "Tišina. Prolaz je zatvoren.")
             return
 
         if not player:
-            # Koristi standardni AI odgovor ako player ne postoji
             ai_odgovor = generate_ai_response(message.text)
             send_msg(message, ai_odgovor)
             return
@@ -559,8 +557,7 @@ def handle_general_message(message):
             send_msg(message, ai_odgovor)
             return
 
-        # --- HANDLER 3.3: OGRANIČENA KONVERZACIJA I DISKVALIFIKACIJA (SA FIKSEVIMA ZA KRATAK TEKST) ---
-        
+        # --- PROVERE TAČNOSTI (Koristi se kasnije) ---
         is_correct_riddle = False
         if ispravan_odgovor is not None:
              if isinstance(ispravan_odgovor, list):
@@ -568,29 +565,29 @@ def handle_general_message(message):
              elif isinstance(ispravan_odgovor, str):
                  is_correct_riddle = korisnikov_tekst == ispravan_odgovor
 
+
+        # --- NOVI HANDLER 3.3: OGRANIČENA KONVERZACIJA I DISKVALIFIKACIJA ---
         
         conversation_keywords = [
             "pomoc", "savet", "hint", "/savet", "/hint", "dimitrije", "ime", 
-            "kakve veze", "zagonetka", "ne znam", "ne znaam", "pomozi", "malo", 
+            "kakve veze", "ne znam", "ne znaam", "pomozi", 
             "pitao", "pitam", "opet", "ponovi", "reci", "paznja", "koje", "kakva", 
             "radi", "cemu", "sta je ovo", "kakvo je ovo",
             "kakve zagonetke", "koje zagonetke", "stvarno ne znam", "gluposti", "koji je ovo", "sta radim",
             "ko si ti", "ko je", "?", "??", "???", "!", "!!" 
         ]
         
-        is_conversation_request = any(keyword in korisnikov_tekst for keyword in conversation_keywords)
-        is_too_short_during_riddle = (
-            trenutna_zagonetka is not None and 
-            len(korisnikov_tekst.split()) <= 2 and
-            not is_correct_riddle 
+        is_conversation_request = (
+            (trenutna_zagonetka is None) or 
+            (trenutna_zagonetka is not None and any(keyword in korisnikov_tekst for keyword in conversation_keywords))
         )
         
-        if trenutna_zagonetka is None or is_conversation_request or is_too_short_during_riddle:
+        if is_conversation_request:
             
             MAX_CONVERSATION_COUNT = 10
             
             if player.general_conversation_count >= MAX_CONVERSATION_COUNT:
-                # Koristimo striktni Morpheus/Dimitrije tekst iz SYSTEM_INSTRUCTION
+                # DISKVALIFIKACIJA ZBOG PREVIŠE TRIVIJALNIH PITANJA
                 ai_odgovor = "Toliko je malo vremena, a ti ga trošiš na eho. Istina koju nosim je teža od svih tvojih praznih reči. Ako nisi spreman da vidiš užas koji nas čeka, onda nisi dostojan ni da čuješ moj glas. Tvoja tišina je tvoj kraj. Ne gubi više moje vreme."
                 send_msg(message, ai_odgovor)
                 
@@ -608,9 +605,9 @@ def handle_general_message(message):
             session.commit()
             return
         
-        # --- KRAJ KONVERZACIJE LOGIKE ---
-
-        # PROVERA 3.4: Normalan odgovor na zagonetku (is_correct_riddle je već izračunat)
+        # --- KRAJ KONVERZACIJE LOGIKE, POČETAK ZAGONETKI ---
+        
+        # PROVERA 3.4: Tačan odgovor na zagonetku
         if is_correct_riddle:
             
             if trenutna_zagonetka in SUB_RIDDLES: 
@@ -654,6 +651,7 @@ def handle_general_message(message):
                 return 
             
         
+        # PROVERA 3.5: Netačan odgovor na zagonetku
         else:
             
             if trenutna_zagonetka.startswith("Putniče, pred tobom je zapis koji vekovima čeka da ga neko pročita."):
