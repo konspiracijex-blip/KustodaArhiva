@@ -10,15 +10,13 @@ from google.genai.errors import APIError
 # 2. RENDER KONFIGURACIJA
 # ----------------------------------------------------
 
-# UČITAVANJE KLJUČEVA (OVDE JE HARDKODIRANJE ZA TEST!)
-# Ostavljamo Telegram Token da se učitava sa Rendera
+# UČITAVANJE KLJUČEVA IZ RENDER OKRUŽENJA (SIGURNO)
 BOT_TOKEN = os.environ.get('BOT_TOKEN') 
-# HARDKODIRANJE GEMINI KLJUČA ZA TESTIRANJE
-GEMINI_API_KEY = 'AIzaSyDPJ4Wsp56_bvbZNkRdv9fWvNyJmvtPgvI' 
+GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY') # OVO JE SIGURAN NAČIN
 
 # Provera ključeva
 if not BOT_TOKEN or not GEMINI_API_KEY:
-    logging.error("Jedan ili više API ključeva nedostaje!")
+    logging.error("Jedan ili više API ključeva nedostaje! AI će biti neaktivan.")
     BOT_TOKEN = "DUMMY:TOKEN_FAIL" 
     
 WEBHOOK_URL = os.environ.get('RENDER_EXTERNAL_URL', 'https://placeholder.com/')
@@ -55,7 +53,6 @@ ZAGONETKE = {
 user_state = {} 
 
 def send_msg(message, text):
-    # Koristimo send_message za stabilnost
     bot.send_message(message.chat.id, text, parse_mode='Markdown')
 
 # Funkcija za generisanje odgovora pomoću AI
@@ -69,7 +66,6 @@ def generate_ai_response(prompt):
             contents=prompt,
             config={'system_instruction': SYSTEM_INSTRUCTION}
         )
-        # Očisti odgovor od suvišnog Markdowna
         return response.text.replace('*', '').replace('**', '')
     except APIError as e:
         logging.error(f"Greška Gemini API: {e}")
@@ -90,7 +86,6 @@ def webhook():
         update = telebot.types.Update.de_json(json_string)
         
         if BOT_TOKEN == "DUMMY:TOKEN_FAIL":
-            # Ne obrađujemo poruke ako token nije validan
             return "Bot nije konfigurisan. Token nedostaje."
             
         bot.process_new_updates([update])
@@ -160,7 +155,6 @@ def handle_general_message(message):
             send_msg(message, "Istina je otkrivena. Ključ je tvoj. Možeš nastaviti kucajući /zagonetka, ali upozoravam te, arhiv je dubok.")
             del user_state[chat_id] 
         else:
-            # Ako je netačan odgovor
             send_msg(message, "Netačan je tvoj eho. Pokušaj ponovo, ili tvoje sećanje neće proći. Kucaj /stop da odustaneš.")
     
     # 2. KORISNIK NIJE U IGRI (Šaljemo upit na AI)
