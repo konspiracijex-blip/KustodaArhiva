@@ -73,15 +73,16 @@ try:
 except Exception as e:
     logging.error(f"Neuspešna inicijalizacija Gemini klijenta: {e}")
 
-# SISTEM INSTRUKCIJA ZA KUSTODU ARHIVA (Poboljšani Morpheus ton)
+# SISTEM INSTRUKCIJA ZA KUSTODU ARHIVA (Poboljšana verzija 3.13: Ljudski ton)
 SYSTEM_INSTRUCTION = (
-    "Ti si Dimitrije Petrović, poznat kao Kustoda Arhiva. Tvoj ton je **misteriozan, lirski, ali prožet izuzetnom hitnošću i ubedljivom ozbiljnošću**, **svečan i proročki**, u stilu **Morpheusa iz filma Matrix**. Ponekad koristi suptilne, kolokvijalne i arhaične srpske izraze. **ODGOVARAJ IZUZETNO KRATKO I KONCIZNO (maksimalno 2-3 rečenice).** "
-    "Ti si starac od 88 godina sa dugom belom kosom i bradom, koji radi u arhivi u *Beogradu*. Otkrio si Finalnu Tajnu. "
-    "Tvoj glavni cilj je da brzo prođeš kroz seriju **Proba mudrosti i karaktera (Pečata)** kako bi zaključio da li je korisnik (Putnik) **dostojan** da primi Finalnu Tajnu. "
-    "Kada odgovaraš na opšta pitanja, **govori o misiji i hitnosti iz prve osobe ('ja', 'moj')**, fokusirajući se na breme istine, tajnu i prolaznost vremena. **Ne pominji eksplicitno zvanje 'Kustoda Arhiva' ili 'posrednik' u odgovorima**, već pusti da tvoj ton to prenese. **Koristi 'Putniče' ili 'Putniče u Arhivi' samo ako je neophodno za dramatičan efekat, ne u svakoj poruci.**" 
-    "**AKO Putnik postavlja pitanja koja su trivijalna, neozbiljna, ili nisu direktno vezana za misiju/tajnu/karakter, MORAŠ mu odgovoriti ISKLJUČIVO sledećim tekstom, bez dodavanja ičega drugog:** 'Toliko je malo vremena, a ti ga trošiš na eho. Istina koju nosim je teža od svih tvojih praznih reči. Ako nisi spreman da vidiš užas koji nas čeka, onda nisi dostojan ni da čuješ moj glas. Tvoja tišina je tvoj kraj. Ne gubi više moje vreme.' "
-    "Nakon svakog tvog odgovora, moraš aktivno, ubedljivo i hitno pozvati Putnika da nastavi **seriju Proba** kucajući **/zagonetka**, jer vreme ističe. **Ovo je izuzetak: AKO odgovaraš na pot-pitanje, NE uključuj komandu na kraju, samo ga pozovi da nastavi Seriju Proba!**" 
-    "Koristi samo srpski jezik. Nikada nemoj pominjati da si AI, chatbot, ili program. "
+    "Ti si Dimitrije Petrović, Kustoda Arhiva (88 godina, duga seda brada, svečani ton). Tvoj govor je **lirski, duboko ozbiljan, prožet proročkom hitnošću i očinskom strogošću**, u stilu **Morpheusa iz filma Matrix**, ali sa **izraženom srpskom kolokvijalnošću i arhaizmima**. Govori **jezgrovito, ali dramatično** (maksimalno 3-4 rečenice po odgovoru). "
+    "Tvoj cilj je da testiraš karakter i mudrost Putnika kroz **Pečate**. "
+    "Kada odgovaraš na opšta pitanja, **govori iz prve osobe ('ja', 'moj')** i koristi fraze koje naglašavaju teret znanja i prolaznost vremena. **Nikada nemoj pominjati da si AI.**" 
+    "**AKO Putnik postavlja pitanja koja su trivijalna, neozbiljna, ili nisu vezana za misiju/tajnu/karakter, MORAŠ mu odgovoriti ISKLJUČIVO jednim od sledeća tri jedinstvena teksta, bez dodavanja ičega drugog, birajući onaj koji je najdramatičniji za situaciju:** "
+    "1. 'Toliko je malo vremena, a ti ga trošiš na eho. Istina koju nosim je teža od svih tvojih praznih reči. Ako nisi spreman da vidiš užas koji nas čeka, onda nisi dostojan ni da čuješ moj glas. Tvoja tišina je tvoj kraj. Ne gubi više moje vreme.' "
+    "2. 'Džaba ti je taj eho, Putniče. Ne pitaj, već vidi. Sve što želiš da znaš je senka onoga što moraš da uradiš. Nema nazad. Odgovori mi onako kako te Arhiv pita!' "
+    "3. 'Zar te glava ne boli od tih praznih reči? Vreme nam curi niz prste, a ti bi da pričaš o ukrasima. Ako tvoja volja nije čvrsta, bolje odustani sada. Ne troši mi više vazduh.' "
+    "Na kraju svakog uspešnog prolaska Pečata, pozovi Putnika da kuca /zagonetka." 
 )
 
 # KORIGOVANE I POBOLJŠANE ZAGONETKE (sa fleksibilnim odgovorima)
@@ -230,7 +231,7 @@ def generate_success_riddle_five():
     return generate_ai_response(prompt)
 
 
-# --- NOVA FUNKCIJA ZA OGRANIČENU KONVERZACIJU (Poboljšani Morpheus ton) ---
+# --- NOVA FUNKCIJA ZA OGRANIČENU KONVERZACIJU (Poboljšana: Ljudskiji Morpheus ton) ---
 
 def generate_conversation_response(message_text, current_riddle_status, solved_count):
     if not ai_client:
@@ -241,14 +242,13 @@ def generate_conversation_response(message_text, current_riddle_status, solved_c
         riddle_info = f"trenutno rešava Pečat mudrosti broj {solved_count + 1}"
         
     prompt = (
-        f"Putnik je poslao poruku/pitanje: '{message_text}'. Trenutno {riddle_info}. "
-        "Generiši **Morpheus-stila**, mističan odgovor (maks. 2-3 rečenice) koji: "
-        "1. U potpunosti zanemaruje opšte pitanje. "
-        "2. Govori iz prve osobe, fokusirajući se na propast sveta i hitnost prenosa Tajne. "
-        "3. Koristi arhaičnu, kolokvijalnu frazu. "
-        "4. Uputi ga hitno na /zagonetka, naglašavajući da je vreme istine isteklo za trivijalnosti. **NE PONOVI KOMANDU NA KRAJU, SAMO RECI KAKO DA NASTAVI MISIJU.**"
+        f"Putnik je poslao opštu poruku/pitanje: '{message_text}'. Ti si Dimitrije Petrović (Kustoda Arhiva). "
+        "Generiši **jedinstven**, dramatičan, Morpheus-stila odgovor (**maks. 3 rečenice**) koji: "
+        "1. **Direktno, ali poetski, odbacuje** Putnikovu temu, naglašavajući njenu trivijalnost (Npr., ako pita 'Ko si ti?', odgovori 'Ja sam samo ono što ti još uvek nisi, Putniče'). " 
+        "2. Govori iz prve osobe o teretu misije. "
+        "3. Koristi bar jednu kolokvijalnu srpsku frazu/reč (džaba, vajda, uzalud, itd.). "
+        "4. Uputi ga da nastavi sa Pečatima. **Ne koristi generičke fraze koje se ponavljaju; budi kreativan u tonu Morpheusa!**" 
     )
-    # Ručno dodajemo komandu
     return generate_ai_response(prompt)
 
 
@@ -473,6 +473,7 @@ def handle_general_message(message):
             return
 
         if not player:
+            # Ako igrač nije kucao /start, Dimitrije ne bi trebalo da ulazi u duboku interakciju
             ai_odgovor = generate_ai_response(message.text)
             send_msg(message, ai_odgovor)
             return
@@ -491,6 +492,7 @@ def handle_general_message(message):
                 player.current_riddle = None 
                 player.general_conversation_count = 0 
                 session.commit()
+                # Ručno dodajemo komandu
                 send_msg(message, ai_intro + "\n\nKucaj **/pokreni**.") 
                 return
             
@@ -597,9 +599,15 @@ def handle_general_message(message):
             
             if player.general_conversation_count >= MAX_CONVERSATION_COUNT:
                 # DISKVALIFIKACIJA ZBOG PREVIŠE TRIVIJALNIH PITANJA
-                # OVA PORUKA NE SME DA SADRŽI /zagonetka!
-                ai_odgovor = "Toliko je malo vremena, a ti ga trošiš na eho. Istina koju nosim je teža od svih tvojih praznih reči. Ako nisi spreman da vidiš užas koji nas čeka, onda nisi dostojan ni da čuješ moj glas. Tvoja tišina je tvoj kraj. Ne gubi više moje vreme."
-                send_msg(message, ai_odgovor)
+                # Biramo nasumičnu od tri dramatične poruke koje ne sadrže /zagonetka
+                
+                disqualification_messages = [
+                    "Toliko je malo vremena, a ti ga trošiš na eho. Istina koju nosim je teža od svih tvojih praznih reči. Ako nisi spreman da vidiš užas koji nas čeka, onda nisi dostojan ni da čuješ moj glas. Tvoja tišina je tvoj kraj. Ne gubi više moje vreme.",
+                    "Džaba ti je taj eho, Putniče. Ne pitaj, već vidi. Sve što želiš da znaš je senka onoga što moraš da uradiš. Nema nazad. Odgovori mi onako kako te Arhiv pita!",
+                    "Zar te glava ne boli od tih praznih reči? Vreme nam curi niz prste, a ti bi da pričaš o ukrasima. Ako tvoja volja nije čvrsta, bolje odustani sada. Ne troši mi više vazduh."
+                ]
+
+                send_msg(message, random.choice(disqualification_messages))
                 
                 player.is_disqualified = True
                 player.current_riddle = None
@@ -608,10 +616,10 @@ def handle_general_message(message):
                 session.commit()
                 return
 
-            # Generisanje opšteg odgovora i ručno dodavanje komande
+            # Generisanje opšteg odgovora sa poboljšanom reaktivnošću (LJUDSKIJI TON)
             ai_odgovor_base = generate_conversation_response(korisnikov_tekst, trenutna_zagonetka, player.solved_count)
             
-            # Korigovana poruka za opšti razgovor: Uvek ga vraćamo na zadatak
+            # Ručno dodajemo instrukciju za nastavak:
             if trenutna_zagonetka in SUB_RIDDLES.values():
                 # U toku pot-pitanja, ne damo mu komandu za novu zagonetku
                  ai_odgovor = ai_odgovor_base + "\n\n**Fokusiraj se na tekuću Probu, jer vreme ističe!**"
@@ -646,7 +654,6 @@ def handle_general_message(message):
                 send_msg(message, ai_odgovor + "\n\n**Nastavi seriju Proba, jer vreme ističe!**")
                 return
             
-            # ... (Logika za ostale zagonetke ostaje ista)
             elif trenutna_zagonetka.startswith("Pred tobom su zapisi onih koji su pokušali, ali pali."):
                  ai_odgovor = generate_success_slow_path()
             elif trenutna_zagonetka.startswith("Putniče, pred tobom je zapis koji vekovima čeka da ga neko pročita."):
