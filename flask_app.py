@@ -158,7 +158,7 @@ def generate_return_message():
         "1. Povratak pokazuje volju i da je Putnik čuo 'poziv'. "
         "2. Upozorenje da je ovo poslednja/jedina šansa. "
         "3. Hitno upozorenje da 'vreme se urušava' i snažan poziv da Putnik *postane* rešenje ('budi put', 'ne traži ključ, već ga stvori'). "
-        "Neka poruka bude snažna i mistična, duga 3-4 rečenice." # Lako povećano u odnosu na globalni limit
+        "Neka poruka bude snažna i mistična, duga 3-4 rečenice." 
     )
 
     try:
@@ -342,12 +342,24 @@ def handle_general_message(message):
             
             return
 
-        # 3. KORISNIK JE U KVIZU (Očekujemo odgovor na zagonetku)
+        # 3. KORISNIK JE U KVIZU (Očekujemo odgovor na zagonetku ili specijalno pitanje)
         trenutna_zagonetka = player.current_riddle
         ispravan_odgovor = ZAGONETKE.get(trenutna_zagonetka)
         
-        # PROVERA 3A: Pomoć / Savet / Spominjanje Dimitrija / Komentari (Proširena logika!)
-        if any(keyword in korisnikov_tekst for keyword in ["pomoc", "savet", "hint", "/savet", "/hint", "dimitrije", "ime", "kakve veze", "zagonetka", "ne znam", "ne znaam", "pomozi", "malo", "ko si ti", "pitao", "pitam", "opet", "ponovi", "reci", "paznja", "koje", "kakva"]):
+        # SPECIJALNI HANDLER: Konkretno pitanje "Ko si ti?" u toku kviza (Ne troši pokušaj!)
+        if "ko si ti" in korisnikov_tekst or "ko je" in korisnikov_tekst:
+            prompt = (
+                "Putnik te pita 'Ko si ti?' Odgovori kratko i misteriozno. "
+                "Fokusiraj se na to da si Kustoda Arhiva i da tvoj identitet nije važan, već je ključna Finalna Tajna koju trebaš da preneseš. "
+                "Tvoj ton je Morpheusov, svečan, i krajnje koncizan (2-3 rečenice). "
+                "Obavezno ga odmah zatim opomeni da se vrati zadatku (/zagonetka)."
+            )
+            ai_odgovor = generate_ai_response(prompt)
+            send_msg(message, ai_odgovor)
+            return
+            
+        # PROVERA 3A: Pomoć / Savet / Spominjanje Dimitrija / Komentari (Sada bez "ko si ti" fraze)
+        if any(keyword in korisnikov_tekst for keyword in ["pomoc", "savet", "hint", "/savet", "/hint", "dimitrije", "ime", "kakve veze", "zagonetka", "ne znam", "ne znaam", "pomozi", "malo", "pitao", "pitam", "opet", "ponovi", "reci", "paznja", "koje", "kakva"]):
             send_msg(message, 
                 "Tvoja snaga je tvoj ključ. Istina se ne daje, već zaslužuje. Ne dozvoli da ti moje reči skrenu pažnju sa zadatka. Foksuiraj se! Ponovi zagonetku ili kucaj /stop da priznaš poraz."
             )
