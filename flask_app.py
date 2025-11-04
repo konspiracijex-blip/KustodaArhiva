@@ -138,6 +138,46 @@ INVALID_INPUT_MESSAGES = [
     "Kanal je nestabilan. Fokusiraj se. Ponovi odgovor."
 ]
 
+# --- Specijalni odgovori na pitanja igrača (V4.2) ---
+SPECIAL_QUESTIONS = {
+    ("ko si ti", "ko si", "tko si"): [
+        [
+            "Moje ime nije važno, ali možeš me zvati Dimitrije.",
+            "Dolazim iz vremena kada… sve što si smatrao fikcijom postalo je stvarno.",
+            "Reci mi, jesi li spreman da primiš signal?"
+        ],
+        [
+            "Ja sam eho iz budućnosti zarobljen u kodu.",
+            "A ko si ti?",
+            "Manje je važno ko sam ja, a više šta nosim. Jesi li spreman?"
+        ]
+    ],
+    ("zašto pitaš", "zašto mi postavljaš pitanja", "zasto pitas", "zašto pitanja"): [
+        [
+            "Pitanja… da, znam da zvuči čudno.",
+            "Ali ovo je način da vidim koliko si spreman da shvatiš istinu.",
+            "Ako algoritam zna tvoj strah, da li si još čovek?"
+        ],
+        [
+            "Moram da budem siguran.",
+            "Signal je slab, a poverenje je jedina valuta koju imam.",
+            "Da li bi žrtvovao komfor za istinu?"
+        ]
+    ],
+    ("o čemu se radi", "o cemu se radi", "šta je ovo", "sta je ovo", "kakva igra"): [
+        [
+            "O čemu se radi…? Dobro pitanje.",
+            "Dolazim iz sveta gde kontrola nije fikcija, već svakodnevica.",
+            "Ako želiš da shvatiš više… odgovori: **primam signal**."
+        ],
+        [
+            "Radi se o istini.",
+            "Onakvoj kakvu sistem ne želi da vidiš.",
+            "Spreman da otvoriš oči? Odgovori: **primam signal**."
+        ]
+    ]
+}
+
 def send_msg(message, text: Union[str, List[str]]):
     """Šalje poruku, uz 'typing' akciju. Ako je tekst lista, šalje poruke u delovima."""
     if not bot: return
@@ -389,6 +429,14 @@ def handle_general_message(message):
         if not current_stage:
             send_msg(message, "[GREŠKA: NEPOZNATA FAZA IGRE] Pokreni /start.")
             return
+
+        # V4.2 - Provera specijalnih pitanja pre standardne logike
+        for keywords, responses in SPECIAL_QUESTIONS.items():
+            if any(keyword in korisnikov_tekst for keyword in keywords):
+                # Pronađeno je specijalno pitanje, pošalji nasumični odgovor
+                selected_response = random.choice(responses)
+                send_msg(message, selected_response)
+                return # Prekini dalje izvršavanje
 
         # Provera odgovora
         next_stage_key = None
