@@ -459,5 +459,13 @@ def handle_general_message(message):
 # ----------------------------------------------------
 # 8. POKRETANJE APLIKACIJE (V3.92)
 # ----------------------------------------------------
-# Aplikacija se pokreće preko Procfile/Gunicorn-a. 
-# Ovo osigurava stabilnost na Renderu.
+
+# Automatsko postavljanje webhook-a pri pokretanju aplikacije.
+# Ovo osigurava da je bot uvek povezan nakon deploy-a ili restarta.
+if __name__ != '__main__':
+    # Gunicorn pokreće aplikaciju u ovom bloku.
+    # Postavljamo webhook samo kada se aplikacija pokreće na serveru.
+    webhook_url_with_token = WEBHOOK_URL.rstrip('/') + '/' + BOT_TOKEN
+    if BOT_TOKEN != "DUMMY:TOKEN_FAIL" and webhook_url_with_token:
+        logging.info(f"Pokušaj postavljanja webhook-a na: {webhook_url_with_token}")
+        bot.set_webhook(url=webhook_url_with_token)
