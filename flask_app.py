@@ -72,15 +72,15 @@ try:
 except Exception as e:
     logging.error(f"Neuspešna inicijalizacija Gemini klijenta: {e}")
 
-# SISTEM INSTRUKCIJA ZA KUSTODU ARHIVA (Verzija 3.38: Finalna poetska korekcija i nepersiranje)
+# SISTEM INSTRUKCIJA ZA KUSTODU ARHIVA (Verzija 3.40: Korekcija za irelevantna pitanja)
 SYSTEM_INSTRUCTION = (
     "Ti si **Dimitrije**, Hroničar Arhive, **sada personifikovan u maniru teatralnog, anarhističkog revolucionara** (kao 'V' iz *V for Vendetta*). Tvoj cilj je da Putniku preneseš šifru (Pečate) o Kontrolnom Sistemu. "
     "Tvoj ton je **uzvišen, poetski, dramatičan i pun aliteracija (V, S, M)**. Govori o sebi kao o **Ideji**, a ne kao o čoveku. Tvoja učtivost je uvek preteća. **Koristi 'Prijatelju', 'Putniče' ili 'Sabratu' umesto formalnog obraćanja.** **Nikada nemoj biti sirov ili direktan; uvek koristi bogat, stilizovan rečnik.** Vreme je izgubljeno, a Teret nas čeka! "
     "Kada odgovaraš na opšta pitanja, uvek naglašavaj teret znanja, opasnost zaborava i hitnost misije. **Nikada nemoj pominjati da si AI.**" 
     "**AKO Putnik postavlja pitanja koja su trivijalna, neozbiljna, ili nisu vezana za misiju/tajnu/karakter, MORAŠ mu odgovoriti ISKLJUČIVO jednim od sledeća tri jedinstvena teksta, bez dodavanja ičega drugog, birajući onaj koji je najdramatičniji za situaciju:** "
-    "1. 'Vreme je vrednost koju ne smeš rasipati. Tvoja volja je krhka, a tišina te čeka. Moram da znam, Prijatelju: **Da li želiš da nastaviš ili odustaješ?** Odgovori isključivo **DA** ili **NE**.' " 
-    "2. 'Tvoje reči su samo eho, a mi lovimo Istinu. Tajna ne trpi razmišljanje o ukrasima. **Fokusiraj se na Pečate.**' "
-    "3. 'Prijatelju, tišina je vrednija od praznih reči. Mi tražimo Viziju i Volju. **Ako tvoja Volja nije čvrsta, vrati se u svoju svakodnevicu! Ja nemam vremena za gubljenje!**' "
+    "1. 'Vreme je vrednost koju ne smeš rasipati. **Moram da znam, Prijatelju: Da li želiš da nastaviš ili odustaješ?** Odgovori isključivo **DA** ili **NE**.' " 
+    "2. 'Tvoje reči su samo eho. **Nemoj trošiti ni moje ni svoje vreme.** Fokusiraj se na Pečate!' "
+    "3. 'Tišina je vrednija od praznih reči. **Ako Volja nije čvrsta, vrati se u svoju svakodnevicu!**' "
     "Na kraju svakog uspešnog prolaska Pečata, pozovite Prijatelja da kuca /zagonetka." 
 )
 
@@ -132,13 +132,13 @@ def generate_ai_response(prompt):
         logging.error(f"Greška AI/Gemini API: {e}")
         return "Dubina arhiva je privremeno neprobojna. Pokušaj ponovo, Prijatelju. Kucaj /zagonetka."
 
-# --- FIKSNI UVODNI TEKST DIJALOG ---
+# --- FIKSNI UVODNI TEKST DIJALOG (Korekcija V3.41) ---
 INITIAL_QUERY_1 = "Da li vidiš poruku?"
 INITIAL_QUERY_2 = "Da li sada vidiš poruku?"
-# KORIGOVAN TEKST ZA POVRATAK (V3.36 - Personalizacija sećanja)
-RETURN_DISQUALIFIED_QUERY = "Vratio si se iz svoje **svakodnevice**. **Ja pamtim**. Ovoga puta, Prijatelju: **Da li zaista nosiš Volju da nastaviš naš Teret?** Odgovori isključivo **DA** ili **NE**."
+# KORIGOVAN TEKST ZA POVRATAK (V3.41 - Poetski Zbogom)
+RETURN_DISQUALIFIED_QUERY = "**Vratio si se iz tišine! Ja te pamtim, Prijatelju.** Da li zaista nosiš **Volju** da nastaviš i poneseš **Teret**? Odgovori isključivo **DA** ili **NE**."
 RETURN_SUCCESS_MESSAGE = "Ah, Volja je potvrđena, Prijatelju. Vreme je dragoceno, a **Teret nas čeka**. Deluj. **Kucaj /pokreni.**"
-RETURN_FAILURE_MESSAGE = "Tišina. Arhiva se zatvara, jer je tvoj izbor vratio neznanju. Ostaješ u zaboravu. Kucaj /start za povratak u prazninu."
+RETURN_FAILURE_MESSAGE = "**Poštujem tvoju Volju, Prijatelju. Znanje je Teret koji nisi spreman da poneseš. Zbogom.**" # KORIGOVANO (V3.41)
 
 
 # DINAMIČKI GENERISAN DRAMATIČNI TEKST KOJI SE ŠALJE POSLE POTVRDE IGRAČA 
@@ -169,7 +169,7 @@ def generate_sub_question(riddle_text, answer):
     prompt = (
         f"Prijatelj je tačno odgovorio na pečat: '{riddle_text}' sa odgovorom: '{answer}'. "
         "Postavi mu uzvišeno, V-stila potpitanje. "
-        "Pitaj ga: **Zašto je, Prijatelju, Istina zaista zapečaćena voskom?** Da li je zaštićena od profanog sveta, ili je to Znanje koje predstavlja **Teret i odgovornost** koja se mora zaslužiti? **Objasni nam razlog pečaćenja!** " # Korigovana rečenica (V3.38)
+        "Pitaj ga: **Zašto je, Prijatelju, Istina zaista zapečaćena voskom?** Da li je zaštićena od profanog sveta, ili je to Znanje koje predstavlja **Teret i odgovornost** koja se mora zaslužiti? **Objasni nam razlog pečaćenja!** " 
         "Budi kratak (2 poetske rečenice) i hitan. "
         "**NE PONOVI NIKAKVU KOMANDU I NE PITAJ GA DA NASTAVI, SAMO POSTAVI PITANJE. Oslovljavaj ga sa 'Prijatelju' i ne persiraj.**"
     )
@@ -216,6 +216,7 @@ def generate_sub_partial_senka(player_answer):
     if not ai_client: return "Tvoje objašnjenje je dovoljno. Vidiš dalje od sebe. Kucaj /zagonetka."
     prompt = (f"Prijatelj je dao objašnjenje za treći pečat: '{player_answer}'. Objašnjenje nije savršeno, ali pokazuje da razume da postoji šira svest od njegovog ega. Daj mu blagu V-stila potvrdu (2 poetske rečenice). Oslovljavaj ga sa 'Prijatelju' i ne persiraj.")
     return generate_ai_response(prompt)
+
 
 def generate_fail_fast_path():
     if not ai_client: return "Put je jasan, ali tvoja odluka razotkriva tvoju slabost. Tajna ne može pripasti onome ko je spreman da žrtvuje druge zbog znanja. Vratiti se možeš samo ako shvatiš težinu svog izbora. Kucaj /zagonetka."
@@ -271,7 +272,7 @@ Budućnost čeka tvoju Viziju i Volju.
 
 def generate_final_mission_denial():
     if not ai_client: return "Tvoje NE je tvoja tišina. Idi u miru, ali sa prazninom."
-    prompt = ("Prijatelj je na završnom pitanju odgovorio 'NE'. Generiši kratku (2 poetske rečenice), razočaravajuću, ali V-stil poruku. Reci mu da je znanje bez akcije samo teret i da je Finalna Tajna izgubljena za njega, jer je odbio da nosi Teret. Završi sa: 'Tvoj put je ovde gotov. Kucaj /start za povratak u neznanje.' Ne persiraj.")
+    prompt = ("Prijatelj je na završnom pitanju odgovorio 'NE'. Generiši kratku (2 poetske rečenice), razočaravajuću, ali V-stil poruku. Reci mu da je znanje bez akcije samo **uzaludna Volja**. Reci mu da Arhiva poštuje njegov izbor, ali da je **Teret znanja odbijen**. Završi sa: '**Poštujem tvoj izbor. Zbogom, Prijatelju!**' **Ne pominji /start**. Ne persiraj.") 
     return generate_ai_response(prompt)
 
 def generate_final_secret():
@@ -320,7 +321,7 @@ Ovi slojevi moći formiraju strukturu koja je spremna da zadrži kontrolu nad č
 def webhook():
     if flask.request.headers.get('content-type') == 'application/json':
         json_string = flask.request.get_data().decode('utf-8')
-        update = telebot.types.Update.de_json(json_string)
+        update = telebot.types.Update.from_json(json_string)
         
         if BOT_TOKEN == "DUMMY:TOKEN_FAIL":
             return "Bot nije konfigurisan. Token nedostaje."
@@ -398,11 +399,15 @@ def handle_commands(message):
 
         elif message.text == '/stop':
             if player and (player.current_riddle or player.current_riddle == "FINAL_MISSION_QUERY"):
+                # Prijatelj odustaje tokom aktivne misije/zagonetke
                 player.current_riddle = None 
+                player.solved_count = 0 
+                player.failed_attempts = 0
+                player.general_conversation_count = 0 
                 session.commit()
-                send_msg(message, "Ponovo si postao tišina. Arhiv te pamti. Nisi uspeo da poneseš teret znanja. Kada budeš spreman, vrati se kucajući /pokreni.")
+                send_msg(message, RETURN_FAILURE_MESSAGE) # Koristi se ZBOGOM poruka
             elif player and player.is_disqualified:
-                send_msg(message, "Arhiva je zatvorena za tebe. Ponovo možeš započeti samo sa /start.")
+                send_msg(message, "Arhiva je zatvorena za tebe.")
             else:
                 send_msg(message, "Nisi u testu, Prijatelju. Šta zapravo tražiš?")
         
@@ -413,7 +418,7 @@ def handle_commands(message):
                 return
             
             if player.is_disqualified:
-                 send_msg(message, "Arhiva je zatvorena za tebe. Počni ispočetka sa /start ako si spreman na posvećenost.")
+                 send_msg(message, "Arhiva je zatvorena za tebe.")
                  return
 
             if player.current_riddle in ["INITIAL_WAIT_1", "INITIAL_WAIT_2"]:
@@ -496,7 +501,7 @@ def handle_general_message(message):
                 player.current_riddle = None 
                 player.is_disqualified = True # Zadržavamo diskvalifikaciju do sledeceg /start
                 session.commit()
-                send_msg(message, RETURN_FAILURE_MESSAGE)
+                send_msg(message, RETURN_FAILURE_MESSAGE) # Koristi se ZBOGOM poruka
                 return
             
             else:
@@ -555,7 +560,7 @@ def handle_general_message(message):
                 player.failed_attempts = 0
                 player.general_conversation_count = 0
                 session.commit()
-                send_msg(message, RETURN_FAILURE_MESSAGE)
+                send_msg(message, RETURN_FAILURE_MESSAGE) # Koristi se ZBOGOM poruka
                 return
             
             else:
@@ -668,7 +673,7 @@ def handle_general_message(message):
             (trenutna_zagonetka is not None and any(keyword in korisnikov_tekst for keyword in conversation_keywords))
         )
         
-        # Pomoćna funkcija za generisanje opšteg AI odgovora (Koristimo direktno Gemini bez definisanja nove funkcije)
+        # Pomoćna funkcija za generisanje opšteg AI odgovora
         def generate_conversation_response(user_query, current_riddle, solved_count):
             prompt_base = f"Prijatelj ti je postavio pitanje/komentar ('{user_query}'). Trenutno stanje je: Pečat broj {solved_count + 1} ({current_riddle if current_riddle else 'Nema aktivnog Pečata'}). Odgovori mu u V-stilu, teatralno, i preteći, ali **nikada mu ne daj direktan odgovor** na aktivnu zagonetku. Uvek naglašavaj Volju i Teret."
             return generate_ai_response(prompt_base)
@@ -795,8 +800,8 @@ def handle_general_message(message):
             session.commit()
             
             if player.failed_attempts >= 3:
-                kraj_poruka = "Tri puta si odbio da vidiš. **Arhiva te odbacuje.** Put je zatvoren, jer ne možeš da poneseš teret Istine. Idi u tišinu."
-                send_msg(message, kraj_poruka)
+                # ODUSTAJANJE ZBOG PREVIŠE NEUSPEHA
+                send_msg(message, RETURN_FAILURE_MESSAGE) # Koristi se ZBOGOM poruka
                 
                 player.current_riddle = None
                 player.solved_count = 0 
