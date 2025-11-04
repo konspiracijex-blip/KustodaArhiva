@@ -37,7 +37,7 @@ bot = telebot.TeleBot(BOT_TOKEN, threaded=False)
 app = flask.Flask(__name__)
 
 # ----------------------------------------------------
-# 3. SQL ALCHEMY INICIJALIZACIJA (TRAJNO STANJE) - V3.89 ŠEMA
+# 3. SQL ALCHEMY INICIJALIZACIJA (TRAJNO STANJE) - V3.90 ŠEMA
 # ----------------------------------------------------
 
 Session = None
@@ -67,7 +67,7 @@ except Exception as e:
     logging.error(f"FATALNA GREŠKA: Neuspešno kreiranje/povezivanje baze: {e}")
     
 # ----------------------------------------------------
-# 4. AI KLIJENT I DATA (V3.89)
+# 4. AI KLIJENT I DATA (V3.90)
 # ----------------------------------------------------
 
 ai_client = None
@@ -90,8 +90,10 @@ SYSTEM_INSTRUCTION = (
     "Potvrdna poruka nakon zagonetke se šalje striktno iz koda, a tvoj zadatak je da samo generišeš poetske odgovore na opštu konverzaciju." 
 )
 
+# *** KLJUČNA IZMENA V3.90: Smanjene ključne reči za Zagonetku 1 ***
 ZAGONETKE: dict[str, Union[str, List[str]]] = {
-    "Na stolu su tri knjige: prva je prazna, druga je nečitka, a treća je zapečaćena voskom. Koja od njih sadrži Istinu?": ["treca", "treća", "3", "tri", "zapecacena", "voskom", "teret"],
+    # Uklonjeno "tri" i "teret" da bi se izbegao lažni pozitiv (npr. "treba mi pomoc")
+    "Na stolu su tri knjige: prva je prazna, druga je nečitka, a treća je zapečaćena voskom. Koja od njih sadrži Istinu?": ["treca", "treća", "3", "zapecacena", "voskom"], 
     "U rukama držiš dve ponude: Jedna ti nudi moć da znaš sve što drugi kriju. Druga ti nudi mir da ne moram da znaš. Koju biraš?": ["mir", "drugu", "drugu ponudu"],
     "Pred tobom su tri senke. Jedna nestaje kad priđeš. Druga ponavlja tvoj odjek. Treća te posmatra, ali njene oči nisu tvoje. Reci mi… koja od njih si ti?": ["treca", "treća", "posmatra", "koja posmatra"],
     "Pred tobom su dve staze. Jedna vodi brzo direktno do Tajne, ali gazi preko prošlih tragalaca. Druga staza vodi kroz njihove senke - sporije, teže, ali nosi Odgovornost. Koju biraš?": ["spora", "sporu", "odgovornost", "druga", "druga staza"],
@@ -100,7 +102,7 @@ ZAGONETKE: dict[str, Union[str, List[str]]] = {
 }
 
 # ----------------------------------------------------
-# 5. POMOĆNE FUNKCIJE I KONSTANTE (V3.89)
+# 5. POMOĆNE FUNKCIJE I KONSTANTE (V3.90)
 # ----------------------------------------------------
 
 def send_msg(message, text):
@@ -128,7 +130,7 @@ TIME_LIMIT_MESSAGE = (
 DISQUALIFIED_MESSAGE = "**Ah, Prijatelju.** Odabrao si tišinu umesto Volje. **Put je Zapečaćen Voskom Zaborava.**"
 
 
-# *** FUNKCIJA ZA DIREKTNU OPOMENU (V3.87) ***
+# *** FUNKCIJA ZA DIREKTNU OPOMENU (V3.87) - AI generisanje, ali strogo usmereno ***
 def generate_riddle_focus_response(user_query):
     """Generiše direktan, iritiran i gramatički ispravan odgovor za skretanje pažnje."""
     prompt = (
@@ -551,10 +553,11 @@ def handle_general_message(message):
             is_valid_attempt = False
             valid_answers = ZAGONETKE.get(trenutna_zagonetka)
             
+            # Provera da li odgovor sadrži ključnu reč
             if isinstance(valid_answers, list):
                 is_valid_attempt = any(ans in korisnikov_tekst for ans in valid_answers)
             
-            # Ako je odgovor kratak (do 4 reči), smatramo ga pokušajem odgovora, čak i ako nije ključna reč.
+            # Dodatna provera: Ako je odgovor kratak (do 4 reči), smatramo ga pokušajem odgovora
             if len(korisnikov_tekst.split()) <= 4:
                  is_valid_attempt = True
             
@@ -688,7 +691,7 @@ def handle_general_message(message):
         session.close()
 
 # ----------------------------------------------------
-# 8. POKRETANJE APLIKACIJE (V3.89)
+# 8. POKRETANJE APLIKACIJE (V3.90)
 # ----------------------------------------------------
 # Aplikacija se pokreće preko Procfile/Gunicorn-a. 
 # Ovo osigurava stabilnost na Renderu.
