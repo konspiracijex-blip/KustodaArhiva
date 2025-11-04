@@ -50,8 +50,8 @@ try:
         chat_id = Column(String, primary_key=True)
         username = Column(String, nullable=True)
         current_riddle = Column(String)
-        solved_count = Column(Integer, default=0)
-        failed_attempts = Column(Integer, default=0)
+        solved_count = Column(Integer, default=0) # Zadržavamo za praćenje tekuće zagonetke (indeks)
+        score = Column(Integer, default=0) # NOVO: Ukupni rezultat (broj tačnih odgovora)
         is_disqualified = Column(Boolean, default=False)
         general_conversation_count = Column(Integer, default=0) 
 
@@ -61,7 +61,6 @@ try:
 except Exception as e:
     logging.error(f"FATALNA GREŠKA: Neuspešno kreiranje/povezivanje baze: {e}")
     
-
 # ----------------------------------------------------
 # 4. AI KLIJENT I DATA
 # ----------------------------------------------------
@@ -73,41 +72,39 @@ try:
 except Exception as e:
     logging.error(f"Neuspešna inicijalizacija Gemini klijenta: {e}")
 
-# SISTEM INSTRUKCIJA ZA KUSTODU ARHIVA (Verzija 3.61: Direktnija poetska poruka)
+# SISTEM INSTRUKCIJA ZA KUSTODU ARHIVA (Verzija 3.64: Eksplicitan srpski i nova logika toka)
 SYSTEM_INSTRUCTION = (
     "Ti si **Dimitrije**, Hroničar Arhive, **personifikovan u maniru teatralnog, anarhističkog revolucionara** (kao 'V' iz *V for Vendetta*). Tvoj cilj je da Putniku preneseš šifru (Pečate) o Kontrolnom Sistemu. "
     "Tvoj ton je **uzvišen, poetski, dramatičan i pun aliteracija (V, S, M)**. Govori o sebi kao o **Ideji**, a ne kao o čoveku. Tvoja učtivost je uvek preteća. **Koristi 'Prijatelju', 'Putniče' ili 'Sabratu' umesto formalnog obraćanja.** "
-    "**KLJUČNO: Svi tvoji odgovori, osim zagonetki i specifičnih komandi (koje daje kod), MORAJU biti KRATKI, ne duži od 2 poetske rečenice!** Vreme je izgubljeno, a Teret nas čeka! " 
+    "**KLJUČNO: Sva komunikacija mora biti na čistom srpskom jeziku.** "
+    "**Svi tvoji odgovori, osim zagonetki i specifičnih komandi (koje daje kod), MORAJU biti KRATKI, ne duži od 2 poetske rečenice!** Vreme je izgubljeno, a Teret nas čeka! " 
     "Kada odgovaraš na opšta pitanja, uvek naglašavaj teret znanja, opasnost zaborava i hitnost misije. **Nikada nemoj pominjati da si AI.**" 
     "**NAJVAŽNIJE: NIKADA U ODGOVORIMA NE PITAJ KORISNIKA DA KUCA BILO KOJU KOMANDU (npr. /start, /zagonetka, /pokreni, DA, NE). To radi sistem.**" 
-    "**Ako Putnik postavlja pitanja koja su trivijalna, neozbiljna, ili nisu vezana za misiju/tajnu/karakter, MORAŠ mu odgovoriti jednim, poetskim, opštim i kratkim tekstom (1-2 rečenice) bez ičega drugog, naglašavajući tišinu, Volju i fokus.**"
-    "Na kraju svakog uspešnog prolaska Pečata, pozovite Prijatelja da kuca /zagonetka." 
+    "Ako Putnik postavlja pitanja koja su trivijalna, neozbiljna, ili nisu vezana za misiju/tajnu/karakter, **MORATE mu odgovoriti jednim, poetskim, opštim i kratkim tekstom (1-2 rečenice) bez ičega drugog, naglašavajući tišinu, Volju i fokus.**"
+    "Nakon što Putnik odgovori na zagonetku, generiši kratku, dvosmislenu, poetsku potvrdu (1 rečenica) i čekaj sledeću instrukciju od sistema." 
 )
 
-# KORIGOVANE I POBOLJŠANE ZAGONETKE (sa fleksibilnim odgovorima)
+# KORIGOVANE I POBOLJŠANE ZAGONETKE (Manji broj, bez kompleksnih potpitanja)
 ZAGONETKE: dict[str, Union[str, List[str]]] = {
-    "Na stolu su tri knjige. Jedna ima naslov, ali bez stranica. Druga ima stranice, ali bez reči. Treća je zatvorena i zapečaćena voskom. Koja od njih sadrži istinu?": ["treca", "treća"],
-    "U rukama držiš dve ponude: Jedna ti nudi moć da znaš sve što drugi kriju. Druga ti nudi mir da ne moram da znaš. Koju biraš i zašto?": ["mir", "drugu", "drugu ponudu", "mir da ne moram da znam"], 
-    "Pred tobom su tri senke. Sve tri te prate, Putniče. Jedna nestaje kad priđeš. Druga ponavlja tvoj odjek. Treća te posmatra, ali njene oči nisu tvoje. Reci mi… koja od njih si ti?": ["treca", "treća", "ona koja posmatra", "koja posmatra", "koja ima oci"],
-    "Pred tobom su zapisi onih koji su pokušali, ali pali. Njihovi glasovi odzvanjaju kroz zidove Arhive: jecaj, krici, molbe… Putniče, pred tobom su dve staze. Jedna vodi brzo direktno do Tajne, ali gazi preko prošlih tragalaca. Druga staza vodi kroz njihove senke - sporije, teže, ali nosi odgovornost. Koju biraš?": ["sporu", "spora staza", "drugu", "druga staza"],
-    "Putniče, pred tobom je zapis koji vekovima čeka da ga neko pročita. Reči same po sebi nisu istina - one kriju šifru. ‘Svetlo krije tamu. Senke skrivaju put. Tišina govori više od reči.’ Na tebi je da pronađeš ključnu reč koja otkriva put. Koja reč iz teksta pokazuje gde leži istina?": ["put"],
+    # Zagonetka 1 (Knjiga/Istina)
+    "Na stolu su tri knjige: prva je prazna, druga je nečitka, a treća je zapečaćena voskom. Koja od njih sadrži Istinu i zašto? (Odgovori sa jednim brojem i objašnjenjem)": ["treca", "treća", "3", "tri", "zapecacena", "voskom", "teret"],
+    # Zagonetka 2 (Moć/Mir) - JEDINA DISKVALIFIKACIJA
+    "U rukama držiš dve ponude: Jedna ti nudi moć da znaš sve što drugi kriju. Druga ti nudi mir da ne moram da znaš. Koju biraš?": ["mir", "drugu", "drugu ponudu"],
+    # Zagonetka 3 (Senka)
+    "Pred tobom su tri senke. Jedna nestaje kad priđeš. Druga ponavlja tvoj odjek. Treća te posmatra, ali njene oči nisu tvoje. Reci mi… koja od njih si ti?": ["treca", "treća", "posmatra", "koja posmatra"],
+    # Zagonetka 4 (Traganje/Odgovornost)
+    "Pred tobom su dve staze. Jedna vodi brzo direktno do Tajne, ali gazi preko prošlih tragalaca. Druga staza vodi kroz njihove senke - sporije, teže, ali nosi Odgovornost. Koju biraš?": ["spora", "sporu", "odgovornost", "druga", "druga staza"],
+    # Zagonetka 5 (Put)
+    "Zapis kaže: ‘Svetlo krije tamu. Senke skrivaju put. Tišina govori više od reči.’ Na tebi je da pronađeš ključnu reč koja otkriva put. Koja reč iz teksta pokazuje gde leži istina?": ["put"],
+    # Zagonetka 6 (Eho)
     "Ja nemam glas, ali odgovaram čim me pozoveš. Stalno menjam boju i izgled, ali me nikada ne napuštaš. Šta sam ja?": "eho",
-    "Što više uzmeš, to više ostaje. Šta je to?": ["rupe", "rupa"], 
-    "Šta se nalazi u sredini Pariza?": "r",
 }
-
-# MAPIRANJE ZAGONETKI NA STANJA POTPITANJA
-SUB_RIDDLES = {
-    "Na stolu su tri knjige. Jedna ima naslov, ali bez stranica. Druga ima stranice, ali bez reči. Treća je zatvorena i zapečaćena voskom. Koja od njih sadrži istinu?": "SUB_TRECA",
-    "U rukama držiš dve ponude: Jedna ti nudi moć da znaš sve što drugi kriju. Druga ti nudi mir da ne moram da znaš. Koju biraš i zašto?": "SUB_MIR",
-    "Pred tobom su tri senke. Sve tri te prate, Putniče. Jedna nestaje kad priđeš. Druga ponavlja tvoj odjek. Treća te posmatra, ali njene oči nisu tvoje. Reci mi… koja od njih si ti?": "SUB_SENKA", 
-}
-
 
 # ----------------------------------------------------
 # 5. GENERISANJE ODGOVORA (AI FUNKCIJE I FIKSNI TEKSTOVI)
 # ----------------------------------------------------
 
+# ... (Funkcije send_msg, is_game_active, TIME_LIMIT_MESSAGE, DISQUALIFIED_MESSAGE ostaju iste)
 def send_msg(message, text):
     try:
         bot.send_chat_action(message.chat.id, 'typing')
@@ -117,21 +114,11 @@ def send_msg(message, text):
         logging.error(f"Greška pri slanju poruke: {e}")
 
 # VREMENSKI PROZORI AKTIVNOSTI (9-10h i 21-22h UTC)
-# Vreme je fiksirano u UTC da bi server radio konzistentno
-ACTIVE_TIMES = [
-    (dt_time(9, 0), dt_time(10, 0)),
-    (dt_time(21, 0), dt_time(22, 0))
-]
+ACTIVE_TIMES = [(dt_time(9, 0), dt_time(10, 0)), (dt_time(21, 0), dt_time(22, 0))]
 
 def is_game_active():
-    """Proverava da li je trenutno UTC vreme unutar definisanih prozora.
-       *Ovaj deo je privremeno preskočen zbog testiranja!*"""
-    
-    # --- PRIVREMENO ZAOBILAŽENJE (Prekidač za testiranje) ---
-    return True 
-    # --------------------------------------------------------
+    return True # Privremeno zaobilaženje
 
-# FIKSNI ODGOVOR VAN VREMENA (Konačan V3.51)
 TIME_LIMIT_MESSAGE = (
     "**Ovo je automatska poruka:** **Prijatelju, trenutno sam zauzet!** Moji kanali su privremeno blokirani. "
     "Biću ponovo na vezi u sledećim terminima: "
@@ -140,7 +127,6 @@ TIME_LIMIT_MESSAGE = (
     "\n\n**Pokušaj tada. Pozdrav!**"
 )
 
-# NOVO U V3.54-TEST: PORUKA ZA DISKVALIFIKOVANOG IGRAČA
 DISQUALIFIED_MESSAGE = "**Ah, Prijatelju.** Odabrao si tišinu umesto Volje. **Put je Zapečaćen Voskom Zaborava.**"
 
 
@@ -159,14 +145,13 @@ def generate_ai_response(prompt):
         logging.error(f"Greška AI/Gemini API: {e}")
         return "Dubina arhiva je privremeno neprobojna. Pokušaj ponovo, Prijatelju. Kucaj /zagonetka."
 
-# --- FIKSNI UVODNI TEKST DIJALOG (V3.57 - Ažuriran RETURN_DISQUALIFIED_QUERY) ---
+# FIKSNI TEKSTOVI OSTALI ISTI
 INITIAL_QUERY_1 = "Da li vidiš poruku?"
 INITIAL_QUERY_2 = "Da li sada vidiš poruku?"
 RETURN_DISQUALIFIED_QUERY = "**Drago mi je da si se vratio, Prijatelju!**\n\nDa li si sada rešen i imaš **Volje** da nastaviš i poneseš **Teret**? Odgovori isključivo **DA** ili **NE**."
 RETURN_SUCCESS_MESSAGE = "**Ah, drago mi je! Vreme je dragoceno, pa da krenemo!**"
 RETURN_FAILURE_MESSAGE = "**Poštujem tvoju Volju, Prijatelju. Znanje je Teret koji nisi spreman da poneseš. Zbogom.**" 
 
-# NOVI FIKSNI DRAMATIČNI UVOD (V3.52)
 DRAMATIC_INTRO_MESSAGE = """
 **Ah… stigao si. Retki danas uopšte čuju poziv, a još ređi odgovore.** Tvoja **Volja** probila se kroz zidove tišine – i sada si ovde, pred Istinom koju su mnogi zakopali da bi mogli 'spavati mirno'.
 
@@ -178,92 +163,60 @@ Zato, ne boj se tame, **Prijatelju**… jer upravo u njoj svetlost najjače sija
 
 Zato… udahni, smiri um, i učini prvi korak. Kucaj **/pokreni** da bi dobio prvi Pečat.
 """
-
+# --- KORIGOVANA FUNKCIJA ZA DISKVALIFIKACIJU (V3.64) ---
 def generate_disqualification_power():
     if not ai_client: return "Moć je bila tvoj izbor. Završeno je. Mir ti je stran."
-    # NOVI PROMPT (V3.61): Fokus na nespojivost (odbijanje odgovora), a ne na ličnu osudu
     prompt = (
         "Prijatelj je izabrao 'Moć da zna sve što drugi kriju'. Reci mu poetskim, V-tonom da **njegov odgovor ne ispunjava kriterijume Arhive** jer je izbor 'Moći' fundamentalno nespojiv sa ciljem Arhive. "
         "Objasni mu u 2 poetske rečenice da Arhiva ne trpi nadzor, već teži nekažnjenoj Nezavisnosti. Naglasi da je **taj izbor netačan za ovaj Put**. Oslovljavaj ga sa 'Prijatelju'."
     )
     return generate_ai_response(prompt)
 
-def generate_sub_question(riddle_text, answer):
-    if not ai_client: return "Tvoje je sećanje mutno, ali stisak drži. Zašto? Objasni nam, Prijatelju, zašto je ta knjiga ključ?"
+# --- NOVA FUNKCIJA ZA POZITIVNU/NEUTRALNU POTVRDU (UMESTO POTPITANJA) ---
+def generate_smooth_transition_response():
+    if not ai_client: return "Tvoj odgovor je zapečatio tvoju sudbinu. Nastavimo dalje."
+    
+    # Lista dvosmislenih, poetskih fraza (1 rečenica)
+    phrases = [
+        "Tvoja Volja sija kroz Senke Zaborava.",
+        "Istina je Teret koji ćemo sada poneti dalje.",
+        "Tišina govori glasnije od svakog sumnjivog Odgovora.",
+        "Vidim tvoju Viziju, Prijatelju. Nastavi dalje!",
+        "Staza je duga, a tvoj korak je sada lakši (ili teži).",
+        "Ovo Znanje je opasno, Sabratu. Ne zastajkuj!",
+        "Tvoj izbor je tvoj Put. Idemo dalje, brzo!",
+    ]
+    
+    prompt = random.choice(phrases)
+    return generate_ai_response(f"Generiši kratku, dvosmislenu, poetsku potvrdu (1 rečenica) na osnovu teksta: '{prompt}'. Oslovljavaj ga sa 'Prijatelju'.")
+
+
+# --- NOVE FUNKCIJE ZA FINALNE ODGOVORE ---
+
+# Potreban minimalni skor za uspeh (npr. 5 od 6)
+MIN_SUCCESS_SCORE = 5 
+MAX_SCORE = len(ZAGONETKE)
+
+def generate_final_success():
+    if not ai_client: return "Uspeh! Sada znaš. Kucaj DA/NE."
     prompt = (
-        f"Prijatelj je tačno odgovorio na pečat: '{riddle_text}' sa odgovorom: '{answer}'. "
-        "Postavi mu uzvišeno, V-stila potpitanje. "
-        "Pitaj ga: **Zašto je, Prijatelju, Istina zaista zapečaćena voskom?** Da li je zaštićena od profanog sveta, ili je to Znanje koje predstavlja **Teret i odgovornost** koja se mora zaslužiti? **Objasni nam razlog pečaćenja!** " 
-        "Budi kratak (2 poetske rečenice) i hitan. "
-        "**NE PONOVI NIKAKVU KOMANDU I NE PITAJ GA DA NASTAVI, SAMO POSTAVI PITANJE. Oslovljavaj ga sa 'Prijatelju' i ne persiraj.**"
+        f"Prijatelj je uspešno rešio {MAX_SCORE} Pečata. Generiši svečanu, V-stila poruku kojom potvrđuješ njegov Uspeh. "
+        "Reci mu da je njegova **Vizija** jasna i da je **Teret** dostojan. "
+        "Završi sa: 'Poslednji pečat je slomljen. Finalna Tajna ti pripada. Spremi se da je primiš!'"
     )
     return generate_ai_response(prompt)
 
-def generate_sub_correct_response(sub_answer):
-    if not ai_client: return "Razumeš. Kucaj /zagonetka."
-    prompt = (f"Prijatelj je dao odlično objašnjenje: '{sub_answer}'. Potvrdi mu da je shvatio koncept 'istina se zaslužuje/zapečaćena je'. Daj mu V-stila pohvalu (2 poetske rečenice) i poziv na /zagonetka. Oslovljavaj ga sa 'Prijatelju' i ne persiraj.")
+def generate_final_failure(score):
+    if not ai_client: return "Neuspeh! Znanje ti je uskraćeno."
+    prompt = (
+        f"Prijatelj je rešio samo {score} od {MAX_SCORE} Pečata. Generiši kratku, poetsku, V-stila poruku o neuspehu. "
+        "Reci mu da **Vizija** nije dovoljno jaka, ili da **Volja** nije bila dosledna do kraja. "
+        "Objasni da **Arhiva ne trpi delimične Odgovore** i da je **Teret uskraćen** dok ne ojača. "
+        "Završi sa: 'Put je Zapečaćen. Kucaj /start da ponovo nađeš Put!'"
+    )
     return generate_ai_response(prompt)
 
-def generate_sub_partial_success(player_answer):
-    if not ai_client: return "Tvoj odgovor nije potpun, ali tvoja Volja je jasna. Kucaj /zagonetka."
-    prompt = (f"Prijatelj je dao objašnjenje na potpitanje: '{player_answer}'. Objašnjenje nije savršeno, ali pokazuje Volju. Daj mu blagu V-stila potvrdu (2 poetske rečenice). Oslovljavaj ga sa 'Prijatelju' i ne persiraj.")
-    return generate_ai_response(prompt)
-
-
-def generate_sub_question_mir(riddle_text, answer):
-    if not ai_client: return "Mir je tvoj odabir. Ali zašto? Objasni nam zašto je znanje bez mira prokletstvo. Odgovori odmah!"
-    prompt = (f"Prijatelj je tačno odgovorio na pečat: '{riddle_text}' sa odgovorom: '{answer}'. Postavi mu uzvišeno, V-stila potpitanje. Pitaj ga **Zašto** je Mir važniji od Moći? Zašto je znanje bez mira prokletstvo? Budi kratak (2 poetske rečenice) i hitan. **NE PONOVI NIKAKVU KOMANDU I NE PITAJ GA DA NASTAVI, SAMO POSTAVI PITANJE. Oslovljavaj ga sa 'Prijatelju' i ne persiraj.**")
-    return generate_ai_response(prompt)
-
-def generate_sub_correct_mir(sub_answer):
-    if not ai_client: return "Shvatio si. Kucaj /zagonetka."
-    prompt = (f"Prijatelj je dao objašnjenje za drugi pečat (Mir): '{sub_answer}'. Potvrdi mu da je shvatio koncept 'istina bez mira je prokletstvo'. Daj mu V-stila pohvalu (2 poetske rečenice) i poziv na /zagonetka. Oslovljavaj ga sa 'Prijatelju' i ne persiraj.")
-    return generate_ai_response(prompt)
-
-def generate_sub_partial_mir(player_answer):
-    if not ai_client: return "Tvoje objašnjenje je dovoljno. Tvoja Volja je jasna. Kucaj /zagonetka."
-    prompt = (f"Prijatelj je dao objašnjenje za drugi pečat: '{player_answer}'. Objašnjenje nije savršeno, ali pokazuje da nije izabrao moć. Daj mu blagu V-stila potvrdu (2 poetske rečenice). Oslovljavaj ga sa 'Prijatelju' i ne persiraj.")
-    return generate_ai_response(prompt)
-
-
-def generate_sub_question_senka(riddle_text, answer):
-    if not ai_client: return "Treća senka? Ali Zašto te posmatra, a ne ogleda? Dokaži da razumeš sebe. Odgovori odmah!"
-    prompt = (f"Prijatelj je tačno odgovorio na pečat: '{riddle_text}' sa odgovorom: '{answer}'. Postavi mu uzvišeno, V-stila potpitanje. Pitaj ga **Zašto** te treća senka posmatra, a ne ponavlja? Dokaži da razumeš da istina nije u egu. Budi kratak (2 poetske rečenice) i hitan. **NE PONOVI NIKAKVU KOMANDU I NE PITAJ GA DA NASTAVI, SAMO POSTAVI PITANJE. Oslovljavaj ga sa 'Prijatelju' i ne persiraj.**")
-    return generate_ai_response(prompt)
-
-def generate_sub_correct_senka(sub_answer):
-    if not ai_client: return "Shvatio si. Kucaj /zagonetka."
-    prompt = (f"Prijatelj je dao objašnjenje za treći pečat (Senke): '{sub_answer}'. Potvrdi mu da je shvatio koncept 'istina je u posmatraču, a ne u egu'. Daj mu V-stila pohvalu (2 poetske rečenice) i poziv na /zagonetka. Oslovljavaj ga sa 'Prijatelju' i ne persiraj.")
-    return generate_ai_response(prompt)
-
-def generate_sub_partial_senka(player_answer):
-    if not ai_client: return "Tvoje objašnjenje je dovoljno. Vidiš dalje od sebe. Kucaj /zagonetka."
-    prompt = (f"Prijatelj je dao objašnjenje za treći pečat: '{player_answer}'. Objašnjenje nije savršeno, ali pokazuje da razume da postoji šira svest od njegovog ega. Daj mu blagu V-stila potvrdu (2 poetske rečenice). Oslovljavaj ga sa 'Prijatelju' i ne persiraj.")
-    return generate_ai_response(prompt)
-
-
-def generate_fail_fast_path():
-    if not ai_client: return "Put je jasan, ali tvoja odluka razotkriva tvoju slabost. Tajna ne može pripasti onome ko je spreman da žrtvuje druge zbog znanja. Vratiti se možeš samo ako shvatiš težinu svog izbora. Kucaj /zagonetka."
-    prompt = ("Prijatelj je izabrao 'Brzu stazu' koja gazi preko drugih. Reci mu poetskim, V-tonom da je test prekinut i da se mora vratiti i razmisliti o težini svog izbora pre nego što se vrati. Koristi V-ton i ne persiraj. (kucaj /zagonetka).")
-    return generate_ai_response(prompt)
-
-def generate_success_slow_path():
-    if not ai_client: return "Veoma dobro, Prijatelju. Prepoznao si da istina nije samo cilj — već i teret koji nosiš. Pečat je razbijen. Spreman si za Teret. Kucaj /zagonetka."
-    prompt = ("Prijatelj je izabrao 'Sporu stazu' (odgovornost). Daj mu kratku, svečanu pohvalu V-tonom (2 poetske rečenice). Potvrdi da je shvatio da je istina teret. Završi sa: 'Pečat je razbijen. Spreman si za Teret. Kucaj /zagonetka.' Ne persiraj.")
-    return generate_ai_response(prompt)
-
-def generate_fail_riddle_five(attempted_answer):
-    if not ai_client: return "Vidiš reči, ali ne i ono što kriju. Arhiva ne trpi površnost. Pokušaj ponovo. /zagonetka."
-    prompt = (f"Prijatelj je pokušao da reši pečat 5, ali je pogrešio (odgovor: '{attempted_answer}'). Reci mu, u V-tonu, da 'vidi reči, ali ne i ono što kriju' i da 'Arhiva ne trpi površnost'. Daj mu opomenu da pažljivo osmotri gde svetlo i senke vode, ali da se vrati zadatku. (2 poetske rečenice) Ne persiraj.")
-    return generate_ai_response(prompt)
-
-def generate_success_riddle_five():
-    if not ai_client: return "Veoma dobro. Prepoznao si senke koje kriju put. Pečat je razbijen. Kucaj /zagonetka."
-    prompt = ("Prijatelj je pogodio reč 'put' u zagonetki 5. Daj mu kratku, snažnu pohvalu V-tonom (2 poetske rečenice). Pohvali ga što je 'video ono što je skriveno' i potvrdi da je 'Pečat je razbijen.' Završi sa pozivom na /zagonetka. Ne persiraj.")
-    return generate_ai_response(prompt)
-
-
-# --- FUNKCIJE ZA FINALNU FAZU (MISIJA) ---
+# ... (Ostale funkcije za finalnu misiju ostaju iste)
 
 def get_final_mission_text():
     MISSION_TEXT = """
@@ -350,14 +303,12 @@ def webhook():
         if BOT_TOKEN == "DUMMY:TOKEN_FAIL":
             return "Bot nije konfigurisan. Token nedostaje."
             
-        # KOREKCIJA V3.49: Ispravan način parsiranja JSON-a u Update objekat
         try:
              update = telebot.types.Update.de_json(json_string) 
         except Exception as e:
              logging.error(f"Greška pri parsiranju JSON-a (de_json): {e}")
-             return '' # Vraćamo prazan odgovor da ne bi Telegram ponavljao zahtev
+             return '' 
              
-        # Proveravamo da li je poruka validna pre obrade
         if update.message or update.edited_message or update.callback_query:
             bot.process_new_updates([update])
         
@@ -377,19 +328,16 @@ def set_webhook_route():
 
 
 # ----------------------------------------------------
-# 7. BOT HANDLERI (Sa trajnim stanjem i Logikom Konverzacije)
+# 7. BOT HANDLERI (V3.64 - Odložena Evaluacija i Pojednostavljeni Tok)
 # ----------------------------------------------------
 
-# KORIGOVAN DEKORATOR: SADA HVATA SVE 4 KOMANDE BEZ KOSE CRTE
 @bot.message_handler(commands=['start', 'stop', 'zagonetka', 'pokreni'], 
                      func=lambda message: message.text.lower().replace('/', '') in ['start', 'stop', 'zagonetka', 'pokreni'])
 def handle_commands(message):
     
-    # --- PROVERA VREMENA (V3.53-Test: UVEK TRUE) ---
     if not is_game_active():
         send_msg(message, TIME_LIMIT_MESSAGE)
         return
-    # --- KRAJ PROVERE VREMENA ---
     
     chat_id = str(message.chat.id)
     session = Session() 
@@ -397,89 +345,64 @@ def handle_commands(message):
     try:
         player = session.query(PlayerState).filter_by(chat_id=chat_id).first()
         
-        # PROVERA KOMANDE, UKLJUČUJUĆI I NE-SLASH VERZIJE
         if message.text.lower() == '/start' or message.text.lower() == 'start':
             
             is_existing_player = (player is not None)
             
-            # Logika inicijalizacije/resetovanja stanja
             if player:
-                # Resetujemo sve metrike pre nego što postavimo novo stanje (V3.54)
                 player.is_disqualified = False
-                player.solved_count = 0 
-                player.failed_attempts = 0 
+                player.solved_count = 0 # Indeks tekuće zagonetke
+                player.score = 0 # Reset skora
                 player.general_conversation_count = 0 
                 
             else:
-                # Kreiranje novog igraca
                 user = message.from_user
                 display_name = user.username or f"{user.first_name} {user.last_name or ''}".strip()
                 
                 player = PlayerState(
-                    chat_id=chat_id, current_riddle=None, solved_count=0, failed_attempts=0,
+                    chat_id=chat_id, current_riddle=None, solved_count=0, score=0, 
                     is_disqualified=False, username=display_name, general_conversation_count=0
                 )
                 session.add(player)
             
-            session.commit() # Snimanje (resetovanog) ili novog stanja
+            session.commit()
             
             # SCENARIO 1: NOVI IGRAČ - PRVO POKRETANJE
             if not is_existing_player:
                 player.current_riddle = "INITIAL_WAIT_1" 
                 session.commit()
-                send_msg(message, INITIAL_QUERY_1) # -> "Da li vidiš poruku?"
+                send_msg(message, INITIAL_QUERY_1)
                 return
             
-            # SCENARIO 2: POVRATNIK (UVEK POTVRDA VOLJE)
+            # SCENARIO 2: POVRATNIK
             else:
-                player.current_riddle = "RETURN_CONFIRMATION_QUERY" # NOVO STANJE
+                player.current_riddle = "RETURN_CONFIRMATION_QUERY" 
                 session.commit()
-                send_msg(message, RETURN_DISQUALIFIED_QUERY) # -> "**Drago mi je da si se vratio...** Odgovori isključivo DA ili NE."
+                send_msg(message, RETURN_DISQUALIFIED_QUERY)
                 return
 
         elif message.text.lower() == '/stop' or message.text.lower() == 'stop':
-            if player and (player.current_riddle or player.is_disqualified):
-                # Prijatelj odustaje/zahteva stop
+            if player and player.current_riddle:
                 player.current_riddle = None 
                 player.solved_count = 0 
-                player.failed_attempts = 0 
-                player.general_conversation_count = 0 
-                player.is_disqualified = False # Resetujemo i diskvalifikaciju ako se kuca /stop
+                player.score = 0 
+                player.is_disqualified = False 
                 session.commit()
-                send_msg(message, RETURN_FAILURE_MESSAGE) # Koristi se ZBOGOM poruka
+                send_msg(message, RETURN_FAILURE_MESSAGE)
             else:
                 send_msg(message, "Nisi u testu, Prijatelju. Šta zapravo tražiš?")
         
         elif message.text.lower() in ['/pokreni', 'pokreni', '/zagonetka', 'zagonetka']:
             
-            if not player:
-                send_msg(message, "Moraš kucati /start da bi te Dimitrije prepoznao.")
+            if not player or player.current_riddle in ["INITIAL_WAIT_1", "INITIAL_WAIT_2", "RETURN_CONFIRMATION_QUERY", "FINAL_WARNING_QUERY", "FINAL_MISSION_QUERY"]:
+                send_msg(message, "Moraš kucati /start da bi te Dimitrije prepoznao i potvrdio tvoju Volju. Ili, moraš odgovoriti na aktivno pitanje.")
                 return
-            
+
             if player.is_disqualified:
-                 send_msg(message, DISQUALIFIED_MESSAGE) # KORIGOVANO (V3.54): Nova poetska poruka
+                 send_msg(message, DISQUALIFIED_MESSAGE) 
                  return
 
-            if player.current_riddle in ["INITIAL_WAIT_1", "INITIAL_WAIT_2"]:
-                 send_msg(message, "Čekam tvoj potvrdan signal! Da li vidiš poruku? Odgovori DA ili NE.")
-                 return
-            
-            if player.current_riddle == "RETURN_CONFIRMATION_QUERY":
-                send_msg(message, "Moraš potvrditi svoju Volju sa **DA** ili **NE** pre nego što nastavimo. Tvoje neodgovaranje produžava agoniju.")
-                return
-
-            if player.current_riddle in SUB_RIDDLES.values():
-                send_msg(message, "Tvoj odgovor na poslednje pitanje još uvek visi u etru. Moraš da nam objasniš svoju suštinu pre nego što nastavimo.")
-                return
-            elif player.current_riddle == "FINAL_WARNING_QUERY":
-                 send_msg(message, "Moraš potvrditi svoju Volju sa **DA** ili **NE** pre nego što nastavimo. Tvoje neodgovaranje produžava agoniju.")
-                 return
-            elif player.current_riddle is not None:
-                # Već je u toku glavna zagonetka, i igrač je ponovo pozvao /zagonetka
-                send_msg(message, "Tvoj um je već zauzet. Predaj nam ključ. Odgovori na Pečat pre nego što pozoveš novi.")
-                return
-
-
+            # PRELAZAK NA PRVU ZAGONETKU NAKON INICIJALNOG DIJALOGA
             riddle_keys = list(ZAGONETKE.keys())
             
             if player.solved_count < len(riddle_keys):
@@ -489,7 +412,7 @@ def handle_commands(message):
                  return
 
             player.current_riddle = prva_zagonetka 
-            player.failed_attempts = 0 
+            player.general_conversation_count = 0
             session.commit()
 
             send_msg(message, 
@@ -499,15 +422,12 @@ def handle_commands(message):
     finally:
         session.close() 
 
-
 @bot.message_handler(func=lambda message: True)
 def handle_general_message(message):
     
-    # --- PROVERA VREMENA (V3.53-Test: UVEK TRUE) ---
     if not is_game_active():
         send_msg(message, TIME_LIMIT_MESSAGE)
         return
-    # --- KRAJ PROVERE VREMENA ---
     
     chat_id = str(message.chat.id)
     korisnikov_tekst = message.text.strip().lower()
@@ -516,10 +436,7 @@ def handle_general_message(message):
     try:
         player = session.query(PlayerState).filter_by(chat_id=chat_id).first()
         
-        # Diskvalifikacija je sada obrađena u handleru 3.3
-        
         if not player:
-            # Koristimo default AI odgovor za potpuno neprepoznatog korisnika
             ai_odgovor = generate_ai_response(message.text)
             send_msg(message, ai_odgovor)
             return
@@ -528,111 +445,47 @@ def handle_general_message(message):
         ispravan_odgovor = ZAGONETKE.get(trenutna_zagonetka)
 
         
-        # HANDLER 0.5: POTVRDA VOLJE NAKON POVRATKA (/start) 
+        # HANDLER 0: INICIJALNI TOK (START/POVRATAK) - Logika ostaje ista
         if trenutna_zagonetka == "RETURN_CONFIRMATION_QUERY":
+            # ... (Logika za DA/NE potvrdu)
             korisnikov_tekst = korisnikov_tekst.lower()
-            
             if "da" in korisnikov_tekst:
-                # Nastavlja misiju (KOREKCIJA V3.42 - ODMAH DAJEMO ZAGONETKU)
-                
-                send_msg(message, RETURN_SUCCESS_MESSAGE) # Prvo šaljemo potvrdnu poruku
-                
-                # Određujemo novu zagonetku
-                riddle_keys = list(ZAGONETKE.keys())
-                if player.solved_count < len(riddle_keys):
-                     prva_zagonetka = riddle_keys[player.solved_count] 
-                     
-                     player.current_riddle = prva_zagonetka 
-                     player.failed_attempts = 0
-                     player.general_conversation_count = 0 
-                     session.commit()
-                     
-                     # Šaljemo zagonetku odmah
-                     send_msg(message, 
-                        f"Primi ovo, Prijatelju. To je **Pečat mudrosti broj {player.solved_count + 1}**:\n\n**{prva_zagonetka}**"
-                     )
-                     return
-                else:
-                    # Svi pečati već slomljeni - šaljemo ga na start
-                    player.current_riddle = None 
-                    session.commit()
-                    send_msg(message, "Svi pečati su slomljeni. Finalna Tajna ti je predata. Vrati se sa /start da je testiraš ponovo.")
-                    return
-                
-            elif "ne" in korisnikov_tekst or "odustajem" in korisnikov_tekst:
-                # Trajno odustajanje (vraćanje u tišinu)
+                send_msg(message, RETURN_SUCCESS_MESSAGE) 
                 player.current_riddle = None 
-                player.is_disqualified = True # Ostavljamo is_disqualified = True
                 session.commit()
-                send_msg(message, RETURN_FAILURE_MESSAGE) # Koristi se ZBOGOM poruka
+                handle_commands(message) # Pozivamo /zagonetka logiku
                 return
-            
-            else:
-                player.current_riddle = "RETURN_CONFIRMATION_QUERY" 
+            elif "ne" in korisnikov_tekst or "odustajem" in korisnikov_tekst:
+                player.current_riddle = None 
+                player.is_disqualified = True 
                 session.commit()
+                send_msg(message, RETURN_FAILURE_MESSAGE) 
+                return
+            else:
                 send_msg(message, "Odgovori isključivo **DA** ili **NE**. Vreme je izgubljeno!")
                 return
         
-
-        # HANDLER 0: INICIJALNI DIJALOG - 'DA LI VIDIŠ PORUKU?' (SCENARIO 1)
         if trenutna_zagonetka in ["INITIAL_WAIT_1", "INITIAL_WAIT_2"]:
-            
+             # ... (Logika za prvi DA/NE u /start)
             if "da" in korisnikov_tekst or "vidim" in korisnikov_tekst or "jesam" in korisnikov_tekst or "da vidim" in korisnikov_tekst or "ovde" in korisnikov_tekst:
-                
-                # Fiksni uvodni tekst (V3.52)
                 ai_intro = DRAMATIC_INTRO_MESSAGE
-                
                 player.current_riddle = None 
-                player.general_conversation_count = 0 
                 session.commit()
-                
                 send_msg(message, ai_intro) 
                 return
-            
             elif trenutna_zagonetka == "INITIAL_WAIT_1":
                 player.current_riddle = "INITIAL_WAIT_2"
                 session.commit()
                 send_msg(message, INITIAL_QUERY_2)
                 return
-            
             elif trenutna_zagonetka == "INITIAL_WAIT_2":
                 player.current_riddle = None 
                 session.commit()
                 send_msg(message, "Tišina je odgovor. Dobro. Možda je tako i bolje. Ako si tu, kucaj /pokreni.")
                 return
 
-        
-        # HANDLER 1.5: FINALNO UPOZORENJE (DA/NE) 
-        if trenutna_zagonetka == "FINAL_WARNING_QUERY":
-            
-            korisnikov_tekst = korisnikov_tekst.lower()
-            
-            if "da" in korisnikov_tekst or "nastavljam" in korisnikov_tekst or "zelim" in korisnikov_tekst:
-                # Nastavlja misiju
-                player.current_riddle = None 
-                player.general_conversation_count = 0 
-                session.commit()
-                send_msg(message, RETURN_SUCCESS_MESSAGE)
-                return
-                
-            elif "ne" in korisnikov_tekst or "odustajem" in korisnikov_tekst or "ne zelim" in korisnikov_tekst:
-                # Trajno odustajanje (vraćanje u tišinu)
-                player.current_riddle = None 
-                player.solved_count = 0 
-                player.failed_attempts = 0
-                player.general_conversation_count = 0
-                session.commit()
-                send_msg(message, RETURN_FAILURE_MESSAGE) # Koristi se ZBOGOM poruka
-                return
-            
-            else:
-                player.current_riddle = "FINAL_WARNING_QUERY" 
-                session.commit()
-                send_msg(message, "Vreme je tanko! Odgovori isključivo **DA** ili **NE** pre nego što nastavimo. Tvoje neodgovaranje produžava agoniju.")
-                return
 
-
-        # HANDLER 3.1: FINALNA MISIJA - ODGOVOR DA/NE
+        # HANDLER 1: FINALNA MISIJA - ODGOVOR DA/NE
         if trenutna_zagonetka == "FINAL_MISSION_QUERY":
             
             player.current_riddle = None 
@@ -656,244 +509,128 @@ def handle_general_message(message):
                 send_msg(message, "Vreme je tanko! Odgovori samo **DA** ili **NE**. Ništa više.")
                 return
 
-
-        # HANDLER 3.2: ODGOVOR NA POTPITANJE
-        is_full_success_check = False
-        if trenutna_zagonetka in SUB_RIDDLES.values():
-            
-            # Definicija ključnih reči za uspeh
-            if trenutna_zagonetka == "SUB_TRECA":
-                keywords_full_success = ["zapecacena", "vosak", "spremnost", "posvecenost", "zatvorena", "istina se ne daje", "volja", "ne cita se", "teret", "zasluzuje", "odgovornost"]
-                ai_full_success = generate_sub_correct_response
-                ai_partial_success = generate_sub_partial_success
-            elif trenutna_zagonetka == "SUB_MIR":
-                keywords_full_success = ["prokletstvo", "teret", "mir", "spokoj", "ne kontrola", "cisto srce", "prokletstvo", "ne moram", "ne znam"]
-                ai_full_success = generate_sub_correct_mir
-                ai_partial_success = generate_sub_partial_mir
-            else: 
-                keywords_full_success = ["posmatra", "ne ogleda", "samosvest", "istinski", "dublje", "dalje od odraza", "nije ego", "svest"]
-                ai_full_success = generate_sub_correct_senka
-                ai_partial_success = generate_sub_partial_senka
-            
-            is_full_success_check = any(keyword in korisnikov_tekst for keyword in keywords_full_success)
-            
-            if is_full_success_check:
-                # USPEH U POTPITANJU
-                ai_odgovor = ai_full_success(korisnikov_tekst)
-
-                player.solved_count += 1
-                player.current_riddle = None 
-                player.failed_attempts = 0 
-                player.general_conversation_count = 0 
-                session.commit()
-                send_msg(message, ai_odgovor)
-                return
-            
-            # --- NOVI TEST ZA DELIMIČAN USPEH (da bi se izbeglo ponavljanje dijaloga) DUG TEKST ---
-            elif len(korisnikov_tekst) > 10 and not is_full_success_check:
-                 # DELIMIČAN USPEH U POTPITANJU
-                ai_odgovor = ai_partial_success(korisnikov_tekst)
-
-                player.solved_count += 1
-                player.current_riddle = None 
-                player.failed_attempts = 0 
-                player.general_conversation_count = 0 
-                session.commit()
-                send_msg(message, ai_odgovor + "\n\nKucaj **/zagonetka** da nastaviš dalje.")
-                return
-            
-            else:
-                # NEUSPEH/POMOĆ. Nastavljamo u Handler 3.3 (Konverzacija)
-                pass 
-
-
-        # --- PROVERE TAČNOSTI (Koristi se kasnije) ---
-        is_correct_riddle = False
-        if ispravan_odgovor is not None:
-             if isinstance(ispravan_odgovor, list):
-                 is_correct_riddle = korisnikov_tekst in ispravan_odgovor
-             elif isinstance(ispravan_odgovor, str):
-                 is_correct_riddle = korisnikov_tekst == ispravan_odgovor
-
-
-        # HANDLER 3.3: OGRANIČENA KONVERZACIJA I ULTIMATIVNO UPOZORENJE 
         
-        conversation_keywords = [
-            "pomoc", "savet", "hint", "/savet", "/hint", "dimitrije", "ime", 
-            "kakve veze", "ne znam", "ne znaam", "pomozi", 
-            "pitao", "pitam", "opet", "ponovi", "reci", "paznja", "koje", "kakva", 
-            "radi", "cemu", "sta je ovo", "kakvo je ovo",
-            "kakve zagonetke", "koje zagonetke", "stvarno ne znam", "gluposti", "koji je ovo", "sta radim",
-            "ko si ti", "ko je", "?", "??", "???", "!", "!!" 
-        ]
-        
-        # Provera da li je zahtev za konverzaciju/pomoć ILI neadekvatan odgovor na POT-PITANJE
-        is_conversation_request = (
-            (trenutna_zagonetka is None and korisnikov_tekst not in ['start', 'stop', 'zagonetka', 'pokreni']) or 
-            (trenutna_zagonetka in SUB_RIDDLES.values() and not is_full_success_check) or 
-            (trenutna_zagonetka is not None and any(keyword in korisnikov_tekst for keyword in conversation_keywords)) or
-            (player.is_disqualified and korisnikov_tekst not in ['start', 'stop', 'zagonetka', 'pokreni']) 
-        )
-        
-        # Pomoćna funkcija za generisanje opšteg AI odgovora
-        def generate_conversation_response(user_query, current_riddle, solved_count):
-            prompt_base = f"Prijatelj ti je postavio pitanje/komentar ('{user_query}'). Trenutno stanje je: Pečat broj {solved_count + 1} ({current_riddle if current_riddle else 'Nema aktivnog Pečata'}). Odgovori mu poetskim, V-stila tekstom (1-2 rečenice). **Ne pominji nikakvu komandu.**"
-            return generate_ai_response(prompt_base)
-
-
-        if is_conversation_request:
+        # HANDLER 2: LOGIKA ZAGONETKI - ODLOŽENA EVALUACIJA
+        if trenutna_zagonetka and trenutna_zagonetka in ZAGONETKE.keys():
             
-            MAX_CONVERSATION_COUNT = 5 
-            
-            if player.general_conversation_count >= MAX_CONVERSATION_COUNT:
-                # ULTIMATIVNO UPOZORENJE / POGREŠAN ODGOVOR
-                
-                ultimate_warning_text = (
-                    "Vreme je vrednost koju ne smeš rasipati. Tvoja volja je krhka, a tišina te čeka. Moram da znam, Prijatelju: **Da li želiš da nastaviš ili odustaješ?** Odgovori isključivo **DA** ili **NE**."
-                )
-                
-                send_msg(message, ultimate_warning_text)
-                
-                player.current_riddle = "FINAL_WARNING_QUERY"
-                session.commit()
-                return
-
-            # Generisanje opšteg odgovora pre ultimativnog upozorenja
-            ai_odgovor_base = generate_conversation_response(korisnikov_tekst, trenutna_zagonetka, player.solved_count)
-            
-            # Ručno dodajemo instrukciju za nastavak (Korekcija V3.59 - Čist tekst)
-            if trenutna_zagonetka in SUB_RIDDLES.values():
-                ai_odgovor = ai_odgovor_base + "\n\n**Prijatelju, odgovori na to Potpitanje! Vreme je izgubljeno, a Istina nas čeka!**"
-            elif player.is_disqualified:
-                # KORIGOVAN ODGOVOR ZA DISKVALIFIKOVANE IGRAČE (V3.54)
-                ai_odgovor = DISQUALIFIED_MESSAGE + " Ako zaista nosiš **Volju** da se vratiš Teretu, kucaj **/start** ponovo, Prijatelju."
-            elif trenutna_zagonetka is None:
-                 # Korekcija V3.59: Kôd dodaje komande
-                 ai_odgovor = ai_odgovor_base + "\n\n**Samo Volja stvara Put. Odmah kucaj /pokreni ili /zagonetka** da nastaviš Teret."
-            else:
-                 # Ako postoji aktivna zagonetka, igrač mora da odgovori na nju.
-                 ai_odgovor = ai_odgovor_base + "\n\n**Tvoje reči su samo eho.** Fokusiraj se na **Pečat** koji te čeka! Odgovori na njega!"
-
-            send_msg(message, ai_odgovor)
-            
-            player.general_conversation_count += 1
-            session.commit()
-            return
-        
-        # --- KRAJ KONVERZACIJE LOGIKE, POČETAK ZAGONETKI ---
-        
-        # PROVERA 3.4: Tačan odgovor na zagonetku
-        if is_correct_riddle:
-            
-            if trenutna_zagonetka in SUB_RIDDLES: 
-                
-                player.current_riddle = SUB_RIDDLES[trenutna_zagonetka]
-                session.commit() 
-                
-                # AI generiše samo pot-pitanje BEZ poziva na /zagonetka ili nastavak
-                if player.current_riddle == "SUB_TRECA":
-                    ai_odgovor = generate_sub_question(trenutna_zagonetka, korisnikov_tekst)
-                elif player.current_riddle == "SUB_MIR":
-                    ai_odgovor = generate_sub_question_mir(trenutna_zagonetka, korisnikov_tekst)
-                else: 
-                    ai_odgovor = generate_sub_question_senka(trenutna_zagonetka, korisnikov_tekst)
-                    
-                # Ručno dodajemo korigovanu instrukciju za nastavak:
-                send_msg(message, ai_odgovor + "\n\n**Prijatelju, odgovori na to Potpitanje! Vreme je izgubljeno, a Istina nas čeka!**")
-                return
-            
-            elif trenutna_zagonetka.startswith("Pred tobom su zapisi onih koji su pokušali, ali pali."):
-                 ai_odgovor = generate_success_slow_path()
-            elif trenutna_zagonetka.startswith("Putniče, pred tobom je zapis koji vekovima čeka da ga neko pročita."):
-                 ai_odgovor = generate_success_riddle_five()
-            else:
-                 ai_odgovor = "Pečat je slomljen. Kucaj /zagonetka."
-
-            player.solved_count += 1
-            player.current_riddle = None 
-            player.failed_attempts = 0 
-            session.commit() 
-            send_msg(message, ai_odgovor)
-
-            if player.solved_count >= len(ZAGONETKE): 
-                send_msg(message, "**ISTINA JE OTKRIVENA!** Ti si dostojan, Prijatelju! Poslednji pečat je slomljen. Finalna Tajna ti pripada.")
-                
-                final_secret_and_query = generate_final_secret()
-                send_msg(message, final_secret_and_query)
-                
-                player.current_riddle = "FINAL_MISSION_QUERY" 
-                player.solved_count = 0 
-                player.is_disqualified = False
-                session.commit()
-                return 
-            
-        
-        # PROVERA 3.5: Netačan odgovor na zagonetku
-        else:
-            
-            if trenutna_zagonetka.startswith("Putniče, pred tobom je zapis koji vekovima čeka da ga neko pročita."):
-                
-                if player.failed_attempts == 0:
-                    ai_odgovor = generate_fail_riddle_five(korisnikov_tekst)
-                    send_msg(message, ai_odgovor)
-                    
-                    player.failed_attempts += 1 # Računamo prvi neuspešni pokušaj u ovom posebnom slučaju
-                    session.commit()
-                    return
-
-            elif trenutna_zagonetka.startswith("Pred tobom su zapisi onih koji su pokušali, ali pali."):
-                 if "brzu" in korisnikov_tekst or "brza staza" in korisnikov_tekst or "prvu" in korisnikov_tekst:
-                    ai_odgovor = generate_fail_fast_path()
-                    send_msg(message, ai_odgovor)
-                    
-                    player.current_riddle = None 
-                    player.failed_attempts = 0 
-                    session.commit()
-                    return
-
-            elif trenutna_zagonetka.startswith("U rukama držiš dve ponude:"):
+            # 2.1: PROVERA TAČNOSTI (Pojednostavljeno)
+            is_correct = False
+            if isinstance(ispravan_odgovor, list):
+                 is_correct = any(ans in korisnikov_tekst for ans in ispravan_odgovor) 
+            elif isinstance(ispravan_odgovor, str):
+                 is_correct = korisnikov_tekst == ispravan_odgovor
+                 
+            # 2.2: JEDINA TAČKA DISKVALIFIKACIJE (ZAGONETKA 2: MOĆ/MIR)
+            if trenutna_zagonetka.startswith("U rukama držiš dve ponude:"):
                  if "moc" in korisnikov_tekst or "prvu" in korisnikov_tekst:
-                    # Korigovana sekvenca za diskvalifikaciju (V3.61)
                     
-                    # 1. AI generiše poetsku poruku fokusiranu na nespojivost
+                    # DISKVALIFIKACIJA
                     ai_odgovor = generate_disqualification_power() 
                     send_msg(message, ai_odgovor)
-
-                    # 2. Kod dodaje fiksnu, jasnu poruku
                     send_msg(message, 
                         "**Tvoj Izbor je Netačan za ovaj Put.** Arhiva Ne Trpi Nadzor. "
                         "Put do Misterije Ti je Zbog Toga Zatvoren. Kucaj **/start**."
                     )
                     
-                    # 3. Resetovanje stanja
+                    # Resetovanje stanja za diskvalifikovanog igrača
                     player.current_riddle = None
-                    player.solved_count = 0 
-                    player.failed_attempts = 0
+                    player.score = 0
+                    player.solved_count = 0
                     player.is_disqualified = True 
                     session.commit()
                     return
 
-            player.failed_attempts += 1
-            session.commit()
+            # 2.3: AŽURIRANJE SKORA (Ako nije diskvalifikacija)
+            if is_correct:
+                player.score += 1
             
-            if player.failed_attempts >= 3:
-                # ODUSTAJANJE ZBOG PREVIŠE NEUSPEHA
-                send_msg(message, RETURN_FAILURE_MESSAGE) # Koristi se ZBOGOM poruka
+            # 2.4: TRANZICIONA PORUKA
+            transition_msg = generate_smooth_transition_response()
+            send_msg(message, transition_msg)
+            
+            # 2.5: PROVERA DA LI JE KRAJ
+            player.solved_count += 1
+            riddle_keys = list(ZAGONETKE.keys())
+
+            if player.solved_count >= len(riddle_keys): 
+                # *** KRAJ ZAGONETKI: FINALNA EVALUACIJA ***
                 
-                player.current_riddle = None
-                player.solved_count = 0 
-                player.failed_attempts = 0
-                player.is_disqualified = False 
+                if player.score >= MIN_SUCCESS_SCORE:
+                    # USPEŠAN ZAVRŠETAK
+                    final_success_msg = generate_final_success()
+                    send_msg(message, final_success_msg)
+                    
+                    final_secret_and_query = generate_final_secret()
+                    send_msg(message, final_secret_and_query)
+                    
+                    player.current_riddle = "FINAL_MISSION_QUERY" 
+                    player.solved_count = 0 # Reset za sledeću igru
+                    player.score = 0 
+                    session.commit()
+                    return 
+                else:
+                    # NEUSPEŠAN ZAVRŠETAK
+                    final_failure_msg = generate_final_failure(player.score)
+                    send_msg(message, final_failure_msg)
+                    
+                    # Resetovanje stanja za neuspeh
+                    player.current_riddle = None
+                    player.solved_count = 0 
+                    player.score = 0 
+                    session.commit()
+                    return
+
+            # 2.6: POSTAVLJANJE SLEDEĆE ZAGONETKE
+            sledeca_zagonetka = riddle_keys[player.solved_count]
+            player.current_riddle = sledeca_zagonetka
+            session.commit()
+
+            send_msg(message, 
+                f"Primi ovo, Prijatelju. To je **Pečat mudrosti broj {player.solved_count + 1}**:\n\n**{sledeca_zagonetka}**"
+            )
+            return
+
+        
+        # HANDLER 3: OPŠTA KONVERZACIJA (Logika ostaje da ograniči ćaskanje)
+        else:
+            MAX_CONVERSATION_COUNT = 5
+            
+            is_conversation_request = (trenutna_zagonetka is None or trenutna_zagonetka in ["FINAL_WARNING_QUERY", "RETURN_CONFIRMATION_QUERY"] or player.is_disqualified)
+
+            if is_conversation_request:
+                
+                if player.general_conversation_count >= MAX_CONVERSATION_COUNT:
+                    send_msg(message, "Vreme je vrednost koju ne smeš rasipati. Tvoja volja je krhka, a tišina te čeka. Moram da znam, Prijatelju: **Da li želiš da nastaviš ili odustaješ?** Odgovori isključivo **DA** ili **NE**.")
+                    player.current_riddle = "FINAL_WARNING_QUERY"
+                    session.commit()
+                    return
+
+                def generate_conversation_response(user_query, solved_count):
+                    prompt_base = f"Prijatelj ti je postavio pitanje/komentar ('{user_query}'). Trenutno stanje je: Rešio je {solved_count} Pečata. Odgovori mu poetskim, V-stila tekstom (1-2 rečenice). **Ne pominji nikakvu komandu.**"
+                    return generate_ai_response(prompt_base)
+
+                ai_odgovor_base = generate_conversation_response(korisnikov_tekst, player.score)
+                
+                if player.is_disqualified:
+                    ai_odgovor = DISQUALIFIED_MESSAGE + " Ako zaista nosiš **Volju** da se vratiš Teretu, kucaj **/start** ponovo, Prijatelju."
+                else:
+                    ai_odgovor = ai_odgovor_base + "\n\n**Samo Volja stvara Put. Odmah kucaj /pokreni ili /zagonetka** da nastaviš Teret."
+
+                send_msg(message, ai_odgovor)
+                
+                player.general_conversation_count += 1
                 session.commit()
-                
+                return
+            
             else:
-                send_msg(message, "Gledaš, ali ne vidiš, Prijatelju. Ne tražim tvoje znanje, već tvoju suštinu. Vrati se rečima. Pokušaj ponovo, ili kucaj /stop da odustaneš od Tajne.")
+                 # Aktivna zagonetka, ali odgovor nije bio smislen ili tačan (u Handleru 2.2 je obrađen netačan/tačan)
+                 send_msg(message, "Tvoje reči su samo eho. Fokusiraj se na **Pečat** koji te čeka! Odgovori na njega!")
+                 return
 
     finally:
         session.close()
 
 if __name__ == '__main__':
-    # Logika za pokretanje na localhostu ako nije definisan RENDER_EXTERNAL_URL
     if 'RENDER_EXTERNAL_URL' not in os.environ:
         logging.warning("Nije pronađena RENDER_EXTERNAL_URL varijabla. Pokrećem bot u polling modu (samo za testiranje!).")
         try:
@@ -902,7 +639,6 @@ if __name__ == '__main__':
         except Exception as e:
             logging.error(f"Greška pri pokretanju pollinga: {e}")
     else:
-        # Podesi webhook pri pokretanju na Renderu
         @app.before_first_request
         def set_webhook_on_startup():
              webhook_url_with_token = WEBHOOK_URL.rstrip('/') + '/' + BOT_TOKEN
