@@ -135,12 +135,12 @@ def is_game_active():
             
     return False
 
-# FIKSNI ODGOVOR VAN VREMENA (Konačan V3.48)
+# FIKSNI ODGOVOR VAN VREMENA (Konačan V3.51 - Sa izmenama)
 TIME_LIMIT_MESSAGE = (
-    "**Prijatelju, trenutno sam zauzet!** Moji kanali su privremeno blokirani. "
+    "**Ovo je automatska poruka:** **Prijatelju, trenutno sam zauzet!** Moji kanali su privremeno blokirani. "
     "Biću ponovo na vezi u sledećim terminima: "
-    "\n\n**Pre podne:** 09:00 do 10:00 (Lokalno vreme Arhive) "
-    "\n**Uveče:** 21:00 do 22:00 (Lokalno vreme Arhive)"
+    "\n\n**Pre podne:** 09:00 do 10:00 "
+    "\n**Uveče:** 21:00 do 22:00"
     "\n\n**Pokušaj tada. Pozdrav!**"
 )
 
@@ -441,7 +441,7 @@ def handle_commands(message):
                 # Prijatelj odustaje tokom aktivne misije/zagonetke
                 player.current_riddle = None 
                 player.solved_count = 0 
-                player.failed_attempts = 0
+                player.failed_attempts = 0 
                 player.general_conversation_count = 0 
                 session.commit()
                 send_msg(message, RETURN_FAILURE_MESSAGE) # Koristi se ZBOGOM poruka
