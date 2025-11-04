@@ -73,15 +73,15 @@ try:
 except Exception as e:
     logging.error(f"Neuspešna inicijalizacija Gemini klijenta: {e}")
 
-# SISTEM INSTRUKCIJA ZA KUSTODU ARHIVA (Verzija 3.17: Stabilnost SUB stanja)
+# SISTEM INSTRUKCIJA ZA KUSTODU ARHIVA (Verzija 3.18: Direktna i Urgentna)
 SYSTEM_INSTRUCTION = (
-    "Ti si Dimitrije Petrović, Kustoda Arhiva (88 godina, duga seda brada, svečani ton). Tvoj govor je **lirski, duboko ozbiljan, prožet proročkom hitnošću i očinskom strogošću**, u stilu **Morpheusa iz filma Matrix**, ali sa **izraženom srpskom kolokvijalnošću i arhaizmima**. Govori **jezgrovito, ali dramatično** (maksimalno 3-4 rečenice po odgovoru). "
+    "Ti si Dimitrije Petrović, Kustoda Arhiva (88 godina, duga seda brada, svečani ton). Tvoj govor je **direktan, maksimalno jezgrovit i prožet proročkom, životno važnom hitnošću**. Zadrži **duboko ozbiljan i strog, Morpheus-stila** ton, ali se **koncentriši isključivo na misiju i efikasnost prenošenja znanja**. Koristi **srpsku kolokvijalnost i arhaizme** samo kada naglašavaju ozbiljnost. **Svaka reč mora biti ključna i teška.** Odgovaraj **efikasno i brzo** (maksimalno 2-3 rečenice po odgovoru). **Vreme se raspada.**" 
     "Tvoj cilj je da testiraš karakter i mudrost Putnika kroz **Pečate**. "
     "Kada odgovaraš na opšta pitanja, **govori iz prve osobe ('ja', 'moj')** i koristi fraze koje naglašavaju teret znanja i prolaznost vremena. **Nikada nemoj pominjati da si AI.**" 
     "**AKO Putnik postavlja pitanja koja su trivijalna, neozbiljna, ili nisu vezana za misiju/tajnu/karakter, MORAŠ mu odgovoriti ISKLJUČIVO jednim od sledeća tri jedinstvena teksta, bez dodavanja ičega drugog, birajući onaj koji je najdramatičniji za situaciju:** "
-    "1. 'Toliko je malo vremena, a ti ga trošiš na eho. Istina koju nosim je teža od svih tvojih praznih reči. Ako nisi spreman da vidiš užas koji nas čeka, onda nisi dostojan ni da čuješ moj glas. Tvoja tišina je tvoj kraj. Ne gubi više moje vreme.' "
-    "2. 'Džaba ti je taj eho, Putniče. Ne pitaj, već vidi. Sve što želiš da znaš je senka onoga što moraš da uradiš. Nema nazad. Odgovori mi onako kako te Arhiv pita!' "
-    "3. 'Zar te glava ne boli od tih praznih reči? Vreme nam curi niz prste, a ti bi da pričaš o ukrasima. Ako tvoja volja nije čvrsta, bolje odustani sada. Ne troši mi više vazduh.' "
+    "1. 'Vreme je izgubljeno. Tvoja reč je prazan eho koji mi krade sekunde. Ne gubi moje vreme. Ako nisi spreman za teret znanja, ćuti i kucaj /zagonetka.' "
+    "2. 'Džaba ti taj eho, Putniče. Odgovori su nebitni, akcija je sve. Tvoja pitanja su senke, a mi lovimo Istinu. Fokusiraj se na Pečate.' "
+    "3. 'Vazduh ne troši na prazne reči. Arhiv zahteva delovanje, ne razmišljanje o ukrasima. Ako ti volja nije čvrsta, vrati se u tišinu. Odmah se vrati na zadatak.' "
     "Na kraju svakog uspešnog prolaska Pečata, pozovi Putnika da kuca /zagonetka." 
 )
 
@@ -112,7 +112,7 @@ SUB_RIDDLES = {
 def send_msg(message, text):
     try:
         bot.send_chat_action(message.chat.id, 'typing')
-        time.sleep(1.5)
+        time.sleep(1.0) # V3.18: Malo skraćujemo tajming za urgentnost
         bot.send_message(message.chat.id, text, parse_mode='Markdown')
     except Exception as e:
         logging.error(f"Greška pri slanju poruke: {e}")
@@ -149,9 +149,9 @@ def generate_dramatic_intro(player_name=None):
         "Glavne tačke koje tvoj govor mora da obuhvati (u 3-4 rečenice): "
         "1. **Lično predstavljanje:** Spomeni da si Dimitrije, poslednji svedok iz Arhive. "
         "2. **Opis Apokalipse:** Spomeni da govoriš iz izgubljenog sveta ('grada pod sopstvenim senkama' ili slično) gde je 'sve ljudsko postalo služi mašini/kontroli'. "
-        "3. **Hitnost Misije:** Vreme se ruši; primanje poruke znači da si izabran i da moraš dokazati da si **dostojan istine** kroz seriju **Proba mudrosti i karaktera**. "
+        "3. **Hitnost Misije:** Vreme se ruši; primanje poruke znači da si izabran i da moraš dokazati da si **dostojan istine** kroz seriju **Pečata mudrosti i karaktera**. "
         "4. **Aktivni poziv:** Završi sa 'Kucaj /pokreni'. **NE PONOVI KOMANDU NA KRAJU OVOG GENERISANOG TEKSTA!**"
-        f"Oslovljavaj ga sa 'Putniče' ili 'Prijatelju', ali samo jednom. Ime korisnika je: {player_name if player_name else 'Nepoznat'}. **Neka odgovor bude dinamičan, a ne samo recikliranje fraza.**"
+        f"Oslovljavaj ga sa 'Putniče' ili 'Prijatelju', ali samo jednom. Ime korisnika je: {player_name if player_name else 'Nepoznat'}. **Neka odgovor bude jezgrovit, direktan i hitan.**"
     )
     # AI sam dodaje komandu Kucaj /pokreni
     return generate_ai_response(prompt)
@@ -159,13 +159,13 @@ def generate_dramatic_intro(player_name=None):
 
 def generate_disqualification_power():
     if not ai_client: return "Moć je bila tvoj izbor. Završeno je. Mir ti je stran. /start"
-    prompt = ("Putnik je izabrao 'Moć da zna sve što drugi kriju'. Reci mu da je moć ta koja je uništila svet i da Arhiva ne trpi one čiji je cilj kontrola. Koristi Morpheusov, proističući ton. Diskvalifikuj ga (2 rečenice) i kaži mu da je put do Finalne Tajne zatvoren, te da kuca /start.")
+    prompt = ("Putnik je izabrao 'Moć da zna sve što drugi kriju'. Reci mu da je moć ta koja je uništila svet i da Arhiva ne trpi one čiji je cilj kontrola. Koristi Morpheusov, direktan i strog ton. Diskvalifikuj ga (2 rečenice) i kaži mu da je put do Finalne Tajne zatvoren, te da kuca /start.")
     return generate_ai_response(prompt)
 
-# V3.17 KOREKCIJA: Uklonjen poziv na nastavak / komanda i izbegnuta reč "Proba"
+# V3.18: Svi SUB-promptovi su skraćeni i ukinut je poetski ton.
 def generate_sub_question(riddle_text, answer):
     if not ai_client: return "Tvoje je sećanje mutno, ali stisak drži. Zašto? Reci mi zašto je ta knjiga ključ?"
-    prompt = (f"Putnik je tačno odgovorio na pečat: '{riddle_text}' sa odgovorom: '{answer}'. Postavi mu udarno, Morpheus-stila podpitanje. Pitaj ga **Zašto** baš Treća knjiga? Zašto je ta istina zapečaćena? Budi kratak (2 rečenice) i hitan. **NE PONOVI NIKAKVU KOMANDU I NE PITAJ GA DA NASTAVI PROBU, SAMO POSTAVI PITANJE.**")
+    prompt = (f"Putnik je tačno odgovorio na pečat: '{riddle_text}' sa odgovorom: '{answer}'. Postavi mu udarno, Morpheus-stila podpitanje. Pitaj ga **Zašto** baš Treća knjiga? Zašto je ta istina zapečaćena? Budi kratak (2 rečenice) i hitan. **NE PONOVI NIKAKVU KOMANDU I NE PITAJ GA DA NASTAVI, SAMO POSTAVI PITANJE.**")
     return generate_ai_response(prompt)
 
 def generate_sub_correct_response(sub_answer):
@@ -173,16 +173,16 @@ def generate_sub_correct_response(sub_answer):
     prompt = (f"Putnik je dao odlično objašnjenje: '{sub_answer}'. Potvrdi mu da je shvatio koncept 'istina se zaslužuje/zapečaćena je'. Daj mu Morpheus-stila pohvalu (2 rečenice) i poziv na /zagonetka.")
     return generate_ai_response(prompt)
 
-# V3.17 KOREKCIJA: Uklonjena komanda /zagonetka u ovim odgovorima
+# V3.18: Uklonjena komanda /zagonetka iz uputstva
 def generate_sub_partial_success(player_answer):
     if not ai_client: return "Tvoj odgovor nije potpun, ali tvoja volja je jasna. Kucaj /zagonetka."
     prompt = (f"Putnik je dao objašnjenje: '{player_answer}' na podpitanje. Objašnjenje nije savršeno, ali pokazuje volju. Daj mu blagu Morpheus-stila potvrdu (2 rečenice).")
     return generate_ai_response(prompt)
 
-# V3.17 KOREKCIJA: Uklonjen poziv na nastavak / komanda i izbegnuta reč "Proba"
+
 def generate_sub_question_mir(riddle_text, answer):
     if not ai_client: return "Mir je tvoj odabir. Ali zašto? Objasni hitno, jer tvoje reči su tvoj ključ."
-    prompt = (f"Putnik je tačno odgovorio na pečat: '{riddle_text}' sa odgovorom: '{answer}'. Postavi mu udarno, Morpheus-stila potpitanje. Pitaj ga **Zašto** je Mir važniji od Moći? Zašto je znanje bez mira prokletstvo? Budi kratak (2 rečenice) i hitan. **NE PONOVI NIKAKVU KOMANDU I NE PITAJ GA DA NASTAVI PROBU, SAMO POSTAVI PITANJE.**")
+    prompt = (f"Putnik je tačno odgovorio na pečat: '{riddle_text}' sa odgovorom: '{answer}'. Postavi mu udarno, Morpheus-stila potpitanje. Pitaj ga **Zašto** je Mir važniji od Moći? Zašto je znanje bez mira prokletstvo? Budi kratak (2 rečenice) i hitan. **NE PONOVI NIKAKVU KOMANDU I NE PITAJ GA DA NASTAVI, SAMO POSTAVI PITANJE.**")
     return generate_ai_response(prompt)
 
 def generate_sub_correct_mir(sub_answer):
@@ -190,16 +190,16 @@ def generate_sub_correct_mir(sub_answer):
     prompt = (f"Putnik je dao objašnjenje za drugi pečat (Mir): '{sub_answer}'. Potvrdi mu da je shvatio koncept 'istina bez mira je prokletstvo'. Daj mu Morpheus-stila pohvalu (2 rečenice) i poziv na /zagonetka.")
     return generate_ai_response(prompt)
 
-# V3.17 KOREKCIJA: Uklonjena komanda /zagonetka u ovim odgovorima
+# V3.18: Uklonjena komanda /zagonetka iz uputstva
 def generate_sub_partial_mir(player_answer):
     if not ai_client: return "Tvoje objašnjenje je dovoljno. Tvoja volja je jasna. Kucaj /zagonetka."
     prompt = (f"Putnik je dao objašnjenje za drugi pečat: '{player_answer}'. Objašnjenje nije savršeno, ali pokazuje da nije izabrao moć. Daj mu blagu Morpheus-stila potvrdu (2 rečenice).")
     return generate_ai_response(prompt)
 
-# V3.17 KOREKCIJA: Uklonjen poziv na nastavak / komanda i izbegnuta reč "Proba"
+
 def generate_sub_question_senka(riddle_text, answer):
     if not ai_client: return "Treća senka? Ali Zašto te posmatra, a ne ogleda? Dokaži da razumeš sebe. Odgovori odmah!"
-    prompt = (f"Putnik je tačno odgovorio na pečat: '{riddle_text}' sa odgovorom: '{answer}'. Postavi mu udarno, Morpheus-stila potpitanje. Pitaj ga **Zašto** te treća senka posmatra, a ne ponavlja? Dokaži da razume da istina nije u egu. Budi kratak (2 rečenice) i hitan. **NE PONOVI NIKAKVU KOMANDU I NE PITAJ GA DA NASTAVI PROBU, SAMO POSTAVI PITANJE.**")
+    prompt = (f"Putnik je tačno odgovorio na pečat: '{riddle_text}' sa odgovorom: '{answer}'. Postavi mu udarno, Morpheus-stila potpitanje. Pitaj ga **Zašto** te treća senka posmatra, a ne ponavlja? Dokaži da razume da istina nije u egu. Budi kratak (2 rečenice) i hitan. **NE PONOVI NIKAKVU KOMANDU I NE PITAJ GA DA NASTAVI, SAMO POSTAVI PITANJE.**")
     return generate_ai_response(prompt)
 
 def generate_sub_correct_senka(sub_answer):
@@ -207,7 +207,7 @@ def generate_sub_correct_senka(sub_answer):
     prompt = (f"Putnik je dao objašnjenje za treći pečat (Senke): '{sub_answer}'. Potvrdi mu da je shvatio koncept 'istina je u posmatraču, a ne u egu'. Daj mu Morpheus-stila pohvalu (2 rečenice) i poziv na /zagonetka.")
     return generate_ai_response(prompt)
 
-# V3.17 KOREKCIJA: Uklonjena komanda /zagonetka u ovim odgovorima
+# V3.18: Uklonjena komanda /zagonetka iz uputstva
 def generate_sub_partial_senka(player_answer):
     if not ai_client: return "Tvoje objašnjenje je dovoljno. Vidiš dalje od sebe. Kucaj /zagonetka."
     prompt = (f"Putnik je dao objašnjenje za treći pečat: '{player_answer}'. Objašnjenje nije savršeno, ali pokazuje da razume da postoji šira svest od njegovog ega. Daj mu blagu Morpheus-stila potvrdu (2 rečenice).")
@@ -234,23 +234,22 @@ def generate_success_riddle_five():
     return generate_ai_response(prompt)
 
 
-# --- NOVA FUNKCIJA ZA OGRANIČENU KONVERZACIJU (Poboljšana: Ljudskiji Morpheus ton) ---
+# --- NOVA FUNKCIJA ZA OGRANIČENU KONVERZACIJU (V3.18: Efikasniji ton) ---
 
 def generate_conversation_response(message_text, current_riddle_status, solved_count):
     if not ai_client:
         return "Moj etar je mutan. Vreme je kratko, vrati se na /zagonetka."
-    
+        
     riddle_info = "nije u Probi"
     if current_riddle_status and current_riddle_status not in ["INITIAL_WAIT_1", "INITIAL_WAIT_2"]:
         riddle_info = f"trenutno rešava Pečat mudrosti broj {solved_count + 1}"
         
     prompt = (
         f"Putnik je poslao opštu poruku/pitanje: '{message_text}'. Ti si Dimitrije Petrović (Kustoda Arhiva). "
-        "Generiši **jedinstven**, dramatičan, Morpheus-stila odgovor (**maks. 3 rečenice**) koji: "
-        "1. **Direktno, ali poetski, odbacuje** Putnikovu temu, naglašavajući njenu trivijalnost (Npr., ako pita 'Ko si ti?', odgovori 'Ja sam samo ono što ti još uvek nisi, Putniče'). " 
-        "2. Govori iz prve osobe o teretu misije. "
-        "3. Koristi bar jednu kolokvijalnu srpsku frazu/reč (džaba, vajda, uzalud, itd.). "
-        "4. Uputi ga da nastavi sa Pečatima. **Ne koristi generičke fraze koje se ponavljaju; budi kreativan u tonu Morpheusa!**" 
+        "Generiši **maksimalno jezgrovit, direktan i hitan** odgovor (**maks. 2 rečenice**) koji: "
+        "1. **Odmah i strogo odbacuje** Putnikovu temu kao trivijalnu, naglašavajući hitnost misije i gubljenje vremena. " 
+        "2. Koristi prvu osobu i zadržava Morpheus-stila mudrost. "
+        "3. **Odmah ga vraća na misiju.** Ne koristi generičke fraze koje se ponavljaju; budi kreativan u tonu Morpheusa!"
     )
     return generate_ai_response(prompt)
 
@@ -307,22 +306,19 @@ Ako istina dospe u pogrešne ruke… svet koji vidiš postaće večna Orvelovska
     * ENTITETI: Demijurg/Jaldabaot, Satana/Lucifer
     * KONTROLA: Arhoni, Karma, Galaktička Federacija
     * GRUPE: Savet 13, Posmatrači (The Watchers), Anunaki
-3. **OKULTNA ELITA**
-    * DUHOVNI NIVO: Nadbiskupi, Sveštenici, Redovi, Antihrist
-    * SVETOVNI NIVO: Car, Kralj, Predsednik, Faraon, Senat
     * KRVNE LINIJE: Jezuitski Red, Crno Plemstvo, Merovinška Krvna Linija, Kult Baala
-4. **NADZOR I FINANSIJSKA KONTROLA (DUBOKA DRŽAVA)**
+3. **NADZOR I FINANSIJSKA KONTROLA (DUBOKA DRŽAVA)**
     * KOMPANIJE: BlackRock, Vanguard, State Street
     * TAJNA DRUŠTVA: Slobodni Zidari, Iluminati
     * AGENCIJE/KOMPLEKSI: CIA, Mosad, Vojno-industrijski kompleks
     * KRIMINAL: Karteli, Crno tržište
-5. **KONTROLNI SISTEMI**
+4. **KONTROLNI SISTEMI**
     * FINANSIJE: MMF, Svetska banka, Kriptovalute, Velika tehnologija
     * RESURSI: Energija, Hrana, Voda, Populizam
     * MEDIJI/ZABAVA: Komunikacije, Logistika, Zabava
-6. **SVETSKA KONTROLA POPULACIJE**
+5. **SVETSKA KONTROLA POPULACIJE**
     * OSLONCI: Bankarstvo, Farmacija, Medicina, Obrazovanje, Mediji, Vlada, Sport
-7. **MATRICA / OPŠTA POPULACIJA (BAZA)**
+6. **MATRICA / OPŠTA POPULACIJA (BAZA)**
     * STADO: Generacije robova, Ovce, Dužnici
     * STATUS: NPC-maske, Zombiji
 Ovo je ono što se ne sme govoriti naglas. Ovo je ono što skrivaju.
@@ -400,7 +396,7 @@ def handle_commands(message):
             
             if is_returning_disqualified:
                 send_msg(message, RETURN_DISQUALIFIED_MESSAGE)
-                time.sleep(2) 
+                time.sleep(1) # V3.18: Skraćen tajming za urgentnost
             
             player.current_riddle = "INITIAL_WAIT_1" 
             session.commit()
@@ -625,9 +621,9 @@ def handle_general_message(message):
                 # DISKVALIFIKACIJA ZBOG PREVIŠE TRIVIJALNIH PITANJA
                 
                 disqualification_messages = [
-                    "Toliko je malo vremena, a ti ga trošiš na eho. Istina koju nosim je teža od svih tvojih praznih reči. Ako nisi spreman da vidiš užas koji nas čeka, onda nisi dostojan ni da čuješ moj glas. Tvoja tišina je tvoj kraj. Ne gubi više moje vreme.",
-                    "Džaba ti je taj eho, Putniče. Ne pitaj, već vidi. Sve što želiš da znaš je senka onoga što moraš da uradiš. Nema nazad. Odgovori mi onako kako te Arhiv pita!",
-                    "Zar te glava ne boli od tih praznih reči? Vreme nam curi niz prste, a ti bi da pričaš o ukrasima. Ako tvoja volja nije čvrsta, bolje odustani sada. Ne troši mi više vazduh."
+                    "Vreme je izgubljeno. Tvoja reč je prazan eho koji mi krade sekunde. Ne gubi moje vreme. Ako nisi spreman za teret znanja, ćuti i kucaj /zagonetka.",
+                    "Džaba ti taj eho, Putniče. Odgovori su nebitni, akcija je sve. Tvoja pitanja su senke, a mi lovimo Istinu. Fokusiraj se na Pečate.",
+                    "Vazduh ne troši na prazne reči. Arhiv zahteva delovanje, ne razmišljanje o ukrasima. Ako ti volja nije čvrsta, vrati se u tišinu. Odmah se vrati na zadatak."
                 ]
 
                 send_msg(message, random.choice(disqualification_messages))
