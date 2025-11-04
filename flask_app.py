@@ -95,15 +95,13 @@ SYSTEM_INSTRUCTION = (
 # --- FAZE IGRE (V4.1 - Ažuriran narativ) ---
 GAME_STAGES = {
     "START": {
-        "text": [ # Lista varijacija
-            [
-                "Hej… ako ovo čuješ, znači da smo spojeni.",
-                "Moje ime nije važno, ali možeš me zvati Dimitrije.",
-                "Dolazim iz budućnosti u kojoj Orwellove reči nisu fikcija.",
-                "Sve što si mislio da je fikcija… postalo je stvarnost.",
-                "Ako si spreman, odgovori: **primam signal**."
-            ]
-        ],
+        "text": [[
+            "Hej… ako ovo čuješ, znači da smo spojeni.",
+            "Moje ime nije važno, ali možeš me zvati Dimitrije.",
+            "Dolazim iz budućnosti u kojoj Orwellove reči nisu fikcija.",
+            "Sve što si mislio da je fikcija… postalo je stvarnost.",
+            "Ako si spreman, odgovori: **primam signal**."
+        ]],
         "responses": {"primam signal": "FAZA_2_TEST_1", "da": "FAZA_2_TEST_1", "spreman sam": "FAZA_2_TEST_1"}
     },
     "FAZA_2_TEST_1": {
@@ -132,15 +130,13 @@ GAME_STAGES = {
     },
     "FAZA_3_UPOZORENJE": {
         "text": [ # Lista varijacija
-            [
-                "Dobro… vreme ističe.",
-                "Transmiter pregreva, a Kolektiv već skenira mrežu.",
-                "Ako me uhvate… linija nestaje.",
-                "Ali pre nego što to bude kraj… moraš znati istinu.",
-                "Postoji piramida moći. Na njenom vrhu nije ono što misliš.",
-                "Hoćeš li da primiš saznanja o strukturi sistema koji drži ljude pod kontrolom?\n\nOdgovori:\n**SPREMAN SAM**\nili\n**NE JOŠ**"
-            ]
-        ],
+            ["Dobro… vreme ističe.",
+             "Transmiter pregreva, a Kolektiv već skenira mrežu.",
+             "Ako me uhvate… linija nestaje.",
+             "Ali pre nego što to bude kraj… moraš znati istinu.",
+             "Postoji piramida moći. Na njenom vrhu nije ono što misliš.",
+             "Hoćeš li da primiš saznanja o strukturi sistema koji drži ljude pod kontrolom?\n\nOdgovori:\n**SPREMAN SAM**\nili\n**NE JOŠ**"
+            ]],
         "responses": {"spreman sam": "END_SHARE", "da": "END_SHARE", "ne još": "END_WAIT", "necu jos": "END_WAIT"}
     }
 }
