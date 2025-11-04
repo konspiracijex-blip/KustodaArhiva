@@ -29,7 +29,6 @@ DATABASE_URL = os.environ.get('DATABASE_URL')
 
 if not BOT_TOKEN or not GEMINI_API_KEY or not DATABASE_URL:
     logging.error("Jedan ili više ključeva/URL-ova nedostaje! Bot će biti neaktivan.")
-    # Postavljanje dummy tokena da bi se izbeglo pokretanje bota bez ključeva
     BOT_TOKEN = "DUMMY:TOKEN_FAIL" 
 
 WEBHOOK_URL = os.environ.get('RENDER_EXTERNAL_URL', 'https://placeholder.com/')
@@ -38,11 +37,12 @@ bot = telebot.TeleBot(BOT_TOKEN, threaded=False)
 app = flask.Flask(__name__)
 
 # ----------------------------------------------------
-# 3. SQL ALCHEMY INICIJALIZACIJA (TRAJNO STANJE) - V3.78 ŠEMA
+# 3. SQL ALCHEMY INICIJALIZACIJA (TRAJNO STANJE) - V3.79 ŠEMA
 # ----------------------------------------------------
 
 Session = None
 try:
+    # Postavljanje konekcije
     Engine = create_engine(DATABASE_URL)
     Base = declarative_base()
     Session = sessionmaker(bind=Engine)
@@ -67,7 +67,7 @@ except Exception as e:
     logging.error(f"FATALNA GREŠKA: Neuspešno kreiranje/povezivanje baze: {e}")
     
 # ----------------------------------------------------
-# 4. AI KLIJENT I DATA (V3.78)
+# 4. AI KLIJENT I DATA (V3.79)
 # ----------------------------------------------------
 
 ai_client = None
@@ -100,7 +100,7 @@ ZAGONETKE: dict[str, Union[str, List[str]]] = {
 }
 
 # ----------------------------------------------------
-# 5. POMOĆNE FUNKCIJE I KONSTANTE (V3.78)
+# 5. POMOĆNE FUNKCIJE I KONSTANTE (V3.79)
 # ----------------------------------------------------
 
 def send_msg(message, text):
@@ -112,9 +112,6 @@ def send_msg(message, text):
         bot.send_message(message.chat.id, text, parse_mode='Markdown')
     except Exception as e:
         logging.error(f"Greška pri slanju poruke (Chat ID: {message.chat.id}): {e}")
-
-# Termin u kojem bot aktivno odgovara na zagonetke (primer)
-ACTIVE_TIMES = [(dt_time(9, 0), dt_time(10, 0)), (dt_time(21, 0), dt_time(22, 0))]
 
 def is_game_active():
     """Trenutno uvek vraća True, za stalnu dostupnost."""
@@ -151,7 +148,7 @@ def generate_ai_response(prompt):
          return "Sistem mi izmiče. Vrati se Volji!"
 
 
-# *** KORIGOVANA FUNKCIJA (V3.74) ***
+# FIKSNA TRANZICIONA PORUKA (V3.74)
 def generate_smooth_transition_response():
     """Generiše fiksni, ne-AI odgovor za tranziciju između zagonetki (na tačan ILI netačan odgovor)."""
     return "U redu, idemo dalje!"
@@ -175,11 +172,6 @@ Zato, ne boj se tame, **Prijatelju**… jer upravo u njoj svetlost najjače sija
 
 Zato… udahni, smiri um, i učini prvi korak. Kucaj **/pokreni** da bi dobio prvi Pečat.
 """
-
-# Funkcija je uklonjena i zamenjena direktnim tekstom u handleru
-# def generate_disqualification_power():
-#     """Vraća fiksni uvodni poetski tekst za diskvalifikaciju."""
-#     return "Tvoja Volja je zaslepljena Moći. Takav Izbor Odbacuje Put Istine." 
 
 MIN_SUCCESS_SCORE = 5 
 MAX_SCORE = len(ZAGONETKE)
@@ -439,13 +431,13 @@ def handle_general_message(message):
         ispravan_odgovor = ZAGONETKE.get(trenutna_zagonetka)
 
         
-        # LOGIKA POVRATKA NA IGRU (V3.70 - ISPRAVLJENO)
+        # LOGIKA POVRATKA NA IGRU (V3.70)
         if trenutna_zagonetka == "RETURN_CONFIRMATION_QUERY":
             korisnikov_tekst = korisnikov_tekst.lower()
             if "da" in korisnikov_tekst:
                 send_msg(message, RETURN_SUCCESS_MESSAGE) 
                 
-                # ISPRAVLJENO: Automatsko postavljanje zagonetke
+                # Automatsko postavljanje zagonetke
                 riddle_keys = list(ZAGONETKE.keys())
                 
                 if player.solved_count < len(riddle_keys):
@@ -461,7 +453,7 @@ def handle_general_message(message):
                     session.commit()
                     send_msg(message, "Svi Pečati su slomljeni. Kucaj **/start** da ponovo nađeš Put.")
                 
-                return # Završava se tok i šalje zagonetka
+                return
                 
             elif "ne" in korisnikov_tekst or "odustajem" in korisnikov_tekst:
                 player.current_riddle = None 
@@ -603,24 +595,6 @@ def handle_general_message(message):
 
             if is_conversation_request:
                 
-                if player.current_riddle == "FINAL_WARNING_QUERY":
-                    # Potrebno je rešiti upozorenje
-                    korisnikov_tekst = korisnikov_tekst.lower()
-                    if "da" in korisnikov_tekst:
-                        player.current_riddle = None
-                        session.commit()
-                        handle_commands(message) # Poziva /pokreni logiku unutar handlera
-                        return
-                    elif "ne" in korisnikov_tekst or "odustajem" in korisnikov_tekst:
-                         player.current_riddle = None 
-                         player.is_disqualified = True 
-                         session.commit()
-                         send_msg(message, RETURN_FAILURE_MESSAGE)
-                         return
-                    else:
-                         send_msg(message, "Vreme vapi! Samo **DA** ili **NE**!")
-                         return
-                
                 if player.general_conversation_count >= MAX_CONVERSATION_COUNT:
                     send_msg(message, "Vreme je vrednost koju ne smeš rasipati. Tvoja volja je krhka, a tišina te čeka. Moram da znam, Prijatelju: **Da li želiš da nastaviš ili odustaješ?** Odgovori isključivo **DA** ili **NE**.")
                     player.current_riddle = "FINAL_WARNING_QUERY"
@@ -653,28 +627,7 @@ def handle_general_message(message):
         session.close()
 
 # ----------------------------------------------------
-# 8. POKRETANJE APLIKACIJE
+# 8. POKRETANJE APLIKACIJE (V3.79 - Korigovano)
 # ----------------------------------------------------
-
-if __name__ == '__main__':
-    if 'RENDER_EXTERNAL_URL' not in os.environ:
-        # Polling Mode
-        logging.warning("Nije pronađena RENDER_EXTERNAL_URL varijabla. Pokrećem bot u polling modu (samo za testiranje!).")
-        try:
-            if BOT_TOKEN != "DUMMY:TOKEN_FAIL":
-                bot.remove_webhook()
-                bot.polling(none_stop=True)
-        except Exception as e:
-            logging.error(f"Greška pri pokretanju pollinga: {e}")
-    else:
-        # Webhook Mode
-        @app.before_first_request
-        def set_webhook_on_startup():
-             webhook_url_with_token = WEBHOOK_URL.rstrip('/') + '/' + BOT_TOKEN
-             s = bot.set_webhook(url=webhook_url_with_token)
-             if s:
-                 logging.info(f"Webhook uspešno postavljen: {webhook_url_with_token}")
-             else:
-                 logging.error("Neuspešno postavljanje webhooka.")
-                 
-        app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+# Aplikacija se pokreće preko Procfile/Gunicorn-a. 
+# Ovo osigurava stabilnost na Renderu.
