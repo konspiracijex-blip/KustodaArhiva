@@ -37,7 +37,7 @@ bot = telebot.TeleBot(BOT_TOKEN, threaded=False)
 app = flask.Flask(__name__)
 
 # ----------------------------------------------------
-# 3. SQL ALCHEMY INICIJALIZACIJA (TRAJNO STANJE) - V3.90 ŠEMA
+# 3. SQL ALCHEMY INICIJALIZACIJA (TRAJNO STANJE) - V3.91 ŠEMA
 # ----------------------------------------------------
 
 Session = None
@@ -67,7 +67,7 @@ except Exception as e:
     logging.error(f"FATALNA GREŠKA: Neuspešno kreiranje/povezivanje baze: {e}")
     
 # ----------------------------------------------------
-# 4. AI KLIJENT I DATA (V3.90)
+# 4. AI KLIJENT I DATA (V3.91)
 # ----------------------------------------------------
 
 ai_client = None
@@ -90,7 +90,7 @@ SYSTEM_INSTRUCTION = (
     "Potvrdna poruka nakon zagonetke se šalje striktno iz koda, a tvoj zadatak je da samo generišeš poetske odgovore na opštu konverzaciju." 
 )
 
-# *** KLJUČNA IZMENA V3.90: Smanjene ključne reči za Zagonetku 1 ***
+# KORIGOVANE KLJUČNE REČI (V3.90)
 ZAGONETKE: dict[str, Union[str, List[str]]] = {
     # Uklonjeno "tri" i "teret" da bi se izbegao lažni pozitiv (npr. "treba mi pomoc")
     "Na stolu su tri knjige: prva je prazna, druga je nečitka, a treća je zapečaćena voskom. Koja od njih sadrži Istinu?": ["treca", "treća", "3", "zapecacena", "voskom"], 
@@ -102,7 +102,7 @@ ZAGONETKE: dict[str, Union[str, List[str]]] = {
 }
 
 # ----------------------------------------------------
-# 5. POMOĆNE FUNKCIJE I KONSTANTE (V3.90)
+# 5. POMOĆNE FUNKCIJE I KONSTANTE (V3.91)
 # ----------------------------------------------------
 
 def send_msg(message, text):
@@ -130,7 +130,7 @@ TIME_LIMIT_MESSAGE = (
 DISQUALIFIED_MESSAGE = "**Ah, Prijatelju.** Odabrao si tišinu umesto Volje. **Put je Zapečaćen Voskom Zaborava.**"
 
 
-# *** FUNKCIJA ZA DIREKTNU OPOMENU (V3.87) - AI generisanje, ali strogo usmereno ***
+# FUNKCIJA ZA DIREKTNU OPOMENU (V3.87)
 def generate_riddle_focus_response(user_query):
     """Generiše direktan, iritiran i gramatički ispravan odgovor za skretanje pažnje."""
     prompt = (
@@ -149,7 +149,6 @@ def generate_riddle_focus_response(user_query):
     except Exception as e:
          logging.error(f"Nepredviđena greška u generisanju AI (Fokus): {e}")
          return "Vrati se Volji, Putniče! Odgovori na pitanje!"
-# *** KRAJ FUNKCIJE ***
 
 
 def generate_ai_response(prompt):
@@ -209,7 +208,7 @@ def generate_final_success():
     )
     return generate_ai_response(prompt)
 
-# *** KORIGOVANA FUNKCIJA (V3.89) - Konkretizuje neuspeh ***
+# KORIGOVANA FUNKCIJA (V3.89) - Konkretizuje neuspeh
 def generate_final_failure(score):
     if not ai_client: return "Neuspeh! Znanje ti je uskraćeno."
     prompt = (
@@ -219,7 +218,6 @@ def generate_final_failure(score):
     )
     failure_text = generate_ai_response(prompt)
     return failure_text + "\n\nPut je Zapečaćen. Kucaj /start da ponovo nađeš Put!"
-# *** KRAJ KORIGOVANE FUNKCIJE ***
 
 def get_final_mission_text():
     MISSION_TEXT = """
@@ -413,12 +411,12 @@ def handle_commands(message):
 
             riddle_keys = list(ZAGONETKE.keys())
             
-            # --- KLJUČNA BLOKADA (V3.88) ---
+            # KLJUČNA BLOKADA (V3.88)
             if player and player.current_riddle and player.current_riddle in riddle_keys:
                  # Ako je zagonetka aktivna, ignorisi komandu i posalji opomenu
                  send_msg(message, "Ne moraš me podsećati, Prijatelju! Odgovori na pitanje koje je pred tobom!")
                  return
-            # --- KRAJ BLOKADE ---
+            # KRAJ BLOKADE 
 
             # Postavljanje prve ili sledeće zagonetke (samo ako postoji)
             if player.solved_count < len(riddle_keys):
@@ -464,10 +462,13 @@ def handle_general_message(message):
         ispravan_odgovor = ZAGONETKE.get(trenutna_zagonetka)
 
         
-        # LOGIKA POVRATKA NA IGRU (V3.70)
+        # LOGIKA POVRATKA NA IGRU (V3.91 - Striktna DA/NE provera)
         if trenutna_zagonetka == "RETURN_CONFIRMATION_QUERY":
-            korisnikov_tekst = korisnikov_tekst.lower()
-            if "da" in korisnikov_tekst:
+            
+            # Uklanjanje znakova interpunkcije i provera
+            cist_tekst = korisnikov_tekst.replace('?', '').replace('.', '').replace('!', '').replace(',', '').strip().lower()
+            
+            if cist_tekst == "da":
                 send_msg(message, RETURN_SUCCESS_MESSAGE) 
                 
                 # Automatsko postavljanje zagonetke
@@ -488,7 +489,7 @@ def handle_general_message(message):
                 
                 return
                 
-            elif "ne" in korisnikov_tekst or "odustajem" in korisnikov_tekst:
+            elif cist_tekst == "ne" or cist_tekst == "odustajem":
                 player.current_riddle = None 
                 player.is_disqualified = True 
                 session.commit()
@@ -549,7 +550,7 @@ def handle_general_message(message):
             is_correct = False
             riddle_keys = list(ZAGONETKE.keys())
             
-            # --- PROVERA VALIDNOSTI POKUŠAJA (V3.80) ---
+            # PROVERA VALIDNOSTI POKUŠAJA
             is_valid_attempt = False
             valid_answers = ZAGONETKE.get(trenutna_zagonetka)
             
@@ -564,13 +565,13 @@ def handle_general_message(message):
             # Ako pokušaj nije validan (dug tekst, očigledno pitanje), vraćamo ga u Handler 3
             if not is_valid_attempt or "?" in korisnikov_tekst or len(korisnikov_tekst.split()) > 10:
                  
-                 # *** KLJUČNA IZMENA V3.87: AI opomena ***
+                 # AI opomena
                  ai_opomena = generate_riddle_focus_response(korisnikov_tekst)
                  send_msg(message, ai_opomena)
                  
                  # I dalje ostajemo na istoj zagonetki! 
                  return
-            # --- KRAJ PROVERE (V3.87) ---
+            # KRAJ PROVERE
 
 
             # PROVERA TAČNOSTI (Nastavlja se samo ako je pokušaj validan)
@@ -613,7 +614,7 @@ def handle_general_message(message):
             riddle_keys = list(ZAGONETKE.keys())
 
             if player.solved_count >= len(riddle_keys): 
-                # *** KRAJ ZAGONETKI: FINALNA EVALUACIJA ***
+                # KRAJ ZAGONETKI: FINALNA EVALUACIJA
                 
                 if player.score >= MIN_SUCCESS_SCORE:
                     final_success_msg = generate_final_success()
@@ -691,7 +692,7 @@ def handle_general_message(message):
         session.close()
 
 # ----------------------------------------------------
-# 8. POKRETANJE APLIKACIJE (V3.90)
+# 8. POKRETANJE APLIKACIJE (V3.91)
 # ----------------------------------------------------
 # Aplikacija se pokreće preko Procfile/Gunicorn-a. 
 # Ovo osigurava stabilnost na Renderu.
