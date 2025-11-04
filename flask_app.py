@@ -11,8 +11,8 @@ from typing import List, Union
 # ----------------------------------------------------
 # 1. PYTHON I DB BIBLIOTEKE
 # ----------------------------------------------------
-# Dodajemo 'text' za rad sa sirovim SQL komandama
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, text 
+# Uklonjen 'text' jer više ne koristimo sirove SQL komande
+from sqlalchemy import create_engine, Column, Integer, String, Boolean 
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 from datetime import datetime, time as dt_time 
@@ -35,7 +35,7 @@ bot = telebot.TeleBot(BOT_TOKEN, threaded=False)
 app = flask.Flask(__name__)
 
 # ----------------------------------------------------
-# 3. SQL ALCHEMY INICIJALIZACIJA & MIGRACIJA (V3.68 - MIGRACIONI BLOK)
+# 3. SQL ALCHEMY INICIJALIZACIJA (TRAJNO STANJE) - V3.69 FINALNA, STABILNA ŠEMA
 # ----------------------------------------------------
 
 try:
@@ -51,35 +51,19 @@ try:
         username = Column(String, nullable=True)
         current_riddle = Column(String)
         solved_count = Column(Integer, default=0) 
-        score = Column(Integer, default=0) # NOVO: Ukupni rezultat
+        score = Column(Integer, default=0) 
         is_disqualified = Column(Boolean, default=False)
         general_conversation_count = Column(Integer, default=0) 
 
-    # >>>>>>> KLJUČNI MIGRACIONI BLOK <<<<<<<
-    # Forsira se Drop/Create kako bi se garantovala ispravna šema sa 'score' kolonom.
-    # OVO SE MORA UKLONITI NAKON PRVOG USPEŠNOG POKRETANJA!
-    try:
-        logging.warning("POKRETANJE AUTOMATSKE MIGRACIJE: BRISANJE I REKREIRANJE tabele 'player_states' za migraciju 'score' kolone. Svi podaci će biti OBRISANI!")
-        
-        with Engine.begin() as connection:
-            # Drop table (potpuno briše staru tabelu, uključujući neispravnu šemu)
-            connection.execute(text("DROP TABLE IF EXISTS player_states;"))
-        
-        # Kreiranje tabele sa novom šemom (sa 'score' kolonom)
-        Base.metadata.create_all(Engine)
-        logging.info("MIGRACIJA USPEŠNA: Tabela 'player_states' je kreirana sa novom šemom.")
-
-    except Exception as create_error:
-         logging.error(f"FATALNA GREŠKA PRI MIGRACIJI BAZE: {create_error}")
-         # Čak i ako pukne, nastavljamo, ali će bot verovatno biti neaktivan
-         pass
-
+    # Kreiranje tabele ako NE POSTOJI (ovo je trajno ponašanje koje želimo)
+    # Ako tabela postoji, ona se preskače i podaci ostaju sačuvani.
+    Base.metadata.create_all(Engine)
 
 except Exception as e:
     logging.error(f"FATALNA GREŠKA: Neuspešno kreiranje/povezivanje baze: {e}")
     
 # ----------------------------------------------------
-# 4. AI KLIJENT I DATA (OSTALO KAO PRE)
+# 4. AI KLIJENT I DATA (Nije menjano)
 # ----------------------------------------------------
 
 ai_client = None
@@ -109,7 +93,7 @@ ZAGONETKE: dict[str, Union[str, List[str]]] = {
     "Ja nemam glas, ali odgovaram čim me pozoveš. Stalno menjam boju i izgled, ali me nikada ne napuštaš. Šta sam ja?": "eho",
 }
 
-# (Pomoćne funkcije i konstantni tekstovi su izostavljeni radi kraćeg prikaza, ali su isti kao u V3.67)
+# (Sve ostale pomoćne funkcije, handleri, i rute su potpuno isti kao u V3.68 i izostavljeni su radi preglednosti)
 
 def send_msg(message, text):
     try:
@@ -324,7 +308,7 @@ def set_webhook_route():
 
 
 # ----------------------------------------------------
-# 7. BOT HANDLERI (Logika ostaje ista)
+# 7. BOT HANDLERI (Nije menjano)
 # ----------------------------------------------------
 @bot.message_handler(commands=['start', 'stop', 'zagonetka', 'pokreni'], 
                      func=lambda message: message.text.lower().replace('/', '') in ['start', 'stop', 'zagonetka', 'pokreni'])
@@ -612,7 +596,7 @@ def handle_general_message(message):
         session.close()
 
 # ----------------------------------------------------
-# 8. POKRETANJE APLIKACIJE
+# 8. POKRETANJE APLIKACIJE (Nije menjano)
 # ----------------------------------------------------
 
 if __name__ == '__main__':
