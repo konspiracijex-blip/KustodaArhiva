@@ -94,46 +94,62 @@ SYSTEM_INSTRUCTION = (
 # --- FAZE IGRE (V4.1 - Ažuriran narativ) ---
 GAME_STAGES = {
     "START": {
-        "text": [
-            "Hej… ako ovo čuješ, znači da smo spojeni.",
-            "Moje ime nije važno, ali možeš me zvati Dimitrije.",
-            "Dolazim iz budućnosti u kojoj Orwellove reči nisu fikcija.",
-            "Sve što si mislio da je fikcija… postalo je stvarnost.",
-            "Ako si spreman, odgovori: **primam signal**."
+        "text": [ # Lista varijacija
+            [
+                "Hej… ako ovo čuješ, znači da smo spojeni.",
+                "Moje ime nije važno, ali možeš me zvati Dimitrije.",
+                "Dolazim iz budućnosti u kojoj Orwellove reči nisu fikcija.",
+                "Sve što si mislio da je fikcija… postalo je stvarnost.",
+                "Ako si spreman, odgovori: **primam signal**."
+            ]
         ],
         "responses": {"primam signal": "FAZA_2_TEST_1", "da": "FAZA_2_TEST_1", "spreman sam": "FAZA_2_TEST_1"}
     },
     "FAZA_2_TEST_1": {
-        "text": "Dobro. Prvi filter je prošao.\nReci mi… kad sistem priča o ‘bezbednosti’, koga zapravo štiti?",
+        "text": [ # Lista varijacija
+            "Dobro. Prvi filter je prošao.\nReci mi… kad sistem priča o ‘bezbednosti’, koga zapravo štiti?",
+            "U redu. Prošao si prvu proveru.\nSledeće pitanje: Kad sistem obećava ‘bezbednost’, čije interese on zaista čuva?",
+            "Signal je stabilan. Idemo dalje.\nRazmisli o ovome: Kada čuješ reč ‘bezbednost’ od sistema, koga on štiti?"
+        ],
         "responses": {"sistem": "FAZA_2_TEST_2", "sebe": "FAZA_2_TEST_2", "vlast": "FAZA_2_TEST_2"}
     },
     "FAZA_2_TEST_2": {
-        "text": "Tako je. Štiti sebe. Sledeće pitanje.\nAko algoritam zna tvoj strah… da li si još čovek?",
+        "text": [ # Lista varijacija
+            "Tako je. Štiti sebe. Sledeće pitanje.\nAko algoritam zna tvoj strah… da li si još čovek?",
+            "Da. Sebe. To je ključno. Idemo dalje.\nAko mašina predviđa tvoje želje pre tebe... da li su te želje i dalje tvoje?",
+            "Tačno. Njegova prva briga je sam za sebe. Sledeće.\nAko algoritam zna tvoj strah… da li si još uvek slobodan?"
+        ],
         "responses": {"da": "FAZA_2_TEST_3", "jesam": "FAZA_2_TEST_3", "naravno": "FAZA_2_TEST_3"}
     },
     "FAZA_2_TEST_3": {
-        "text": "Zanimljivo… još uvek vidiš sebe kao čoveka. Poslednja provera.\nOdgovori mi iskreno. Da li bi žrtvovao komfor — za istinu?",
+        "text": [ # Lista varijacija
+            "Zanimljivo… još uvek veruješ u to. Poslednja provera.\nOdgovori mi iskreno. Da li bi žrtvovao komfor — za istinu?",
+            "Držiš se za tu ideju... Dobro. Finalno pitanje.\nDa li bi menjao udobnost neznanja za bolnu istinu?",
+            "To je odgovor koji sam očekivao. Poslednji test.\nReci mi, da li je istina vredna gubljenja sigurnosti?"
+        ],
         "responses": {"da": "FAZA_3_UPOZORENJE", "bih": "FAZA_3_UPOZORENJE", "žrtvovao bih": "FAZA_3_UPOZORENJE", "zrtvovao bih": "FAZA_3_UPOZORENJE"}
     },
     "FAZA_3_UPOZORENJE": {
-        "text": [
-            "Dobro… vreme ističe.",
-            "Transmiter pregreva, a Kolektiv već skenira mrežu.",
-            "Ako me uhvate… linija nestaje.",
-            "Ali pre nego što to bude kraj… moraš znati istinu.",
-            "Postoji piramida moći. Na njenom vrhu nije ono što misliš.",
-            "Hoćeš li da primiš saznanja o strukturi sistema koji drži ljude pod kontrolom?\n\nOdgovori:\n**SPREMAN SAM**\nili\n**NE JOŠ**"
+        "text": [ # Lista varijacija
+            [
+                "Dobro… vreme ističe.",
+                "Transmiter pregreva, a Kolektiv već skenira mrežu.",
+                "Ako me uhvate… linija nestaje.",
+                "Ali pre nego što to bude kraj… moraš znati istinu.",
+                "Postoji piramida moći. Na njenom vrhu nije ono što misliš.",
+                "Hoćeš li da primiš saznanja o strukturi sistema koji drži ljude pod kontrolom?\n\nOdgovori:\n**SPREMAN SAM**\nili\n**NE JOŠ**"
+            ]
         ],
         "responses": {"spreman sam": "END_SHARE", "da": "END_SHARE", "ne još": "END_WAIT", "necu jos": "END_WAIT"}
     }
 }
 
 # ----------------------------------------------------
-# 5. POMOĆNE FUNKCIJE I KONSTANTE (V3.92)
+# 5. POMOĆNE FUNKCIJE I KONSTANTE (V4.3 - Fleksibilni odgovori)
 # ----------------------------------------------------
 INVALID_INPUT_MESSAGES = [
     "Signal slabi... Odgovor nije prepoznat. Pokušaj ponovo.",
-    "Hmm… čini se da nisam razumeo tvoju reč. Možeš li ponoviti?",
+    "Nisam te razumeo. Fokusiraj se. Ponovi odgovor.",
     "Interferencija... nešto ometa prenos. Reci ponovo, jasno.",
     "Kanal je nestabilan. Fokusiraj se. Ponovi odgovor."
 ]
@@ -238,23 +254,33 @@ def evaluate_riddle_answer_with_ai(riddle_text, user_answer, keywords):
         logging.error(f"Nepredviđena greška u generisanju AI (Evaluacija): {e}")
         return any(kw in user_answer.lower() for kw in keywords)
 
-def generate_ai_response(prompt, player_state=None):
-    """Generiše odgovor koristeći Gemini model sa sistemskom instrukcijom (Koristi se za Poetsku konverzaciju)."""
+def generate_ai_response(user_input, player_state, current_stage_key):
+    """Generiše odgovor koristeći Gemini model za pitanja igrača."""
     if not ai_client:
-        return "[GREŠKA: AI MODUL NIJE DOSTUPAN]"
+        return random.choice(INVALID_INPUT_MESSAGES) # Fallback
 
-    # Dodavanje konteksta o igraču u sistemsku instrukciju za personalizaciju
-    personalized_system_instruction = SYSTEM_INSTRUCTION
-    if player_state:
-        personalized_system_instruction += (
-            f"\n\n**KONTEKST O IGRAČU:** Ime: {player_state.username}. Rešio je {player_state.solved_count} zagonetki."
-        )
+    # Dohvatanje teksta trenutnog pitanja na koje igrač treba da odgovori
+    current_riddle_text = "Nalazi se na početku."
+    if current_stage_key and current_stage_key in GAME_STAGES:
+        # Uzimamo prvu varijaciju kao reprezentativni tekst pitanja
+        stage_text = GAME_STAGES[current_stage_key]['text'][0]
+        if isinstance(stage_text, list):
+            current_riddle_text = " ".join(stage_text)
+        else:
+            current_riddle_text = stage_text
+
+    prompt = (
+        f"Korisnik je, umesto da odgovori na tvoje pitanje, postavio svoje pitanje ili dao komentar: '{user_input}'.\n"
+        f"Tvoje trenutno pitanje za njega je: '{current_riddle_text}'\n"
+        f"Nalazite se u fazi igre: {current_stage_key}.\n"
+        "Tvoj zadatak je da mu odgovoriš u skladu sa svojom ulogom (Dimitrije, član otpora), ali ga suptilno vrati na zadatak ili pitanje koje si postavio. Budi kratak, misteriozan i direktan. Maksimalno DVE rečenice."
+    )
 
     try:
         response = ai_client.models.generate_content(
             model='gemini-2.5-flash',
             contents=prompt,
-            config={'system_instruction': personalized_system_instruction}
+            system_instruction=SYSTEM_INSTRUCTION
         )
         return response.text
     except APIError as e:
@@ -383,12 +409,13 @@ def handle_commands(message):
             
             session.commit()
             
-            start_message = GAME_STAGES["START"]["text"]
+            # Nasumično bira jednu od varijacija poruke
+            start_message = random.choice(GAME_STAGES["START"]["text"])
             send_msg(message, start_message)
 
         elif message.text.lower() == '/stop' or message.text.lower() == 'stop':
             if player and player.current_riddle:
-                player.current_riddle = None 
+                player.current_riddle = "END_STOP" 
                 player.is_disqualified = True # Trajno prekida vezu
                 session.commit()
                 send_msg(message, "[KRAJ SIGNALA] Veza prekinuta na tvoj zahtev.")
@@ -433,14 +460,6 @@ def handle_general_message(message):
         if not current_stage:
             send_msg(message, "[GREŠKA: NEPOZNATA FAZA IGRE] Pokreni /start.")
             return
-
-        # V4.2 - Provera specijalnih pitanja pre standardne logike
-        for keywords, responses in SPECIAL_QUESTIONS.items():
-            if any(keyword in korisnikov_tekst for keyword in keywords):
-                # Pronađeno je specijalno pitanje, pošalji nasumični odgovor
-                selected_response = random.choice(responses)
-                send_msg(message, selected_response)
-                return # Prekini dalje izvršavanje
 
         # Provera odgovora
         next_stage_key = None
