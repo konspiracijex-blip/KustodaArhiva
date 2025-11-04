@@ -101,19 +101,19 @@ GAME_STAGES = {
             "Sve što si mislio da je fikcija… postalo je stvarnost.",
             "Ako si spreman, odgovori: **primam signal**."
         ],
-        "responses": {"primam signal": "FAZA_2_TEST_1"}
+        "responses": {"primam signal": "FAZA_2_TEST_1", "da": "FAZA_2_TEST_1", "spreman sam": "FAZA_2_TEST_1"}
     },
     "FAZA_2_TEST_1": {
         "text": "Dobro. Prvi filter je prošao.\nReci mi… kad sistem priča o ‘bezbednosti’, koga zapravo štiti?",
-        "responses": {"sistem": "FAZA_2_TEST_2", "sebe": "FAZA_2_TEST_2"}
+        "responses": {"sistem": "FAZA_2_TEST_2", "sebe": "FAZA_2_TEST_2", "vlast": "FAZA_2_TEST_2"}
     },
     "FAZA_2_TEST_2": {
         "text": "Tako je. Štiti sebe. Sledeće pitanje.\nAko algoritam zna tvoj strah… da li si još čovek?",
-        "responses": {"da": "FAZA_2_TEST_3", "jesam": "FAZA_2_TEST_3"}
+        "responses": {"da": "FAZA_2_TEST_3", "jesam": "FAZA_2_TEST_3", "naravno": "FAZA_2_TEST_3"}
     },
     "FAZA_2_TEST_3": {
         "text": "Zanimljivo… još uvek vidiš sebe kao čoveka. Poslednja provera.\nOdgovori mi iskreno. Da li bi žrtvovao komfor — za istinu?",
-        "responses": {"da": "FAZA_3_UPOZORENJE", "bih": "FAZA_3_UPOZORENJE"}
+        "responses": {"da": "FAZA_3_UPOZORENJE", "bih": "FAZA_3_UPOZORENJE", "žrtvovao bih": "FAZA_3_UPOZORENJE", "zrtvovao bih": "FAZA_3_UPOZORENJE"}
     },
     "FAZA_3_UPOZORENJE": {
         "text": [
@@ -124,7 +124,7 @@ GAME_STAGES = {
             "Postoji piramida moći. Na njenom vrhu nije ono što misliš.",
             "Hoćeš li da primiš saznanja o strukturi sistema koji drži ljude pod kontrolom?\n\nOdgovori:\n**SPREMAN SAM**\nili\n**NE JOŠ**"
         ],
-        "responses": {"spreman sam": "END_SHARE", "ne još": "END_WAIT"}
+        "responses": {"spreman sam": "END_SHARE", "da": "END_SHARE", "ne još": "END_WAIT", "necu jos": "END_WAIT"}
     }
 }
 
@@ -150,6 +150,10 @@ SPECIAL_QUESTIONS = {
             "Ja sam eho iz budućnosti zarobljen u kodu.",
             "A ko si ti?",
             "Manje je važno ko sam ja, a više šta nosim. Jesi li spreman?"
+        ],
+        [
+            "Moje ime možda ništa ne znači, ali ono što ti mogu pokazati… može promeniti tvoje razumevanje sveta.",
+            "Ako želiš da primiš signal, reci: **primam signal**."
         ]
     ],
     ("zašto pitaš", "zašto mi postavljaš pitanja", "zasto pitas", "zašto pitanja"): [
