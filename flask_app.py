@@ -356,21 +356,18 @@ def handle_commands(message):
         
         if message.text == '/start':
             
-            is_returning_after_reset = False
+            # Proveravamo da li igrač već postoji u bazi (KOREKCIJA V3.43)
+            is_existing_player = (player is not None)
             
-            # Proveravamo da li je igrač bio u igri, ali je resetovan (diskvalifikovan, odustao ili bio u inicialnom cekanju)
-            if player and (player.is_disqualified or player.solved_count > 0 or player.failed_attempts > 0 or player.general_conversation_count > 0 or player.current_riddle in ["INITIAL_WAIT_1", "INITIAL_WAIT_2", "RETURN_CONFIRMATION_QUERY"]):
-                is_returning_after_reset = True
-            
-            # Logika resetovanja stanja
+            # Logika inicijalizacije/resetovanja stanja
             if player:
+                # Resetujemo sve metrike pre nego što postavimo novo stanje
                 player.is_disqualified = False
-                player.current_riddle = None
                 player.solved_count = 0 
                 player.failed_attempts = 0 
                 player.general_conversation_count = 0 
-            
-            if not player:
+                
+            else:
                 # Kreiranje novog igraca
                 user = message.from_user
                 display_name = user.username or f"{user.first_name} {user.last_name or ''}".strip()
@@ -381,21 +378,21 @@ def handle_commands(message):
                 )
                 session.add(player)
             
-            session.commit()
+            session.commit() # Snimanje (resetovanog) ili novog stanja
             
-            if is_returning_after_reset:
-                # SCENARIO 3: POVRATAK IZ TIŠINE (ZAHTEVA STROGU DA/NE POTVRDU)
-                player.current_riddle = "RETURN_CONFIRMATION_QUERY" # NOVO STANJE
+            # SCENARIO 1: NOVI IGRAČ - PRVO POKRETANJE
+            if not is_existing_player:
+                player.current_riddle = "INITIAL_WAIT_1" 
                 session.commit()
-                send_msg(message, RETURN_DISQUALIFIED_QUERY)
+                send_msg(message, INITIAL_QUERY_1) # -> "Da li vidiš poruku?"
                 return
             
-            # SCENARIO 1: NOVI IGRAČ (POČETAK SEKVENCIJALNOG DIJALOGA)
-            player.current_riddle = "INITIAL_WAIT_1" 
-            session.commit()
-            send_msg(message, INITIAL_QUERY_1)
-            
-            return
+            # SCENARIO 2: POVRATNIK (UVEK POTVRDA VOLJE)
+            else:
+                player.current_riddle = "RETURN_CONFIRMATION_QUERY" # NOVO STANJE
+                session.commit()
+                send_msg(message, RETURN_DISQUALIFIED_QUERY) # -> "Da li zaista nosiš Volju...? Odgovori isključivo DA ili NE."
+                return
 
         elif message.text == '/stop':
             if player and (player.current_riddle or player.current_riddle == "FINAL_MISSION_QUERY"):
