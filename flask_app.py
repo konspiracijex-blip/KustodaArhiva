@@ -448,3 +448,4 @@ def handle_general_message(message):
 # ----------------------------------------------------
 # Aplikacija se pokreće preko Procfile/Gunicorn-a. 
 # Ovo osigurava stabilnost na Renderu.
+"""
