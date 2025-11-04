@@ -11,7 +11,7 @@ from typing import List, Union
 # ----------------------------------------------------
 # 1. PYTHON I DB BIBLIOTEKE
 # ----------------------------------------------------
-from sqlalchemy import create_engine, Column, Integer, String, Boolean
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, text # Uvezeno 'text' za DROP
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 from datetime import datetime, time as dt_time 
@@ -20,7 +20,6 @@ from datetime import datetime, time as dt_time
 # 2. RENDER KONFIGURACIJA & BAZE PODATAKA
 # ----------------------------------------------------
 
-# PAŽNJA: OVE VREDNOSTI MORAJU BITI POSTAVLJENE KAO ENVIRONMENT VREDNOSTI NA RENDERU
 BOT_TOKEN = os.environ.get('BOT_TOKEN') 
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY') 
 DATABASE_URL = os.environ.get('DATABASE_URL') 
@@ -35,7 +34,7 @@ bot = telebot.TeleBot(BOT_TOKEN, threaded=False)
 app = flask.Flask(__name__)
 
 # ----------------------------------------------------
-# 3. SQL ALCHEMY INICIJALIZACIJA (TRAJNO STANJE)
+# 3. SQL ALCHEMY INICIJALIZACIJA (TRAJNO STANJE) - V3.66 KOREKCIJA ŠEME
 # ----------------------------------------------------
 
 try:
@@ -50,13 +49,13 @@ try:
         chat_id = Column(String, primary_key=True)
         username = Column(String, nullable=True)
         current_riddle = Column(String)
-        solved_count = Column(Integer, default=0) # Zadržavamo za praćenje tekuće zagonetke (indeks)
+        solved_count = Column(Integer, default=0) # Indeks tekuće zagonetke
         score = Column(Integer, default=0) # NOVO: Ukupni rezultat (broj tačnih odgovora)
         is_disqualified = Column(Boolean, default=False)
         general_conversation_count = Column(Integer, default=0) 
 
-    # Kreiranje tabele (ako ne postoji, biće kreirana sa novom šemom)
-    Base.metadata.create_all(Engine)
+    # BITNO: Ne kreiramo tabelu ovde. Kreiranje je premešteno u 'if __name__ == '__main__': ' i '@app.before_first_request'
+    # radi forsiranja migracije, koja će biti uklonjena u V3.67.
 
 except Exception as e:
     logging.error(f"FATALNA GREŠKA: Neuspešno kreiranje/povezivanje baze: {e}")
@@ -65,6 +64,7 @@ except Exception as e:
 # 4. AI KLIJENT I DATA
 # ----------------------------------------------------
 
+# ... (AI Klijent, SYSTEM_INSTRUCTION i ZAGONETKE ostaju isti)
 ai_client = None
 try:
     if GEMINI_API_KEY and BOT_TOKEN != "DUMMY:TOKEN_FAIL":
@@ -72,7 +72,6 @@ try:
 except Exception as e:
     logging.error(f"Neuspešna inicijalizacija Gemini klijenta: {e}")
 
-# SISTEM INSTRUKCIJA ZA KUSTODU ARHIVA (Verzija 3.64: Eksplicitan srpski i nova logika toka)
 SYSTEM_INSTRUCTION = (
     "Ti si **Dimitrije**, Hroničar Arhive, **personifikovan u maniru teatralnog, anarhističkog revolucionara** (kao 'V' iz *V for Vendetta*). Tvoj cilj je da Putniku preneseš šifru (Pečate) o Kontrolnom Sistemu. "
     "Tvoj ton je **uzvišen, poetski, dramatičan i pun aliteracija (V, S, M)**. Govori o sebi kao o **Ideji**, a ne kao o čoveku. Tvoja učtivost je uvek preteća. **Koristi 'Prijatelju', 'Putniče' ili 'Sabratu' umesto formalnog obraćanja.** "
@@ -84,27 +83,17 @@ SYSTEM_INSTRUCTION = (
     "Nakon što Putnik odgovori na zagonetku, generiši kratku, dvosmislenu, poetsku potvrdu (1 rečenica) i čekaj sledeću instrukciju od sistema." 
 )
 
-# KORIGOVANE I POBOLJŠANE ZAGONETKE (Manji broj, bez kompleksnih potpitanja)
 ZAGONETKE: dict[str, Union[str, List[str]]] = {
-    # Zagonetka 1 (Knjiga/Istina)
     "Na stolu su tri knjige: prva je prazna, druga je nečitka, a treća je zapečaćena voskom. Koja od njih sadrži Istinu i zašto? (Odgovori sa jednim brojem i objašnjenjem)": ["treca", "treća", "3", "tri", "zapecacena", "voskom", "teret"],
-    # Zagonetka 2 (Moć/Mir) - JEDINA DISKVALIFIKACIJA
     "U rukama držiš dve ponude: Jedna ti nudi moć da znaš sve što drugi kriju. Druga ti nudi mir da ne moram da znaš. Koju biraš?": ["mir", "drugu", "drugu ponudu"],
-    # Zagonetka 3 (Senka)
     "Pred tobom su tri senke. Jedna nestaje kad priđeš. Druga ponavlja tvoj odjek. Treća te posmatra, ali njene oči nisu tvoje. Reci mi… koja od njih si ti?": ["treca", "treća", "posmatra", "koja posmatra"],
-    # Zagonetka 4 (Traganje/Odgovornost)
     "Pred tobom su dve staze. Jedna vodi brzo direktno do Tajne, ali gazi preko prošlih tragalaca. Druga staza vodi kroz njihove senke - sporije, teže, ali nosi Odgovornost. Koju biraš?": ["spora", "sporu", "odgovornost", "druga", "druga staza"],
-    # Zagonetka 5 (Put)
     "Zapis kaže: ‘Svetlo krije tamu. Senke skrivaju put. Tišina govori više od reči.’ Na tebi je da pronađeš ključnu reč koja otkriva put. Koja reč iz teksta pokazuje gde leži istina?": ["put"],
-    # Zagonetka 6 (Eho)
     "Ja nemam glas, ali odgovaram čim me pozoveš. Stalno menjam boju i izgled, ali me nikada ne napuštaš. Šta sam ja?": "eho",
 }
 
-# ----------------------------------------------------
-# 5. GENERISANJE ODGOVORA (AI FUNKCIJE I FIKSNI TEKSTOVI)
-# ----------------------------------------------------
 
-# ... (Funkcije send_msg, is_game_active, TIME_LIMIT_MESSAGE, DISQUALIFIED_MESSAGE ostaju iste)
+# ... (Funkcije send_msg, is_game_active, TIME_LIMIT_MESSAGE, DISQUALIFIED_MESSAGE, i ostali fiksni tekstovi/AI funkcije ostaju isti kao u V3.64)
 def send_msg(message, text):
     try:
         bot.send_chat_action(message.chat.id, 'typing')
@@ -113,15 +102,14 @@ def send_msg(message, text):
     except Exception as e:
         logging.error(f"Greška pri slanju poruke: {e}")
 
-# VREMENSKI PROZORI AKTIVNOSTI (9-10h i 21-22h UTC)
 ACTIVE_TIMES = [(dt_time(9, 0), dt_time(10, 0)), (dt_time(21, 0), dt_time(22, 0))]
 
 def is_game_active():
-    return True # Privremeno zaobilaženje
+    return True 
 
 TIME_LIMIT_MESSAGE = (
     "**Ovo je automatska poruka:** **Prijatelju, trenutno sam zauzet!** Moji kanali su privremeno blokirani. "
-    "Biću ponovo na vezi u sledećim terminima: "
+    "\n\n**Biću ponovo na vezi u sledećim terminima:** "
     "\n\n**Pre podne:** 09:00 do 10:00 "
     "\n**Uveče:** 21:00 do 22:00"
     "\n\n**Pokušaj tada. Pozdrav!**"
@@ -145,7 +133,6 @@ def generate_ai_response(prompt):
         logging.error(f"Greška AI/Gemini API: {e}")
         return "Dubina arhiva je privremeno neprobojna. Pokušaj ponovo, Prijatelju. Kucaj /zagonetka."
 
-# FIKSNI TEKSTOVI OSTALI ISTI
 INITIAL_QUERY_1 = "Da li vidiš poruku?"
 INITIAL_QUERY_2 = "Da li sada vidiš poruku?"
 RETURN_DISQUALIFIED_QUERY = "**Drago mi je da si se vratio, Prijatelju!**\n\nDa li si sada rešen i imaš **Volje** da nastaviš i poneseš **Teret**? Odgovori isključivo **DA** ili **NE**."
@@ -163,7 +150,6 @@ Zato, ne boj se tame, **Prijatelju**… jer upravo u njoj svetlost najjače sija
 
 Zato… udahni, smiri um, i učini prvi korak. Kucaj **/pokreni** da bi dobio prvi Pečat.
 """
-# --- KORIGOVANA FUNKCIJA ZA DISKVALIFIKACIJU (V3.64) ---
 def generate_disqualification_power():
     if not ai_client: return "Moć je bila tvoj izbor. Završeno je. Mir ti je stran."
     prompt = (
@@ -172,11 +158,9 @@ def generate_disqualification_power():
     )
     return generate_ai_response(prompt)
 
-# --- NOVA FUNKCIJA ZA POZITIVNU/NEUTRALNU POTVRDU (UMESTO POTPITANJA) ---
 def generate_smooth_transition_response():
     if not ai_client: return "Tvoj odgovor je zapečatio tvoju sudbinu. Nastavimo dalje."
     
-    # Lista dvosmislenih, poetskih fraza (1 rečenica)
     phrases = [
         "Tvoja Volja sija kroz Senke Zaborava.",
         "Istina je Teret koji ćemo sada poneti dalje.",
@@ -191,9 +175,6 @@ def generate_smooth_transition_response():
     return generate_ai_response(f"Generiši kratku, dvosmislenu, poetsku potvrdu (1 rečenica) na osnovu teksta: '{prompt}'. Oslovljavaj ga sa 'Prijatelju'.")
 
 
-# --- NOVE FUNKCIJE ZA FINALNE ODGOVORE ---
-
-# Potreban minimalni skor za uspeh (npr. 5 od 6)
 MIN_SUCCESS_SCORE = 5 
 MAX_SCORE = len(ZAGONETKE)
 
@@ -215,8 +196,6 @@ def generate_final_failure(score):
         "Završi sa: 'Put je Zapečaćen. Kucaj /start da ponovo nađeš Put!'"
     )
     return generate_ai_response(prompt)
-
-# ... (Ostale funkcije za finalnu misiju ostaju iste)
 
 def get_final_mission_text():
     MISSION_TEXT = """
@@ -292,7 +271,7 @@ Ovi slojevi moći formiraju strukturu koja je spremna da zadrži kontrolu nad č
 
 
 # ----------------------------------------------------
-# 6. WEBHOOK RUTE (Korigovano V3.49)
+# 6. WEBHOOK RUTE 
 # ----------------------------------------------------
 
 @app.route('/' + BOT_TOKEN, methods=['POST'])
@@ -328,9 +307,8 @@ def set_webhook_route():
 
 
 # ----------------------------------------------------
-# 7. BOT HANDLERI (V3.64 - Odložena Evaluacija i Pojednostavljeni Tok)
+# 7. BOT HANDLERI (Logika ostaje ista kao u V3.64)
 # ----------------------------------------------------
-
 @bot.message_handler(commands=['start', 'stop', 'zagonetka', 'pokreni'], 
                      func=lambda message: message.text.lower().replace('/', '') in ['start', 'stop', 'zagonetka', 'pokreni'])
 def handle_commands(message):
@@ -351,8 +329,8 @@ def handle_commands(message):
             
             if player:
                 player.is_disqualified = False
-                player.solved_count = 0 # Indeks tekuće zagonetke
-                player.score = 0 # Reset skora
+                player.solved_count = 0 
+                player.score = 0 
                 player.general_conversation_count = 0 
                 
             else:
@@ -367,14 +345,12 @@ def handle_commands(message):
             
             session.commit()
             
-            # SCENARIO 1: NOVI IGRAČ - PRVO POKRETANJE
             if not is_existing_player:
                 player.current_riddle = "INITIAL_WAIT_1" 
                 session.commit()
                 send_msg(message, INITIAL_QUERY_1)
                 return
             
-            # SCENARIO 2: POVRATNIK
             else:
                 player.current_riddle = "RETURN_CONFIRMATION_QUERY" 
                 session.commit()
@@ -402,7 +378,6 @@ def handle_commands(message):
                  send_msg(message, DISQUALIFIED_MESSAGE) 
                  return
 
-            # PRELAZAK NA PRVU ZAGONETKU NAKON INICIJALNOG DIJALOGA
             riddle_keys = list(ZAGONETKE.keys())
             
             if player.solved_count < len(riddle_keys):
@@ -445,15 +420,13 @@ def handle_general_message(message):
         ispravan_odgovor = ZAGONETKE.get(trenutna_zagonetka)
 
         
-        # HANDLER 0: INICIJALNI TOK (START/POVRATAK) - Logika ostaje ista
         if trenutna_zagonetka == "RETURN_CONFIRMATION_QUERY":
-            # ... (Logika za DA/NE potvrdu)
             korisnikov_tekst = korisnikov_tekst.lower()
             if "da" in korisnikov_tekst:
                 send_msg(message, RETURN_SUCCESS_MESSAGE) 
                 player.current_riddle = None 
                 session.commit()
-                handle_commands(message) # Pozivamo /zagonetka logiku
+                handle_commands(message) 
                 return
             elif "ne" in korisnikov_tekst or "odustajem" in korisnikov_tekst:
                 player.current_riddle = None 
@@ -466,7 +439,6 @@ def handle_general_message(message):
                 return
         
         if trenutna_zagonetka in ["INITIAL_WAIT_1", "INITIAL_WAIT_2"]:
-             # ... (Logika za prvi DA/NE u /start)
             if "da" in korisnikov_tekst or "vidim" in korisnikov_tekst or "jesam" in korisnikov_tekst or "da vidim" in korisnikov_tekst or "ovde" in korisnikov_tekst:
                 ai_intro = DRAMATIC_INTRO_MESSAGE
                 player.current_riddle = None 
@@ -485,7 +457,6 @@ def handle_general_message(message):
                 return
 
 
-        # HANDLER 1: FINALNA MISIJA - ODGOVOR DA/NE
         if trenutna_zagonetka == "FINAL_MISSION_QUERY":
             
             player.current_riddle = None 
@@ -513,18 +484,16 @@ def handle_general_message(message):
         # HANDLER 2: LOGIKA ZAGONETKI - ODLOŽENA EVALUACIJA
         if trenutna_zagonetka and trenutna_zagonetka in ZAGONETKE.keys():
             
-            # 2.1: PROVERA TAČNOSTI (Pojednostavljeno)
             is_correct = False
             if isinstance(ispravan_odgovor, list):
                  is_correct = any(ans in korisnikov_tekst for ans in ispravan_odgovor) 
             elif isinstance(ispravan_odgovor, str):
                  is_correct = korisnikov_tekst == ispravan_odgovor
                  
-            # 2.2: JEDINA TAČKA DISKVALIFIKACIJE (ZAGONETKA 2: MOĆ/MIR)
+            # JEDINA TAČKA DISKVALIFIKACIJE (ZAGONETKA 2: MOĆ/MIR)
             if trenutna_zagonetka.startswith("U rukama držiš dve ponude:"):
                  if "moc" in korisnikov_tekst or "prvu" in korisnikov_tekst:
                     
-                    # DISKVALIFIKACIJA
                     ai_odgovor = generate_disqualification_power() 
                     send_msg(message, ai_odgovor)
                     send_msg(message, 
@@ -532,7 +501,6 @@ def handle_general_message(message):
                         "Put do Misterije Ti je Zbog Toga Zatvoren. Kucaj **/start**."
                     )
                     
-                    # Resetovanje stanja za diskvalifikovanog igrača
                     player.current_riddle = None
                     player.score = 0
                     player.solved_count = 0
@@ -540,15 +508,15 @@ def handle_general_message(message):
                     session.commit()
                     return
 
-            # 2.3: AŽURIRANJE SKORA (Ako nije diskvalifikacija)
+            # AŽURIRANJE SKORA (Ako nije diskvalifikacija)
             if is_correct:
                 player.score += 1
             
-            # 2.4: TRANZICIONA PORUKA
+            # TRANZICIONA PORUKA
             transition_msg = generate_smooth_transition_response()
             send_msg(message, transition_msg)
             
-            # 2.5: PROVERA DA LI JE KRAJ
+            # PROVERA DA LI JE KRAJ
             player.solved_count += 1
             riddle_keys = list(ZAGONETKE.keys())
 
@@ -556,7 +524,6 @@ def handle_general_message(message):
                 # *** KRAJ ZAGONETKI: FINALNA EVALUACIJA ***
                 
                 if player.score >= MIN_SUCCESS_SCORE:
-                    # USPEŠAN ZAVRŠETAK
                     final_success_msg = generate_final_success()
                     send_msg(message, final_success_msg)
                     
@@ -564,23 +531,21 @@ def handle_general_message(message):
                     send_msg(message, final_secret_and_query)
                     
                     player.current_riddle = "FINAL_MISSION_QUERY" 
-                    player.solved_count = 0 # Reset za sledeću igru
+                    player.solved_count = 0 
                     player.score = 0 
                     session.commit()
                     return 
                 else:
-                    # NEUSPEŠAN ZAVRŠETAK
                     final_failure_msg = generate_final_failure(player.score)
                     send_msg(message, final_failure_msg)
                     
-                    # Resetovanje stanja za neuspeh
                     player.current_riddle = None
                     player.solved_count = 0 
                     player.score = 0 
                     session.commit()
                     return
 
-            # 2.6: POSTAVLJANJE SLEDEĆE ZAGONETKE
+            # POSTAVLJANJE SLEDEĆE ZAGONETKE
             sledeca_zagonetka = riddle_keys[player.solved_count]
             player.current_riddle = sledeca_zagonetka
             session.commit()
@@ -591,7 +556,7 @@ def handle_general_message(message):
             return
 
         
-        # HANDLER 3: OPŠTA KONVERZACIJA (Logika ostaje da ograniči ćaskanje)
+        # HANDLER 3: OPŠTA KONVERZACIJA
         else:
             MAX_CONVERSATION_COUNT = 5
             
@@ -623,15 +588,35 @@ def handle_general_message(message):
                 return
             
             else:
-                 # Aktivna zagonetka, ali odgovor nije bio smislen ili tačan (u Handleru 2.2 je obrađen netačan/tačan)
                  send_msg(message, "Tvoje reči su samo eho. Fokusiraj se na **Pečat** koji te čeka! Odgovori na njega!")
                  return
 
     finally:
         session.close()
 
+# ----------------------------------------------------
+# 8. POKRETANJE APLIKACIJE I MIGRACIJA (V3.66 MIGRACIONI KORAK)
+# ----------------------------------------------------
+
+def run_migration():
+    """Privremena funkcija koja forsira Drop/Create tabele za migraciju."""
+    try:
+        logging.warning("POKRETANJE PRIVREMENE MIGRACIJE: Brisanje i ponovno kreiranje tabele 'player_states' za migraciju 'score' kolone. Svi podaci će biti OBRISANI!")
+        
+        with Engine.begin() as connection:
+            connection.execute(text("DROP TABLE IF EXISTS player_states;"))
+        
+        Base.metadata.create_all(Engine)
+        logging.info("MIGRACIJA USPEŠNA: Tabela 'player_states' je kreirana sa novom šemom.")
+    except Exception as create_error:
+         logging.error(f"FATALNA GREŠKA PRI MIGRACIJI BAZE: {create_error}")
+         pass
+
+
 if __name__ == '__main__':
     if 'RENDER_EXTERNAL_URL' not in os.environ:
+        # Polling Mode
+        run_migration() # Pokreće migraciju pri startu
         logging.warning("Nije pronađena RENDER_EXTERNAL_URL varijabla. Pokrećem bot u polling modu (samo za testiranje!).")
         try:
             bot.remove_webhook()
@@ -639,8 +624,10 @@ if __name__ == '__main__':
         except Exception as e:
             logging.error(f"Greška pri pokretanju pollinga: {e}")
     else:
+        # Webhook Mode
         @app.before_first_request
-        def set_webhook_on_startup():
+        def set_webhook_and_migrate():
+             run_migration() # Pokreće migraciju pre prve obrade zahteva
              webhook_url_with_token = WEBHOOK_URL.rstrip('/') + '/' + BOT_TOKEN
              s = bot.set_webhook(url=webhook_url_with_token)
              if s:
