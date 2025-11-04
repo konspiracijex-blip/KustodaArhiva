@@ -95,13 +95,13 @@ SYSTEM_INSTRUCTION = (
 # --- FAZE IGRE (V4.1 - Ažuriran narativ) ---
 GAME_STAGES = {
     "START": {
-        "text": [[
+        "text": [
             "Hej… ako ovo čuješ, znači da smo spojeni.",
             "Moje ime nije važno, ali možeš me zvati Dimitrije.",
             "Dolazim iz budućnosti u kojoj Orwellove reči nisu fikcija.",
             "Sve što si mislio da je fikcija… postalo je stvarnost.",
             "Ako si spreman, odgovori: **primam signal**."
-        ]],
+        ],
         "responses": {"primam signal": "FAZA_2_TEST_1", "da": "FAZA_2_TEST_1", "spreman sam": "FAZA_2_TEST_1"}
     },
     "FAZA_2_TEST_1": {
@@ -130,13 +130,13 @@ GAME_STAGES = {
     },
     "FAZA_3_UPOZORENJE": {
         "text": [ # Lista varijacija
-            ["Dobro… vreme ističe.",
+            "Dobro… vreme ističe.",
              "Transmiter pregreva, a Kolektiv već skenira mrežu.",
              "Ako me uhvate… linija nestaje.",
              "Ali pre nego što to bude kraj… moraš znati istinu.",
              "Postoji piramida moći. Na njenom vrhu nije ono što misliš.",
              "Hoćeš li da primiš saznanja o strukturi sistema koji drži ljude pod kontrolom?\n\nOdgovori:\n**SPREMAN SAM**\nili\n**NE JOŠ**"
-            ]],
+            ],
         "responses": {"spreman sam": "END_SHARE", "da": "END_SHARE", "ne još": "END_WAIT", "necu jos": "END_WAIT"}
     }
 }
@@ -163,13 +163,13 @@ def send_msg(message, text: Union[str, List[str]]):
     try:
         bot.send_chat_action(message.chat.id, 'typing')
         if isinstance(text, list):
-            for i, part in enumerate(text):
+            # Ako je lista, šalji poruke u delovima sa pauzom
+            for part in text:
                 bot.send_chat_action(message.chat.id, 'typing')
-                # Duža pauza pre poslednjeg dela koji sadrži pitanje
-                sleep_time = random.uniform(2.0, 3.0) if i < len(text) - 1 else 0
-                time.sleep(sleep_time)
+                time.sleep(random.uniform(1.5, 2.5))
                 bot.send_message(message.chat.id, part, parse_mode='Markdown')
         else:
+            # Ako je samo string, pošalji ga direktno
             time.sleep(random.uniform(1.2, 2.8)) # Simulacija "ljudskog" vremena za kucanje
             bot.send_message(message.chat.id, text, parse_mode='Markdown')
     except Exception as e:
@@ -243,10 +243,11 @@ def generate_ai_response(user_input, player, current_stage_key):
     if current_stage_key and current_stage_key in GAME_STAGES:
         # Uzimamo prvu varijaciju kao reprezentativni tekst pitanja
         stage_text = GAME_STAGES[current_stage_key]['text'][0]
-        if isinstance(stage_text, list):
-            current_riddle_text = " ".join(stage_text)
-        else:
-            current_riddle_text = stage_text
+        # Ako je ta varijacija lista (kao u START), uzmi poslednji element kao pitanje
+        if isinstance(stage_text, list): 
+            current_riddle_text = stage_text[-1]
+        else: # Inače, uzmi ceo tekst
+            current_riddle_text = stage_text 
 
     prompt = (
         f"Tvoje trenutno pitanje za korisnika je: '{current_riddle_text}'\n"
@@ -407,7 +408,8 @@ def handle_commands(message):
             session.commit()
             
             # Nasumično bira jednu od varijacija poruke
-            start_message = random.choice(GAME_STAGES["START"]["text"])
+            # START faza sada ima samo jednu definiciju poruka, ne više varijacija
+            start_message = GAME_STAGES["START"]["text"]
             send_msg(message, start_message)
 
         elif message.text.lower() == '/stop' or message.text.lower() == 'stop':
