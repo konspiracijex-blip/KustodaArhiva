@@ -7,7 +7,7 @@ import time
 from google import genai
 from google.genai.errors import APIError
 from typing import List, Union
-
+import json
 # ----------------------------------------------------
 # 1. PYTHON I DB BIBLIOTEKE
 # ----------------------------------------------------
@@ -57,7 +57,8 @@ try:
         solved_count = Column(Integer, default=0) 
         score = Column(Integer, default=0) 
         is_disqualified = Column(Boolean, default=False)
-        general_conversation_count = Column(Integer, default=0) 
+        general_conversation_count = Column(Integer, default=0)
+        conversation_history = Column(String, default='[]') # JSON string za istoriju
 
     # Kreiranje tabele ako NE POSTOJI
     Base.metadata.create_all(Engine)
@@ -215,12 +216,33 @@ def evaluate_intent_with_ai(question_text, user_answer, expected_intent_keywords
         logging.error(f"Nepredviđena greška u generisanju AI (Evaluacija): {e}")
         return any(kw in user_answer.lower() for kw in expected_intent_keywords)
 
-def generate_ai_response(user_input, player_state, current_stage_key):
+def generate_ai_response(user_input, player, current_stage_key):
     """Generiše odgovor koristeći Gemini model za pitanja igrača."""
     if not ai_client:
         return random.choice(INVALID_INPUT_MESSAGES) # Fallback
 
-    # Dohvatanje teksta trenutnog pitanja na koje igrač treba da odgovori
+    try:
+        history = json.loads(player.conversation_history)
+    except (json.JSONDecodeError, TypeError):
+        history = []
+
+    # Ograničavanje istorije na poslednjih N interakcija (npr. 5 pitanja i 5 odgovora)
+    MAX_HISTORY_ITEMS = 10 
+    if len(history) > MAX_HISTORY_ITEMS:
+        history = history[-MAX_HISTORY_ITEMS:]
+
+    # Formatiranje istorije za Gemini
+    gemini_history = []
+    for entry in history:
+        role = 'user' if entry['role'] == 'user' else 'model'
+        gemini_history.append({'role': role, 'parts': [{'text': entry['content']}]})
+
+    # Dodavanje trenutne poruke korisnika u istoriju za slanje
+    gemini_history.append({'role': 'user', 'parts': [{'text': user_input}]})
+
+    # Ažuriranje istorije u bazi
+    player.conversation_history = json.dumps(history + [{'role': 'user', 'content': user_input}])
+
     current_riddle_text = "Nalazi se na početku."
     if current_stage_key and current_stage_key in GAME_STAGES:
         # Uzimamo prvu varijaciju kao reprezentativni tekst pitanja
@@ -231,25 +253,32 @@ def generate_ai_response(user_input, player_state, current_stage_key):
             current_riddle_text = stage_text
 
     prompt = (
-        f"Korisnik je, umesto da direktno odgovori na tvoje pitanje, postavio svoje pitanje ili dao komentar: '{user_input}'.\n"
-        f"Tvoje trenutno pitanje za njega je: '{current_riddle_text}'\n"
+        f"Tvoje trenutno pitanje za korisnika je: '{current_riddle_text}'\n"
         f"Nalazite se u fazi igre: {current_stage_key}.\n"
-        "Tvoj zadatak je da mu odgovoriš u skladu sa svojom ulogom (Dimitrije, član otpora). Odgovori na njegovo pitanje ili komentar misteriozno i refleksivno, ali ga suptilno podseti na važnost trenutnog zadatka. Budi kratak, maksimalno DVE rečenice."
+        "Tvoj zadatak je da odgovoriš na poslednju poruku korisnika u skladu sa svojom ulogom (Dimitrije). Budi misteriozan, refleksivan i 'glitchy'. "
+        "Ako korisnik postavi pitanje (npr. 'ko si ti?', 'odakle si?'), odgovori na način koji produbljuje misteriju, ali ga lagano usmeri nazad ka zadatku. "
+        "Primeri dobrih odgovora:\n"
+        "- Na 'iz koje godine dolaziš?': 'Godina nije važna… ono što nosim prevazilazi vreme. Fokusiraj se na ono što sledi.'\n"
+        "- Na 'ko si ti?': 'Moje ime je manje važno od poruke koju nosim. Ako želiš da vidiš istinu, reci: primam signal.'\n"
+        "Budi kratak, maksimalno DVE rečenice. Održavaj iluziju."
     )
 
     try:
-        response = ai_client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=prompt,
-            system_instruction=SYSTEM_INSTRUCTION
-        )
-        return response.text
+        # Kreiranje konverzacionog modela sa istorijom
+        model = ai_client.GenerativeModel(model_name='gemini-1.5-flash', system_instruction=SYSTEM_INSTRUCTION)
+        chat = model.start_chat(history=gemini_history[:-1]) # Istorija bez poslednje poruke korisnika
+        response = chat.send_message(f"{prompt}\n\nKorisnik kaže: {user_input}")
+
+        ai_text = response.text
+        # Ažuriranje istorije sa odgovorom modela
+        player.conversation_history = json.dumps(json.loads(player.conversation_history) + [{'role': 'model', 'content': ai_text}])
+        return ai_text
     except APIError as e:
         logging.error(f"Greška AI/Gemini API: {e}")
-        return random.choice(AI_FALLBACK_MESSAGES) # Inteligentni fallback
+        return random.choice(AI_FALLBACK_MESSAGES)
     except Exception as e:
         logging.error(f"Nepredviđena greška u generisanju AI: {e}")
-        return random.choice(AI_FALLBACK_MESSAGES) # Inteligentni fallback
+        return random.choice(AI_FALLBACK_MESSAGES)
 
 
 def get_epilogue_message(epilogue_type):
@@ -357,13 +386,14 @@ def handle_commands(message):
                 player.solved_count = 0 
                 player.score = 0 
                 player.general_conversation_count = 0 
+                player.conversation_history = '[]' # Resetovanje istorije
                 
             else:
                 user = message.from_user
                 display_name = user.username or f"{user.first_name} {user.last_name or ''}".strip()
                 
                 player = PlayerState(
-                    chat_id=chat_id, current_riddle="START", solved_count=0, score=0, 
+                    chat_id=chat_id, current_riddle="START", solved_count=0, score=0, conversation_history='[]',
                     is_disqualified=False, username=display_name, general_conversation_count=0
                 )
                 session.add(player)
@@ -449,7 +479,7 @@ def handle_general_message(message):
                     send_msg(message, response_text)
         else:
             # Ako namera nije prepoznata, tretiraj kao pitanje/komentar i generiši AI odgovor
-            ai_response = generate_ai_response(korisnikov_tekst, player, current_stage_key)
+            ai_response = generate_ai_response(message.text.strip(), player, current_stage_key)
             send_msg(message, ai_response)
 
         session.commit()
