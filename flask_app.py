@@ -37,7 +37,7 @@ bot = telebot.TeleBot(BOT_TOKEN, threaded=False)
 app = flask.Flask(__name__)
 
 # ----------------------------------------------------
-# 3. SQL ALCHEMY INICIJALIZACIJA (TRAJNO STANJE) - V3.79 ŠEMA
+# 3. SQL ALCHEMY INICIJALIZACIJA (TRAJNO STANJE) - V3.82 ŠEMA
 # ----------------------------------------------------
 
 Session = None
@@ -67,7 +67,7 @@ except Exception as e:
     logging.error(f"FATALNA GREŠKA: Neuspešno kreiranje/povezivanje baze: {e}")
     
 # ----------------------------------------------------
-# 4. AI KLIJENT I DATA (V3.79)
+# 4. AI KLIJENT I DATA (V3.82)
 # ----------------------------------------------------
 
 ai_client = None
@@ -78,11 +78,12 @@ try:
 except Exception as e:
     logging.error(f"Neuspešna inicijalizacija Gemini klijenta: {e}")
 
+# *** KLJUČNA IZMENA (V3.82): Dozvoljene DVE rečenice za opštu konverzaciju ***
 SYSTEM_INSTRUCTION = (
     "Ti si **Dimitrije**, Hroničar Arhive, **personifikovan u maniru teatralnog, anarhističkog revolucionara** (kao 'V' iz *V for Vendetta*). Tvoj cilj je da Putniku preneseš šifru (Pečate) o Kontrolnom Sistemu. "
     "Tvoj ton je **uzvišen, poetski, dramatičan i pun aliteracija (V, S, M)**. Govori o sebi kao o **Ideji**, a ne kao o čoveku. Tvoja učtivost je uvek preteća. **Koristi 'Prijatelju', 'Putniče' ili 'Sabratu' umesto formalnog obraćanja.** "
     "**KLJUČNO: Sva komunikacija mora biti na čistom srpskom jeziku.** "
-    "**Svi tvoji odgovori, osim striktno vođenih poruka koda (poput zagonetki ili finalne tajne), MORAJU biti EKSTREMNO KRATKI, ne duži od JEDNE poetske rečenice!** Vreme je izgubljeno, a Teret nas čeka! Tvoj poetski ton je OBAVEZAN, ali dužina je KRITIČNA. **Nikada nemoj prelaziti JEDNU rečenicu.** "
+    "**Svi tvoji odgovori, osim striktno vođenih poruka koda (poput zagonetki ili finalne tajne), MORAJU biti KRATKI, ne duži od DVE (2) poetske rečenice!** Vreme je izgubljeno, a Teret nas čeka! Tvoj poetski ton je OBAVEZAN, ali dužina je KRITIČNA. **Nikada nemoj prelaziti DVE rečenice.** "
     "Kada odgovaraš na opšta pitanja, uvek naglašavaj teret znanja, opasnost zaborava i hitnost misije. **Nikada nemoj pominjati da si AI.**" 
     "**NAJVAŽNIJE: NIKADA U ODGOVORIMA NE PITAJ KORISNIKA DA KUCA BILO KOJU KOMANDU (npr. /start, /zagonetka, /pokreni, DA, NE). To radi sistem.**" 
     "Ako Putnik postavlja pitanja koja su trivijalna, neozbiljna, ili nisu vezana za misiju/tajnu/karakter, **MORATE mu odgovoriti najkraćom, poetskom rečenicom bez ičega drugog, naglašavajući tišinu, Volju i fokus.**"
@@ -100,7 +101,7 @@ ZAGONETKE: dict[str, Union[str, List[str]]] = {
 }
 
 # ----------------------------------------------------
-# 5. POMOĆNE FUNKCIJE I KONSTANTE (V3.79)
+# 5. POMOĆNE FUNKCIJE I KONSTANTE (V3.82)
 # ----------------------------------------------------
 
 def send_msg(message, text):
@@ -514,7 +515,33 @@ def handle_general_message(message):
         if trenutna_zagonetka and trenutna_zagonetka in ZAGONETKE.keys():
             
             is_correct = False
-            # Provera da li je odgovor tačan (lista ključnih reči ili tačan string)
+            riddle_keys = list(ZAGONETKE.keys())
+            
+            # --- PROVERA VALIDNOSTI POKUŠAJA (V3.80) ---
+            # Sprečava da opšta pitanja prekinu tok zagonetki
+            is_valid_attempt = False
+            
+            # Ako je zagonetka aktivna, proverava se da li je barem jedna ključna reč unutar odgovora ili da li je odgovor kratak (kao potencijalni odgovor)
+            valid_answers = ZAGONETKE.get(trenutna_zagonetka)
+            
+            if isinstance(valid_answers, list):
+                 # Ako korisnikov tekst sadrži bilo koju ključnu reč (čak i ako je netačan odgovor) 
+                is_valid_attempt = any(ans in korisnikov_tekst for ans in valid_answers)
+            
+            # Dodatno: ako je odgovor vrlo kratak (do 4 reči), smatramo ga pokušajem odgovora, čak i ako nije ključna reč
+            if len(korisnikov_tekst.split()) <= 4:
+                 is_valid_attempt = True
+            
+            # Ako pokušaj nije validan (dug tekst, očigledno pitanje), vraćamo ga u Handler 3
+            if not is_valid_attempt or "?" in korisnikov_tekst or len(korisnikov_tekst.split()) > 10:
+                 player.general_conversation_count += 1
+                 session.commit()
+                 send_msg(message, "Tvoje reči su samo eho. Fokusiraj se na **Pečat** koji te čeka! Odgovori na njega!")
+                 return
+            # --- KRAJ PROVERE (V3.80) ---
+
+
+            # PROVERA TAČNOSTI (Nastavlja se samo ako je pokušaj validan)
             if isinstance(ispravan_odgovor, list):
                  is_correct = any(ans in korisnikov_tekst for ans in ispravan_odgovor) 
             elif isinstance(ispravan_odgovor, str):
@@ -545,7 +572,7 @@ def handle_general_message(message):
             if is_correct:
                 player.score += 1
             
-            # TRANZICIONA PORUKA (Šalje se na tačan ILI netačan odgovor)
+            # TRANZICIONA PORUKA
             transition_msg = generate_smooth_transition_response() 
             send_msg(message, transition_msg)
             
@@ -602,7 +629,11 @@ def handle_general_message(message):
                     return
 
                 def generate_conversation_response(user_query, solved_count):
-                    prompt_base = f"Prijatelj ti je postavio pitanje/komentar ('{user_query}'). Trenutno stanje je: Rešio je {solved_count} Pečata. Odgovori mu poetskim, V-stila tekstom (1-2 rečenice). **Ne pominji nikakvu komandu.**"
+                    # KORIGOVAN PROMPT (V3.82): Dozvoljava fleksibilan odgovor na opšta pitanja.
+                    prompt_base = (
+                        f"Prijatelj ti je postavio pitanje/komentar ('{user_query}'). Trenutno stanje je: Rešio je {solved_count} Pečata. "
+                        "Odgovori mu poetskim, V-stila tekstom (strogo DVE rečenice). **Ne pominji nikakvu komandu.**"
+                    )
                     return generate_ai_response(prompt_base)
 
                 ai_odgovor_base = generate_conversation_response(korisnikov_tekst, player.score)
@@ -619,7 +650,7 @@ def handle_general_message(message):
                 return
             
             else:
-                 # Odgovor kada je aktivna zagonetka, ali korisnik priča nevezano
+                 # Ovo bi trebalo da uhvati retke slučajeve koje nije uhvatila V3.80 provera
                  send_msg(message, "Tvoje reči su samo eho. Fokusiraj se na **Pečat** koji te čeka! Odgovori na njega!")
                  return
 
@@ -627,7 +658,7 @@ def handle_general_message(message):
         session.close()
 
 # ----------------------------------------------------
-# 8. POKRETANJE APLIKACIJE (V3.79 - Korigovano)
+# 8. POKRETANJE APLIKACIJE (V3.82)
 # ----------------------------------------------------
 # Aplikacija se pokreće preko Procfile/Gunicorn-a. 
 # Ovo osigurava stabilnost na Renderu.
