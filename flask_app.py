@@ -132,14 +132,14 @@ def generate_ai_response(prompt):
         logging.error(f"Greška AI/Gemini API: {e}")
         return "Dubina arhiva je privremeno neprobojna. Pokušaj ponovo, Prijatelju. Kucaj /zagonetka."
 
-# --- FIKSNI UVODNI TEKST DIJALOG (Korekcija V3.41) ---
+# --- FIKSNI UVODNI TEKST DIJALOG (Korekcija V3.42) ---
 INITIAL_QUERY_1 = "Da li vidiš poruku?"
 INITIAL_QUERY_2 = "Da li sada vidiš poruku?"
-# KORIGOVAN TEKST ZA POVRATAK (V3.41 - Poetski Zbogom)
+# KORIGOVAN TEKST ZA POVRATAK (V3.39 - Jače i kraće)
 RETURN_DISQUALIFIED_QUERY = "**Vratio si se iz tišine! Ja te pamtim, Prijatelju.** Da li zaista nosiš **Volju** da nastaviš i poneseš **Teret**? Odgovori isključivo **DA** ili **NE**."
-RETURN_SUCCESS_MESSAGE = "Ah, Volja je potvrđena, Prijatelju. Vreme je dragoceno, a **Teret nas čeka**. Deluj. **Kucaj /pokreni.**"
-RETURN_FAILURE_MESSAGE = "**Poštujem tvoju Volju, Prijatelju. Znanje je Teret koji nisi spreman da poneseš. Zbogom.**" # KORIGOVANO (V3.41)
-
+# KORIGOVANO (V3.42): Kraća poruka bez /pokreni poziva, odmah sledi zagonetka
+RETURN_SUCCESS_MESSAGE = "**Ah, drago mi je! Vreme je dragoceno, pa da krenemo!**"
+RETURN_FAILURE_MESSAGE = "**Poštujem tvoju Volju, Prijatelju. Znanje je Teret koji nisi spreman da poneseš. Zbogom.**" 
 
 # DINAMIČKI GENERISAN DRAMATIČNI TEKST KOJI SE ŠALJE POSLE POTVRDE IGRAČA 
 def generate_dramatic_intro(player_name=None):
@@ -489,12 +489,31 @@ def handle_general_message(message):
             korisnikov_tekst = korisnikov_tekst.lower()
             
             if "da" in korisnikov_tekst:
-                # Nastavlja misiju
-                player.current_riddle = None 
-                player.general_conversation_count = 0 
-                session.commit()
-                send_msg(message, RETURN_SUCCESS_MESSAGE)
-                return
+                # Nastavlja misiju (KOREKCIJA V3.42 - ODMAH DAJEMO ZAGONETKU)
+                
+                send_msg(message, RETURN_SUCCESS_MESSAGE) # Prvo šaljemo potvrdnu poruku
+                
+                # Određujemo novu zagonetku
+                riddle_keys = list(ZAGONETKE.keys())
+                if player.solved_count < len(riddle_keys):
+                     prva_zagonetka = riddle_keys[player.solved_count] 
+                     
+                     player.current_riddle = prva_zagonetka 
+                     player.failed_attempts = 0
+                     player.general_conversation_count = 0 
+                     session.commit()
+                     
+                     # Šaljemo zagonetku odmah
+                     send_msg(message, 
+                        f"Primi ovo, Prijatelju. To je **Pečat mudrosti broj {player.solved_count + 1}**:\n\n**{prva_zagonetka}**"
+                     )
+                     return
+                else:
+                    # Svi pečati već slomljeni - šaljemo ga na start
+                    player.current_riddle = None 
+                    session.commit()
+                    send_msg(message, "Svi pečati su slomljeni. Finalna Tajna ti je predata. Vrati se sa /start da je testiraš ponovo.")
+                    return
                 
             elif "ne" in korisnikov_tekst or "odustajem" in korisnikov_tekst:
                 # Trajno odustajanje (vraćanje u tišinu)
