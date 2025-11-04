@@ -135,7 +135,7 @@ def is_game_active():
             
     return False
 
-# FIKSNI ODGOVOR VAN VREMENA (Konačan V3.51 - Sa izmenama)
+# FIKSNI ODGOVOR VAN VREMENA (Konačan V3.51)
 TIME_LIMIT_MESSAGE = (
     "**Ovo je automatska poruka:** **Prijatelju, trenutno sam zauzet!** Moji kanali su privremeno blokirani. "
     "Biću ponovo na vezi u sledećim terminima: "
@@ -166,23 +166,18 @@ RETURN_DISQUALIFIED_QUERY = "**Vratio si se iz tišine! Ja te pamtim, Prijatelju
 RETURN_SUCCESS_MESSAGE = "**Ah, drago mi je! Vreme je dragoceno, pa da krenemo!**"
 RETURN_FAILURE_MESSAGE = "**Poštujem tvoju Volju, Prijatelju. Znanje je Teret koji nisi spreman da poneseš. Zbogom.**" 
 
-# DINAMIČKI GENERISAN DRAMATIČNI TEKST KOJI SE ŠALJE POSLE POTVRDE IGRAČA 
-def generate_dramatic_intro(player_name=None):
-    if not ai_client:
-        return "**Transmiter je mutan.** Ja sam Ideja. Vreme se ruši. Kucaj /pokreni."
-        
-    prompt = (
-        f"Korisnik (Prijatelj) je upravo potvrdio signal. Ti si Dimitrije (Hroničar Arhive), ali govoriš u stilu 'V' iz V for Vendetta. Oslovljavaj ga sa 'Prijatelju' ili 'Putniče'. "
-        "Tvoj ton je poetski, teatralan i koristi uzvišene reči. "
-        "Glavne tačke koje tvoj govor mora da obuhvati (u 3-4 poetske rečenice): "
-        "1. **Predstavljanje:** Spomeni da si Hroničar Arhive i da si pronašao ključni **Dokument** o zaboravljenoj slobodi."
-        "2. **Opasnost:** Dokument razotkriva **Kontrolni Sistem**, gde je sloboda samo sećanje."
-        "3. **Svrha:** Primio si poziv, time si dokazao **Volju**. Moraš kroz **Pečate** otkriti **šifru** da bih predao **ključ** za akciju. "
-        "4. **Aktivni poziv:** Završi sa 'Kucaj /pokreni'. "
-        f"Ime korisnika je: {player_name if player_name else 'Nepoznat'}. **Neka odgovor bude uzvišen i pun aliteracija (V, S, M).**"
-    )
-    return generate_ai_response(prompt)
+# NOVI FIKSNI DRAMATIČNI UVOD (V3.52)
+DRAMATIC_INTRO_MESSAGE = """
+**Ah… stigao si. Retki danas uopšte čuju poziv, a još ređi odgovore.** Tvoja **Volja** probila se kroz zidove tišine – i sada si ovde, pred Istinom koju su mnogi zakopali da bi mogli 'spavati mirno'.
 
+Čuvam jedan važan **Dokument** ne zbog moći, već zbog sećanja. On razotkriva mašinu koja nas je pretvorila u brojeve, gde je poslušnost vrlina, a misao zločin. Ako si stigao dovde, znači da si odlučio da se ne klanjaš.
+
+**Pred tobom su test pitanja a iza njih – Vizija.** Moram biti siguran kome otkrivam tajnu.
+Ključ leži u razumevanju, ne u slepom odgovoru.
+Zato, ne boj se tame, **Prijatelju**… jer upravo u njoj svetlost najjače sija.
+
+Zato… udahni, smiri um, i učini prvi korak. Kucaj **/pokreni** da bi dobio prvi Pečat.
+"""
 
 def generate_disqualification_power():
     if not ai_client: return "Moć je bila tvoj izbor. Završeno je. Mir ti je stran. /start"
@@ -581,9 +576,8 @@ def handle_general_message(message):
             
             if "da" in korisnikov_tekst or "vidim" in korisnikov_tekst or "jesam" in korisnikov_tekst or "da vidim" in korisnikov_tekst or "ovde" in korisnikov_tekst:
                 
-                # OVO JE PUNO PREDSTAVLJANJE, JER JE IGRAČ POTPUNO NOV
-                player_name = player.username if player.username else "Prijatelju"
-                ai_intro = generate_dramatic_intro(player_name)
+                # Fiksni uvodni tekst (V3.52)
+                ai_intro = DRAMATIC_INTRO_MESSAGE
                 
                 player.current_riddle = None 
                 player.general_conversation_count = 0 
