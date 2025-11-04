@@ -11,7 +11,8 @@ from typing import List, Union
 # ----------------------------------------------------
 # 1. PYTHON I DB BIBLIOTEKE
 # ----------------------------------------------------
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, text # Uvezeno 'text' za DROP
+# Dodajemo 'text' za rad sa sirovim SQL komandama
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, text 
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 from datetime import datetime, time as dt_time 
@@ -34,7 +35,7 @@ bot = telebot.TeleBot(BOT_TOKEN, threaded=False)
 app = flask.Flask(__name__)
 
 # ----------------------------------------------------
-# 3. SQL ALCHEMY INICIJALIZACIJA (TRAJNO STANJE) - V3.66 KOREKCIJA ŠEME
+# 3. SQL ALCHEMY INICIJALIZACIJA & MIGRACIJA (V3.68 - MIGRACIONI BLOK)
 # ----------------------------------------------------
 
 try:
@@ -49,22 +50,38 @@ try:
         chat_id = Column(String, primary_key=True)
         username = Column(String, nullable=True)
         current_riddle = Column(String)
-        solved_count = Column(Integer, default=0) # Indeks tekuće zagonetke
-        score = Column(Integer, default=0) # NOVO: Ukupni rezultat (broj tačnih odgovora)
+        solved_count = Column(Integer, default=0) 
+        score = Column(Integer, default=0) # NOVO: Ukupni rezultat
         is_disqualified = Column(Boolean, default=False)
         general_conversation_count = Column(Integer, default=0) 
 
-    # BITNO: Ne kreiramo tabelu ovde. Kreiranje je premešteno u 'if __name__ == '__main__': ' i '@app.before_first_request'
-    # radi forsiranja migracije, koja će biti uklonjena u V3.67.
+    # >>>>>>> KLJUČNI MIGRACIONI BLOK <<<<<<<
+    # Forsira se Drop/Create kako bi se garantovala ispravna šema sa 'score' kolonom.
+    # OVO SE MORA UKLONITI NAKON PRVOG USPEŠNOG POKRETANJA!
+    try:
+        logging.warning("POKRETANJE AUTOMATSKE MIGRACIJE: BRISANJE I REKREIRANJE tabele 'player_states' za migraciju 'score' kolone. Svi podaci će biti OBRISANI!")
+        
+        with Engine.begin() as connection:
+            # Drop table (potpuno briše staru tabelu, uključujući neispravnu šemu)
+            connection.execute(text("DROP TABLE IF EXISTS player_states;"))
+        
+        # Kreiranje tabele sa novom šemom (sa 'score' kolonom)
+        Base.metadata.create_all(Engine)
+        logging.info("MIGRACIJA USPEŠNA: Tabela 'player_states' je kreirana sa novom šemom.")
+
+    except Exception as create_error:
+         logging.error(f"FATALNA GREŠKA PRI MIGRACIJI BAZE: {create_error}")
+         # Čak i ako pukne, nastavljamo, ali će bot verovatno biti neaktivan
+         pass
+
 
 except Exception as e:
     logging.error(f"FATALNA GREŠKA: Neuspešno kreiranje/povezivanje baze: {e}")
     
 # ----------------------------------------------------
-# 4. AI KLIJENT I DATA
+# 4. AI KLIJENT I DATA (OSTALO KAO PRE)
 # ----------------------------------------------------
 
-# ... (AI Klijent, SYSTEM_INSTRUCTION i ZAGONETKE ostaju isti)
 ai_client = None
 try:
     if GEMINI_API_KEY and BOT_TOKEN != "DUMMY:TOKEN_FAIL":
@@ -92,8 +109,8 @@ ZAGONETKE: dict[str, Union[str, List[str]]] = {
     "Ja nemam glas, ali odgovaram čim me pozoveš. Stalno menjam boju i izgled, ali me nikada ne napuštaš. Šta sam ja?": "eho",
 }
 
+# (Pomoćne funkcije i konstantni tekstovi su izostavljeni radi kraćeg prikaza, ali su isti kao u V3.67)
 
-# ... (Funkcije send_msg, is_game_active, TIME_LIMIT_MESSAGE, DISQUALIFIED_MESSAGE, i ostali fiksni tekstovi/AI funkcije ostaju isti kao u V3.64)
 def send_msg(message, text):
     try:
         bot.send_chat_action(message.chat.id, 'typing')
@@ -307,7 +324,7 @@ def set_webhook_route():
 
 
 # ----------------------------------------------------
-# 7. BOT HANDLERI (Logika ostaje ista kao u V3.64)
+# 7. BOT HANDLERI (Logika ostaje ista)
 # ----------------------------------------------------
 @bot.message_handler(commands=['start', 'stop', 'zagonetka', 'pokreni'], 
                      func=lambda message: message.text.lower().replace('/', '') in ['start', 'stop', 'zagonetka', 'pokreni'])
@@ -551,7 +568,7 @@ def handle_general_message(message):
             session.commit()
 
             send_msg(message, 
-                f"Primi ovo, Prijatelju. To je **Pečat mudrosti broj {player.solved_count + 1}**:\n\n**{sledeca_zagonetka}**"
+                f"Primi ovo, Prijatelju. To je **Pečat mudrosti broj {player.solved_count + 1}**:\n\n**{prva_zagonetka}**"
             )
             return
 
@@ -595,28 +612,12 @@ def handle_general_message(message):
         session.close()
 
 # ----------------------------------------------------
-# 8. POKRETANJE APLIKACIJE I MIGRACIJA (V3.66 MIGRACIONI KORAK)
+# 8. POKRETANJE APLIKACIJE
 # ----------------------------------------------------
-
-def run_migration():
-    """Privremena funkcija koja forsira Drop/Create tabele za migraciju."""
-    try:
-        logging.warning("POKRETANJE PRIVREMENE MIGRACIJE: Brisanje i ponovno kreiranje tabele 'player_states' za migraciju 'score' kolone. Svi podaci će biti OBRISANI!")
-        
-        with Engine.begin() as connection:
-            connection.execute(text("DROP TABLE IF EXISTS player_states;"))
-        
-        Base.metadata.create_all(Engine)
-        logging.info("MIGRACIJA USPEŠNA: Tabela 'player_states' je kreirana sa novom šemom.")
-    except Exception as create_error:
-         logging.error(f"FATALNA GREŠKA PRI MIGRACIJI BAZE: {create_error}")
-         pass
-
 
 if __name__ == '__main__':
     if 'RENDER_EXTERNAL_URL' not in os.environ:
         # Polling Mode
-        run_migration() # Pokreće migraciju pri startu
         logging.warning("Nije pronađena RENDER_EXTERNAL_URL varijabla. Pokrećem bot u polling modu (samo za testiranje!).")
         try:
             bot.remove_webhook()
@@ -626,8 +627,7 @@ if __name__ == '__main__':
     else:
         # Webhook Mode
         @app.before_first_request
-        def set_webhook_and_migrate():
-             run_migration() # Pokreće migraciju pre prve obrade zahteva
+        def set_webhook_on_startup():
              webhook_url_with_token = WEBHOOK_URL.rstrip('/') + '/' + BOT_TOKEN
              s = bot.set_webhook(url=webhook_url_with_token)
              if s:
