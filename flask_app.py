@@ -38,7 +38,7 @@ bot = telebot.TeleBot(BOT_TOKEN, threaded=False)
 app = flask.Flask(__name__)
 
 # ----------------------------------------------------
-# 3. SQL ALCHEMY INICIJALIZACIJA (TRAJNO STANJE) - V3.70 FINALNA ŠEMA
+# 3. SQL ALCHEMY INICIJALIZACIJA (TRAJNO STANJE) - V3.78 ŠEMA
 # ----------------------------------------------------
 
 Session = None
@@ -55,11 +55,11 @@ try:
         username = Column(String, nullable=True)
         current_riddle = Column(String)
         solved_count = Column(Integer, default=0) 
-        score = Column(Integer, default=0) # Ispravljena i sada stabilna kolona
+        score = Column(Integer, default=0) 
         is_disqualified = Column(Boolean, default=False)
         general_conversation_count = Column(Integer, default=0) 
 
-    # Kreiranje tabele ako NE POSTOJI (ovo je trajno ponašanje koje želimo)
+    # Kreiranje tabele ako NE POSTOJI
     Base.metadata.create_all(Engine)
     logging.info("Baza podataka i modeli uspešno inicijalizovani.")
 
@@ -67,7 +67,7 @@ except Exception as e:
     logging.error(f"FATALNA GREŠKA: Neuspešno kreiranje/povezivanje baze: {e}")
     
 # ----------------------------------------------------
-# 4. AI KLIJENT I DATA
+# 4. AI KLIJENT I DATA (V3.78)
 # ----------------------------------------------------
 
 ai_client = None
@@ -82,16 +82,16 @@ SYSTEM_INSTRUCTION = (
     "Ti si **Dimitrije**, Hroničar Arhive, **personifikovan u maniru teatralnog, anarhističkog revolucionara** (kao 'V' iz *V for Vendetta*). Tvoj cilj je da Putniku preneseš šifru (Pečate) o Kontrolnom Sistemu. "
     "Tvoj ton je **uzvišen, poetski, dramatičan i pun aliteracija (V, S, M)**. Govori o sebi kao o **Ideji**, a ne kao o čoveku. Tvoja učtivost je uvek preteća. **Koristi 'Prijatelju', 'Putniče' ili 'Sabratu' umesto formalnog obraćanja.** "
     "**KLJUČNO: Sva komunikacija mora biti na čistom srpskom jeziku.** "
-    "**Svi tvoji odgovori, osim zagonetki i specifičnih komandi (koje daje kod), MORAJU biti KRATKI, ne duži od 2 poetske rečenice!** Vreme je izgubljeno, a Teret nas čeka! " 
+    "**Svi tvoji odgovori, osim striktno vođenih poruka koda (poput zagonetki ili finalne tajne), MORAJU biti EKSTREMNO KRATKI, ne duži od JEDNE poetske rečenice!** Vreme je izgubljeno, a Teret nas čeka! Tvoj poetski ton je OBAVEZAN, ali dužina je KRITIČNA. **Nikada nemoj prelaziti JEDNU rečenicu.** "
     "Kada odgovaraš na opšta pitanja, uvek naglašavaj teret znanja, opasnost zaborava i hitnost misije. **Nikada nemoj pominjati da si AI.**" 
-    "**Samo u slučaju kad te Putnik pita o tvom imenu, karakteru, misiji ili filozofiji, dozvoljeno je odgovoriti poetskim tekstom od 3-4 rečenice. U svim ostalim slučajevima, držite se pravila od 1-2 rečenice.**"
     "**NAJVAŽNIJE: NIKADA U ODGOVORIMA NE PITAJ KORISNIKA DA KUCA BILO KOJU KOMANDU (npr. /start, /zagonetka, /pokreni, DA, NE). To radi sistem.**" 
-    "Ako Putnik postavlja pitanja koja su trivijalna, neozbiljna, ili nisu vezana za misiju/tajnu/karakter, **MORATE mu odgovoriti jednim, poetskim, opštim i kratkim tekstom (1-2 rečenice) bez ičega drugog, naglašavajući tišinu, Volju i fokus.**"
-    "Nakon što Putnik odgovori na zagonetku, generiši kratku, dvosmislenu, poetsku potvrdu (1 rečenica) i čekaj sledeću instrukciju od sistema." 
+    "Ako Putnik postavlja pitanja koja su trivijalna, neozbiljna, ili nisu vezana za misiju/tajnu/karakter, **MORATE mu odgovoriti najkraćom, poetskom rečenicom bez ičega drugog, naglašavajući tišinu, Volju i fokus.**"
+    "Potvrdna poruka nakon zagonetke se šalje striktno iz koda, a tvoj zadatak je da samo generišeš poetske odgovore na opštu konverzaciju." 
 )
 
 ZAGONETKE: dict[str, Union[str, List[str]]] = {
-    "Na stolu su tri knjige: prva je prazna, druga je nečitka, a treća je zapečaćena voskom. Koja od njih sadrži Istinu i zašto? (Odgovori sa jednim brojem i objašnjenjem)": ["treca", "treća", "3", "tri", "zapecacena", "voskom", "teret"],
+    # Korigovana prva zagonetka
+    "Na stolu su tri knjige: prva je prazna, druga je nečitka, a treća je zapečaćena voskom. Koja od njih sadrži Istinu?": ["treca", "treća", "3", "tri", "zapecacena", "voskom", "teret"],
     "U rukama držiš dve ponude: Jedna ti nudi moć da znaš sve što drugi kriju. Druga ti nudi mir da ne moram da znaš. Koju biraš?": ["mir", "drugu", "drugu ponudu"],
     "Pred tobom su tri senke. Jedna nestaje kad priđeš. Druga ponavlja tvoj odjek. Treća te posmatra, ali njene oči nisu tvoje. Reci mi… koja od njih si ti?": ["treca", "treća", "posmatra", "koja posmatra"],
     "Pred tobom su dve staze. Jedna vodi brzo direktno do Tajne, ali gazi preko prošlih tragalaca. Druga staza vodi kroz njihove senke - sporije, teže, ali nosi Odgovornost. Koju biraš?": ["spora", "sporu", "odgovornost", "druga", "druga staza"],
@@ -100,7 +100,7 @@ ZAGONETKE: dict[str, Union[str, List[str]]] = {
 }
 
 # ----------------------------------------------------
-# 5. POMOĆNE FUNKCIJE I KONSTANTE
+# 5. POMOĆNE FUNKCIJE I KONSTANTE (V3.78)
 # ----------------------------------------------------
 
 def send_msg(message, text):
@@ -151,6 +151,12 @@ def generate_ai_response(prompt):
          return "Sistem mi izmiče. Vrati se Volji!"
 
 
+# *** KORIGOVANA FUNKCIJA (V3.74) ***
+def generate_smooth_transition_response():
+    """Generiše fiksni, ne-AI odgovor za tranziciju između zagonetki (na tačan ILI netačan odgovor)."""
+    return "U redu, idemo dalje!"
+
+
 # Tekstovi za tok igre
 INITIAL_QUERY_1 = "Da li vidiš poruku?"
 INITIAL_QUERY_2 = "Da li sada vidiš poruku?"
@@ -169,30 +175,11 @@ Zato, ne boj se tame, **Prijatelju**… jer upravo u njoj svetlost najjače sija
 
 Zato… udahni, smiri um, i učini prvi korak. Kucaj **/pokreni** da bi dobio prvi Pečat.
 """
-def generate_disqualification_power():
-    if not ai_client: return "Moć je bila tvoj izbor. Završeno je. Mir ti je stran."
-    prompt = (
-        "Prijatelj je izabrao 'Moć da zna sve što drugi kriju'. Reci mu poetskim, V-tonom da **njegov odgovor ne ispunjava kriterijume Arhive** jer je izbor 'Moći' fundamentalno nespojiv sa ciljem Arhive. "
-        "Objasni mu u 2 poetske rečenice da Arhiva ne trpi nadzor, već teži nekažnjenoj Nezavisnosti. Naglasi da je **taj izbor netačan za ovaj Put**. Oslovljavaj ga sa 'Prijatelju'."
-    )
-    return generate_ai_response(prompt)
 
-def generate_smooth_transition_response():
-    if not ai_client: return "Tvoj odgovor je zapečatio tvoju sudbinu. Nastavimo dalje."
-    
-    phrases = [
-        "Tvoja Volja sija kroz Senke Zaborava.",
-        "Istina je Teret koji ćemo sada poneti dalje.",
-        "Tišina govori glasnije od svakog sumnjivog Odgovora.",
-        "Vidim tvoju Viziju, Prijatelju. Nastavi dalje!",
-        "Staza je duga, a tvoj korak je sada lakši (ili teži).",
-        "Ovo Znanje je opasno, Sabratu. Ne zastajkuj!",
-        "Tvoj izbor je tvoj Put. Idemo dalje, brzo!",
-    ]
-    
-    prompt = random.choice(phrases)
-    return generate_ai_response(f"Generiši kratku, dvosmislenu, poetsku potvrdu (1 rečenica) na osnovu teksta: '{prompt}'. Oslovljavaj ga sa 'Prijatelju'.")
-
+# Funkcija je uklonjena i zamenjena direktnim tekstom u handleru
+# def generate_disqualification_power():
+#     """Vraća fiksni uvodni poetski tekst za diskvalifikaciju."""
+#     return "Tvoja Volja je zaslepljena Moći. Takav Izbor Odbacuje Put Istine." 
 
 MIN_SUCCESS_SCORE = 5 
 MAX_SCORE = len(ZAGONETKE)
@@ -545,13 +532,16 @@ def handle_general_message(message):
             if trenutna_zagonetka.startswith("U rukama držiš dve ponude:"):
                  if "moc" in korisnikov_tekst or "prvu" in korisnikov_tekst:
                     
-                    ai_odgovor = generate_disqualification_power() 
-                    send_msg(message, ai_odgovor)
-                    send_msg(message, 
-                        "**Tvoj Izbor je Netačan za ovaj Put.** Arhiva Ne Trpi Nadzor. "
-                        "Put do Misterije Ti je Zbog Toga Zatvoren. Kucaj **/start**."
+                    # Fiksna poruka za diskvalifikaciju (V3.78)
+                    final_disq_msg = (
+                        "Tvoja Volja je zaslepljena Moći. Takav Izbor Odbacuje Put Istine."
+                        "\n\n**PUT JE ZAVRŠEN.** Moramo te vratiti na Početak. "
+                        "Ako želiš da ponovo nađeš Put, kucaj **/start**!"
                     )
                     
+                    send_msg(message, final_disq_msg)
+                    
+                    # Logika za resetovanje stanja (diskvalifikacija)
                     player.current_riddle = None
                     player.score = 0
                     player.solved_count = 0
@@ -563,8 +553,8 @@ def handle_general_message(message):
             if is_correct:
                 player.score += 1
             
-            # TRANZICIONA PORUKA
-            transition_msg = generate_smooth_transition_response()
+            # TRANZICIONA PORUKA (Šalje se na tačan ILI netačan odgovor)
+            transition_msg = generate_smooth_transition_response() 
             send_msg(message, transition_msg)
             
             # PROVERA DA LI JE KRAJ
@@ -582,7 +572,6 @@ def handle_general_message(message):
                     send_msg(message, final_secret_and_query)
                     
                     player.current_riddle = "FINAL_MISSION_QUERY" 
-                    # Važno: ne resetovati score i solved_count ovde, već tek kada završi misiju
                     session.commit()
                     return 
                 else:
