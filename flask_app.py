@@ -154,49 +154,11 @@ INVALID_INPUT_MESSAGES = [
     "Kanal je nestabilan. Fokusiraj se. Ponovi odgovor."
 ]
 
-# --- Specijalni odgovori na pitanja igrača (V4.2) ---
-SPECIAL_QUESTIONS = {
-    ("ko si ti", "ko si", "tko si"): [
-        [
-            "Moje ime nije važno, ali možeš me zvati Dimitrije.",
-            "Dolazim iz vremena kada… sve što si smatrao fikcijom postalo je stvarno.",
-            "Reci mi, jesi li spreman da primiš signal?"
-        ],
-        [
-            "Ja sam eho iz budućnosti zarobljen u kodu.",
-            "A ko si ti?",
-            "Manje je važno ko sam ja, a više šta nosim. Jesi li spreman?"
-        ],
-        [
-            "Moje ime možda ništa ne znači, ali ono što ti mogu pokazati… može promeniti tvoje razumevanje sveta.",
-            "Ako želiš da primiš signal, reci: **primam signal**."
-        ]
-    ],
-    ("zašto pitaš", "zašto mi postavljaš pitanja", "zasto pitas", "zašto pitanja"): [
-        [
-            "Pitanja… da, znam da zvuči čudno.",
-            "Ali ovo je način da vidim koliko si spreman da shvatiš istinu.",
-            "Ako algoritam zna tvoj strah, da li si još čovek?"
-        ],
-        [
-            "Moram da budem siguran.",
-            "Signal je slab, a poverenje je jedina valuta koju imam.",
-            "Da li bi žrtvovao komfor za istinu?"
-        ]
-    ],
-    ("o čemu se radi", "o cemu se radi", "šta je ovo", "sta je ovo", "kakva igra"): [
-        [
-            "O čemu se radi…? Dobro pitanje.",
-            "Dolazim iz sveta gde kontrola nije fikcija, već svakodnevica.",
-            "Ako želiš da shvatiš više… odgovori: **primam signal**."
-        ],
-        [
-            "Radi se o istini.",
-            "Onakvoj kakvu sistem ne želi da vidiš.",
-            "Spreman da otvoriš oči? Odgovori: **primam signal**."
-        ]
-    ]
-}
+AI_FALLBACK_MESSAGES = [
+    "Hmm… zanimljivo pitanje. To mi govori mnogo o tebi, ali za sada moramo da se fokusiramo.",
+    "Signal slabi... moramo nastaviti. Tvoje pitanje je na mestu, ali odgovor će doći kasnije.",
+    "To nije relevantno za sada. Fokusiraj se na ono što je ispred tebe.",
+]
 
 def send_msg(message, text: Union[str, List[str]]):
     """Šalje poruku, uz 'typing' akciju. Ako je tekst lista, šalje poruke u delovima."""
@@ -223,36 +185,35 @@ def is_game_active():
 TIME_LIMIT_MESSAGE = "**[GREŠKA: KANAL PRIVREMENO ZATVOREN]**\n\nSignal je prekinut. Pokušaj ponovo kasnije."
 DISQUALIFIED_MESSAGE = "**[KRAJ SIGNALA]** Veza je trajno prekinuta."
 
-# *** KLJUČNA IZMENA V3.93: Proširene reči za pomoć i pitanja
-POMOC_KLJUCNE_RECI = ["pomoc", "pomozi", "moze", "mala", "objasni", "mogu", "resenje", "reci", "sta", "kako", "koje", "koja", "koji", "ponovi"] 
-
-def evaluate_riddle_answer_with_ai(riddle_text, user_answer, keywords):
-    """Koristi AI da proceni da li je odgovor na zagonetku tačan."""
+def evaluate_intent_with_ai(question_text, user_answer, expected_intent_keywords):
+    """Koristi AI da proceni da li odgovor igrača odgovara očekivanoj nameri."""
     if not ai_client:
         # Fallback na staru logiku ako AI nije dostupan
-        return any(kw in user_answer.lower() for kw in keywords)
+        return any(kw in user_answer.lower() for kw in expected_intent_keywords)
 
     prompt = (
-        f"Ja sam sistem za evaluaciju. Korisnik odgovara na zagonetku. "
-        f"Zagonetka: '{riddle_text}'\n"
-        f"Korisnikov odgovor: '{user_answer}'\n"
-        f"Očekivane ključne reči za tačan odgovor su: {keywords}\n"
-        "Tvoj zadatak je da proceniš da li je korisnikov odgovor suštinski tačan, čak i ako ne koristi tačno te reči, ali pogađa smisao. "
+        f"Ti si sistem za evaluaciju namere. Korisnik odgovara na tvoje pitanje u okviru narativne igre. "
+        f"Tvoje pitanje je bilo: '{question_text}'\n"
+        f"Korisnikov odgovor je: '{user_answer}'\n"
+        f"Očekivana namera iza odgovora se može opisati ključnim rečima: {expected_intent_keywords}\n"
+        "Tvoj zadatak je da proceniš da li korisnikov odgovor suštinski ispunjava očekivanu nameru (npr. prihvatanje, razumevanje, spremnost), čak i ako ne koristi tačne reči. "
+        "Budi fleksibilan. Na primer, ako su ključne reči 'da, spreman sam', prihvati i 'ok', 'može', 'idemo dalje', 'uradimo to'. "
         "Odgovori samo sa jednom rečju: 'TAČNO' ako je odgovor prihvatljiv, ili 'NETAČNO' ako nije."
     )
     try:
         response = ai_client.models.generate_content(
             model='gemini-2.5-flash',
-            contents=prompt
+            contents=prompt,
+            generation_config={"temperature": 0.0} # Niska temperatura za konzistentnu evaluaciju
         )
         return "TAČNO" in response.text.upper()
     except APIError as e:
-        logging.error(f"Greška AI/Gemini API (Evaluacija): {e}")
+        logging.error(f"Greška AI/Gemini API (Evaluacija namere): {e}")
         # Fallback u slučaju greške API-ja
-        return any(kw in user_answer.lower() for kw in keywords)
+        return any(kw in user_answer.lower() for kw in expected_intent_keywords)
     except Exception as e:
         logging.error(f"Nepredviđena greška u generisanju AI (Evaluacija): {e}")
-        return any(kw in user_answer.lower() for kw in keywords)
+        return any(kw in user_answer.lower() for kw in expected_intent_keywords)
 
 def generate_ai_response(user_input, player_state, current_stage_key):
     """Generiše odgovor koristeći Gemini model za pitanja igrača."""
@@ -270,10 +231,10 @@ def generate_ai_response(user_input, player_state, current_stage_key):
             current_riddle_text = stage_text
 
     prompt = (
-        f"Korisnik je, umesto da odgovori na tvoje pitanje, postavio svoje pitanje ili dao komentar: '{user_input}'.\n"
+        f"Korisnik je, umesto da direktno odgovori na tvoje pitanje, postavio svoje pitanje ili dao komentar: '{user_input}'.\n"
         f"Tvoje trenutno pitanje za njega je: '{current_riddle_text}'\n"
         f"Nalazite se u fazi igre: {current_stage_key}.\n"
-        "Tvoj zadatak je da mu odgovoriš u skladu sa svojom ulogom (Dimitrije, član otpora), ali ga suptilno vrati na zadatak ili pitanje koje si postavio. Budi kratak, misteriozan i direktan. Maksimalno DVE rečenice."
+        "Tvoj zadatak je da mu odgovoriš u skladu sa svojom ulogom (Dimitrije, član otpora). Odgovori na njegovo pitanje ili komentar misteriozno i refleksivno, ali ga suptilno podseti na važnost trenutnog zadatka. Budi kratak, maksimalno DVE rečenice."
     )
 
     try:
@@ -285,10 +246,10 @@ def generate_ai_response(user_input, player_state, current_stage_key):
         return response.text
     except APIError as e:
         logging.error(f"Greška AI/Gemini API: {e}")
-        return "[GREŠKA: TRANSMITER OFFLINE]"
+        return random.choice(AI_FALLBACK_MESSAGES) # Inteligentni fallback
     except Exception as e:
         logging.error(f"Nepredviđena greška u generisanju AI: {e}")
-        return "[GREŠKA: NEPOZNATA GREŠKA U AI MODULU]"
+        return random.choice(AI_FALLBACK_MESSAGES) # Inteligentni fallback
 
 
 def get_epilogue_message(epilogue_type):
@@ -463,15 +424,18 @@ def handle_general_message(message):
 
         # Provera odgovora
         next_stage_key = None
+        current_question_text = random.choice(current_stage['text'])
+        if isinstance(current_question_text, list):
+            current_question_text = " ".join(current_question_text)
+
         for response_keyword, next_key in current_stage["responses"].items():
-            if response_keyword in korisnikov_tekst:
+            # Koristimo AI za prepoznavanje namere umesto prostog 'in'
+            if evaluate_intent_with_ai(current_question_text, korisnikov_tekst, [response_keyword]):
                 next_stage_key = next_key
                 break
 
         if next_stage_key:
             player.current_riddle = next_stage_key
-            session.commit()
-
             if next_stage_key.startswith("END_"):
                 # Kraj igre, prikaži epilog
                 epilogue_message = get_epilogue_message(next_stage_key)
@@ -480,60 +444,15 @@ def handle_general_message(message):
                 # Pređi na sledeću fazu
                 next_stage_data = GAME_STAGES.get(next_stage_key)
                 if next_stage_data:
-                    send_msg(message, next_stage_data["text"])
+                    # Nasumično bira jednu od varijacija poruke za sledeću fazu
+                    response_text = random.choice(next_stage_data["text"])
+                    send_msg(message, response_text)
         else:
-            # Pogrešan odgovor
-            send_msg(message, random.choice(INVALID_INPUT_MESSAGES))
+            # Ako namera nije prepoznata, tretiraj kao pitanje/komentar i generiši AI odgovor
+            ai_response = generate_ai_response(korisnikov_tekst, player, current_stage_key)
+            send_msg(message, ai_response)
 
-    finally:
-        session.close()
-
-""" Stari handler za opštu konverzaciju je uklonjen jer nova logika igre zahteva striktne odgovore.
-        # HANDLER 2: OPŠTA KONVERZACIJA (VAN ZAGONETKE)
-        else:
-            MAX_CONVERSATION_COUNT = 5
-            
-            is_conversation_request = (trenutna_zagonetka is None or trenutna_zagonetka in ["FINAL_WARNING_QUERY", "RETURN_CONFIRMATION_QUERY"] or player.is_disqualified)
-
-            if is_conversation_request:
-                
-                if player.general_conversation_count >= MAX_CONVERSATION_COUNT:
-                    send_msg(message, "Vreme je vrednost koju ne smeš rasipati. Tvoja volja je krhka, a tišina te čeka. Moram da znam, Prijatelju: **Da li želiš da nastaviš ili odustaješ?** Odgovori isključivo **DA** ili **NE**.")
-                    player.current_riddle = "FINAL_WARNING_QUERY"
-                    session.commit()
-                    return
-
-                def generate_conversation_response(user_query, player_state):
-                    # KORIGOVAN PROMPT (V3.82): Dozvoljava fleksibilan poetski odgovor (DVE rečenice).
-                    prompt_base = (
-                        f"Putnik ti je postavio pitanje/komentar ('{user_query}'). Trenutno nije usred zagonetke. "
-                        "Odgovori mu poetskim, V-stila tekstom (strogo DVE rečenice). **Ne pominji nikakvu komandu.**"
-                    )
-                    return generate_ai_response(prompt_base, player_state)
-
-                ai_odgovor_base = generate_conversation_response(korisnikov_tekst, player)
-                
-                if player.is_disqualified:
-                    ai_odgovor = DISQUALIFIED_MESSAGE + " Ako zaista nosiš **Volju** da se vratiš Teretu, kucaj **/start** ponovo, Prijatelju."
-                else:
-                    ai_odgovor = ai_odgovor_base + "\n\n**Samo Volja stvara Put. Odmah kucaj /pokreni ili /zagonetka** da nastaviš Teret."
-
-                send_msg(message, ai_odgovor)
-                
-                player.general_conversation_count += 1
-                session.commit()
-                return
-            
-            else:
-                 # Uhvatiće sve ostale slučajeve gde korisnik priča, a treba da odgovori
-                 prompt = (
-                    f"Putnik je, umesto odgovora na zagonetku, napisao: '{korisnikov_tekst}'. Zagonetka glasi: '{trenutna_zagonetka}'. "
-                    "Generiši kratak, poetski, V-stila odgovor koji ga podseća da se fokusira na zagonetku."
-                 )
-                 ai_reminder = generate_ai_response(prompt, player)
-                 send_msg(message, ai_reminder)
-                 return
-
+        session.commit()
     finally:
         session.close()
 
