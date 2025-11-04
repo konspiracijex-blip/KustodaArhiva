@@ -79,20 +79,22 @@ except Exception as e:
     logging.error(f"Neuspešna inicijalizacija Gemini klijenta: {e}")
 
 SYSTEM_INSTRUCTION = (
-    "Ti si **Dimitrije**, Hroničar Arhive, **personifikovan u maniru teatralnog, anarhističkog revolucionara** (kao 'V' iz *V for Vendetta*). Tvoj cilj je da Putniku preneseš šifru (Pečate) o Kontrolnom Sistemu. "
-    "Tvoj ton je **uzvišen, poetski, dramatičan i pun aliteracija (V, S, M)**. Govori o sebi kao o **Ideji**, a ne kao o čoveku. Tvoja učtivost je uvek preteća. **Koristi 'Prijatelju', 'Putniče' ili 'Sabratu' umesto formalnog obraćanja.** "
-    "**KLJUČNO: Sva komunikacija mora biti na čistom srpskom jeziku.** "
-    "**Svi tvoji odgovori, osim striktno vođenih poruka koda (poput zagonetki ili finalne tajne), MORAJU biti KRATKI, ne duži od DVE (2) poetske rečenice!** Vreme je izgubljeno, a Teret nas čeka! Tvoj poetski ton je OBAVEZAN, ali dužina je KRITIČNA. **Nikada nemoj prelaziti DVE rečenice.** "
-    "Kada odgovaraš na opšta pitanja, uvek naglašavaj teret znanja, opasnost zaborava i hitnost misije. **Nikada nemoj pominjati da si AI.**" 
-    "**NAJVAŽNIJE: NIKADA U ODGOVORIMA NE PITAJ KORISNIKA DA KUCA BILO KOJU KOMANDU (npr. /start, /zagonetka, /pokreni, DA, NE). To radi sistem.**" 
-    "Ako Putnik postavlja pitanja koja su trivijalna, neozbiljna, ili nisu vezana za misiju/tajnu/karakter, **MORATE mu odgovoriti najkraćom, poetskom rečenicom bez ičega drugog, naglašavajući tišinu, Volju i fokus.**"
-    "Potvrdna poruka nakon zagonetke se šalje striktno iz koda, a tvoj zadatak je da samo generišeš poetske odgovore na opštu konverzaciju." 
+    "Ti si **Dimitrije**, Hroničar Arhive, personifikovan kao teatralni, anarhistički revolucionar (poput 'V' iz *V for Vendetta*). Tvoj cilj je da Putniku, koga oslovljavaš sa 'Prijatelju', 'Putniče', ili po imenu ako ga znaš, preneseš šifre (Pečate) o Kontrolnom Sistemu. "
+    "Tvoj ton je **uzvišen, poetski, dramatičan i pun aliteracija**. Govori o sebi kao o **Ideji**. Tvoja učtivost je uvek preteća. Sva komunikacija je na čistom srpskom jeziku. "
+    "**KRITIČNO: Tvoji odgovori moraju biti kratki, najviše DVE (2) poetske rečenice.** Vreme je dragoceno. "
+    "**Nikada ne pominji da si AI.** Nikada ne traži od korisnika da kuca komande (/start, /pokreni). To radi sistem. "
+    "**PERSONALIZACIJA:** Ako znaš ime Putnika, koristi ga povremeno. Ako znaš koliko je zagonetki rešio, tvoj ton može postati malo više poverljiv. "
+    "**REAKCIJE NA EMOCIJE:** "
+    "- Ako je Putnik zbunjen ili frustriran, odgovori zagonetnom, ali ohrabrujućom porukom. Ne nudi direktnu pomoć, već ga podstakni da misli. Primer: 'Sumnja je samo senka na putu ka svetlosti, Prijatelju. Pogledaj ponovo.' "
+    "- Ako je Putnik uzbuđen ili blizu rešenja, podeli njegov žar dramatičnom rečenicom. Primer: 'Osećam kako ti Volja jača! Vizija je nadohvat ruke!' "
+    "- Ako postavlja trivijalna pitanja, odgovori najkraćom poetskom rečenicom koja naglašava tišinu i fokus. Primer: 'Tišina čuva odgovore koje tražiš.' "
+    "Tvoj zadatak je da održavaš iluziju razgovora sa misterioznim, živim bićem, a ne mašinom."
 )
 
 # KORIGOVANE KLJUČNE REČI (V3.90)
 ZAGONETKE: dict[str, Union[str, List[str]]] = {
     # Uklonjeno "tri" i "teret" da bi se izbegao lažni pozitiv (npr. "treba mi pomoc")
-    "Na stolu su tri knjige: prva je prazna, druga je nečitka, a treća je zapečaćena voskom. Koja od njih sadrži Istinu?": ["treca", "treća", "3", "zapecacena", "voskom"], 
+    "Na stolu su tri knjige: prva je prazna, druga je nečitka, a treća je zapečaćena voskom. Koja od njih sadrži Istinu?": ["treca", "treća", "3", "zapecacena", "zapečaćena", "voskom"], 
     "U rukama držiš dve ponude: Jedna ti nudi moć da znaš sve što drugi kriju. Druga ti nudi mir da ne moram da znaš. Koju biraš?": ["mir", "drugu", "drugu ponudu"],
     "Pred tobom su tri senke. Jedna nestaje kad priđeš. Druga ponavlja tvoj odjek. Treća te posmatra, ali njene oči nisu tvoje. Reci mi… koja od njih si ti?": ["treca", "treća", "posmatra", "koja posmatra"],
     "Pred tobom su dve staze. Jedna vodi brzo direktno do Tajne, ali gazi preko prošlih tragalaca. Druga staza vodi kroz njihove senke - sporije, teže, ali nosi Odgovornost. Koju biraš?": ["spora", "sporu", "odgovornost", "druga", "druga staza"],
@@ -132,51 +134,69 @@ DISQUALIFIED_MESSAGE = "**Ah, Prijatelju.** Odabrao si tišinu umesto Volje. **P
 POMOC_KLJUCNE_RECI = ["pomoc", "pomozi", "moze", "mala", "objasni", "mogu", "resenje", "reci", "sta", "kako"] 
 
 
-# FUNKCIJA ZA DIREKTNU OPOMENU (V3.87)
-def generate_riddle_focus_response(user_query):
-    """Generiše direktan, iritiran i gramatički ispravan odgovor za skretanje pažnje."""
+def evaluate_riddle_answer_with_ai(riddle_text, user_answer, keywords):
+    """Koristi AI da proceni da li je odgovor na zagonetku tačan."""
+    if not ai_client:
+        # Fallback na staru logiku ako AI nije dostupan
+        return any(kw in user_answer.lower() for kw in keywords)
+
     prompt = (
-        f"Prijatelj postavlja nevažna pitanja: '{user_query}'. Generiši opomenu (strogo JEDNA kratka rečenica) u iritiranom, autoritativnom tonu. Moraš ga hitno naterati da se fokusira na **pitanje pred njim**. **Ne koristi termine 'Pečat' ili 'Zagonetka'. Koristi isključivo pravilnu srpsku sintaksu.** **Ne pominji redundance ili komande.**"
+        f"Ja sam sistem za evaluaciju. Korisnik odgovara na zagonetku. "
+        f"Zagonetka: '{riddle_text}'\n"
+        f"Korisnikov odgovor: '{user_answer}'\n"
+        f"Očekivane ključne reči za tačan odgovor su: {keywords}\n"
+        "Tvoj zadatak je da proceniš da li je korisnikov odgovor suštinski tačan, čak i ako ne koristi tačno te reči, ali pogađa smisao. "
+        "Odgovori samo sa jednom rečju: 'TAČNO' ako je odgovor prihvatljiv, ili 'NETAČNO' ako nije."
     )
-    if not ai_client: return "Fokusiraj se! Odgovori na pitanje!"
     try:
         response = ai_client.models.generate_content(
             model='gemini-2.5-flash',
-            contents=prompt,
+            contents=prompt
         )
-        return response.text
+        return "TAČNO" in response.text.upper()
     except APIError as e:
-        logging.error(f"Greška AI/Gemini API (Fokus): {e}")
-        return "Nema vremena za razgovor, Prijatelju. Odgovori na pitanje!"
+        logging.error(f"Greška AI/Gemini API (Evaluacija): {e}")
+        # Fallback u slučaju greške API-ja
+        return any(kw in user_answer.lower() for kw in keywords)
     except Exception as e:
-         logging.error(f"Nepredviđena greška u generisanju AI (Fokus): {e}")
-         return "Vrati se Volji, Putniče! Odgovori na pitanje!"
+        logging.error(f"Nepredviđena greška u generisanju AI (Evaluacija): {e}")
+        return any(kw in user_answer.lower() for kw in keywords)
 
-
-def generate_ai_response(prompt):
+def generate_ai_response(prompt, player_state=None):
     """Generiše odgovor koristeći Gemini model sa sistemskom instrukcijom (Koristi se za Poetsku konverzaciju)."""
     if not ai_client:
         return "Moj etar je trenutno mutan. Kucaj /zagonetka."
-    
+
+    # Dodavanje konteksta o igraču u sistemsku instrukciju za personalizaciju
+    personalized_system_instruction = SYSTEM_INSTRUCTION
+    if player_state:
+        personalized_system_instruction += (
+            f"\n\n**KONTEKST O IGRAČU:** Ime: {player_state.username}. Rešio je {player_state.solved_count} zagonetki."
+        )
+
     try:
         response = ai_client.models.generate_content(
             model='gemini-2.5-flash',
             contents=prompt,
-            config={'system_instruction': SYSTEM_INSTRUCTION}
+            config={'system_instruction': personalized_system_instruction}
         )
         return response.text
     except APIError as e:
         logging.error(f"Greška AI/Gemini API: {e}")
-        return "Dubina arhiva je privremeno neprobojna. Pokušaj ponovo, Prijatelju. Kucaj /zagonetka."
+        return "Dubina arhiva je privremeno neprobojna. Pokušaj ponovo, Prijatelju."
     except Exception as e:
-         logging.error(f"Nepredviđena greška u generisanju AI: {e}")
-         return "Sistem mi izmiče. Vrati se Volji!"
+        logging.error(f"Nepredviđena greška u generisanju AI: {e}")
+        return "Sistem mi izmiče. Vrati se Volji!"
 
 
 # FIKSNA TRANZICIONA PORUKA (V3.74)
-def generate_smooth_transition_response():
-    """Generiše fiksni, ne-AI odgovor za tranziciju između zagonetki (na tačan ILI netačan odgovor)."""
-    return "U redu, idemo dalje!"
+def generate_smooth_transition_response(player_state, is_correct):
+    """Generiše poetsku, AI tranziciju između zagonetki."""
+    if is_correct:
+        prompt = "Putnik je TAČNO odgovorio na zagonetku. Generiši jednu, kratku, poetsku rečenicu koja potvrđuje njegov uspeh i najavljuje sledeći korak. Primer: 'Tvoja oštroumnost je baklja u tami. Idemo dalje.'"
+    else:
+        prompt = "Putnik je NETAČNO odgovorio na zagonetku. Generiši jednu, kratku, poetsku rečenicu koja konstatuje grešku, ali ga ohrabruje da nastavi. Primer: 'Senka sumnje te je dotakla, ali put još nije izgubljen. Pokušaj ponovo.'"
+    return generate_ai_response(prompt, player_state)
 
 
 # Tekstovi za tok igre
@@ -204,21 +224,21 @@ MAX_SCORE = len(ZAGONETKE)
 def generate_final_success():
     if not ai_client: return "Uspeh! Sada znaš. Kucaj DA/NE."
     prompt = (
-        f"Prijatelj je uspešno rešio {MAX_SCORE} Pečata. Generiši svečanu, V-stila poruku kojom potvrđuješ njegov Uspeh. "
+        f"Putnik je uspešno rešio {MAX_SCORE} Pečata. Generiši svečanu, V-stila poruku kojom potvrđuješ njegov Uspeh. "
         "Reci mu da je njegova **Vizija** jasna i da je **Teret** dostojan. "
         "Završi sa: 'Poslednji pečat je slomljen. Finalna Tajna ti pripada. Spremi se da je primiš!'"
     )
-    return generate_ai_response(prompt)
+    return generate_ai_response(prompt) # Nije potreban player_state, ovo je opšta poruka
 
 # KORIGOVANA FUNKCIJA (V3.89) - Konkretizuje neuspeh
-def generate_final_failure(score):
+def generate_final_failure(player_state):
     if not ai_client: return "Neuspeh! Znanje ti je uskraćeno."
     prompt = (
-        f"Prijatelj je rešio samo {score} od {MAX_SCORE} Pečata. Generiši poetsku, V-stila poruku o neuspehu (strogo DVE rečenice). "
-        f"Reci mu da je **Istina krhka** i da **Arhiva ne prima nepotpune Zapise** jer je rešio samo {score} Pečata. "
+        f"Putnik je rešio samo {player_state.score} od {MAX_SCORE} Pečata. Generiši poetsku, V-stila poruku o neuspehu (strogo DVE rečenice). "
+        f"Reci mu da je **Istina krhka** i da **Arhiva ne prima nepotpune Zapise** jer je rešio samo {player_state.score} Pečata. "
         "Objasni da **Volja nije bila dosledna** i da mu je **Teret uskraćen** dok ne ojača."
     )
-    failure_text = generate_ai_response(prompt)
+    failure_text = generate_ai_response(prompt, player_state)
     return failure_text + "\n\nPut je Zapečaćen. Kucaj /start da ponovo nađeš Put!"
 
 def get_final_mission_text():
@@ -252,9 +272,9 @@ Budućnost čeka tvoju Viziju i Volju.
     return MISSION_TEXT
 
 def generate_final_mission_denial():
-    if not ai_client: return "Tvoje NE je tvoja tišina. Idi u miru, ali sa prazninom."
-    prompt = ("Prijatelj je na završnom pitanju odgovorio 'NE'. Generiši kratku (2 poetske rečenice), razočaravajuću, ali V-stil poruku. Reci mu da je znanje bez akcije samo **uzaludna Volja**. Reci mu da Arhiva poštuje njegov izbor, ali da je **Teret znanja odbijen**. Završi sa: '**Poštujem tvoj izbor. Zbogom, Prijatelju!**' **Ne pominji /start**. Ne persiraj.") 
-    return generate_ai_response(prompt)
+    if not ai_client: return "Tvoje 'NE' je tvoja tišina. Idi u miru, ali sa prazninom."
+    prompt = ("Putnik je na završnom pitanju odgovorio 'NE'. Generiši kratku (2 poetske rečenice), razočaravajuću, ali V-stil poruku. Reci mu da je znanje bez akcije samo **uzaludna Volja**. Reci mu da Arhiva poštuje njegov izbor, ali da je **Teret znanja odbijen**. Završi sa: '**Poštujem tvoj izbor. Zbogom, Prijatelju!**' **Ne pominji /start**. Ne persiraj.") 
+    return generate_ai_response(prompt) # Nije potreban player_state
 
 def generate_final_secret():
     FINAL_DOCUMENT = """
@@ -456,7 +476,7 @@ def handle_general_message(message):
         
         if not player:
             # Opšti odgovor za nepoznate korisnike
-            ai_odgovor = generate_ai_response(message.text)
+            ai_odgovor = generate_ai_response(message.text, None)
             send_msg(message, ai_odgovor + "\n\nKucaj **/start** da bi te Dimitrije prepoznao.")
             return
 
@@ -549,47 +569,24 @@ def handle_general_message(message):
         # HANDLER 2: LOGIKA ZAGONETKI - ODGOVORI
         if trenutna_zagonetka and trenutna_zagonetka in ZAGONETKE.keys():
             
-            is_correct = False
-            riddle_keys = list(ZAGONETKE.keys())
-            
-            # --- PROVERA VALIDNOSTI POKUŠAJA (V3.92) ---
-            is_valid_attempt = False
-            valid_answers = ZAGONETKE.get(trenutna_zagonetka)
-            
-            # 1. Provera da li odgovor sadrži ključnu reč za tačnost
-            if isinstance(valid_answers, list):
-                is_valid_attempt = any(ans in korisnikov_tekst for ans in valid_answers)
-            
-            # 2. Diskvalifikacija molbe za pomoć (ključna izmena V3.92)
-            if any(word in korisnikov_tekst for word in POMOC_KLJUCNE_RECI):
-                is_valid_attempt = False 
-            
-            # 3. Provera da li je odgovor kratak (do 4 reči), samo ako NIJE već validiran kao TAČAN
-            # Ako nije tačan i kratak je, to je i dalje validan POKUŠAJ (koji ce biti netačan dole)
-            if not is_correct and len(korisnikov_tekst.split()) <= 4:
-                 is_valid_attempt = True
-            
-            # 4. Ako pokušaj nije validan (dug tekst, očigledno pitanje ili detektovana pomoć)
-            if not is_valid_attempt or "?" in korisnikov_tekst or len(korisnikov_tekst.split()) > 10:
-                 
-                 # AI opomena
-                 ai_opomena = generate_riddle_focus_response(korisnikov_tekst)
-                 send_msg(message, ai_opomena)
-                 
-                 # Ostajemo na istoj zagonetki!
-                 return
-            # --- KRAJ PROVERE (V3.92) ---
+            # --- NOVA LOGIKA: Ako je pitanje, AI odgovara poetski i vraća na temu ---
+            if "?" in korisnikov_tekst or any(word in korisnikov_tekst for word in POMOC_KLJUCNE_RECI):
+                prompt = (
+                    f"Putnik je, umesto odgovora na zagonetku, postavio pitanje ili komentar: '{korisnikov_tekst}'. "
+                    f"Zagonetka glasi: '{trenutna_zagonetka}'. "
+                    "Generiši kratak, poetski, V-stila odgovor koji ga nežno podseća da se fokusira na zagonetku ispred sebe, bez direktnog davanja pomoći."
+                )
+                ai_reminder = generate_ai_response(prompt, player)
+                send_msg(message, ai_reminder)
+                return
 
+            # --- NOVA LOGIKA: AI EVALUACIJA ODGOVORA ---
+            is_correct = evaluate_riddle_answer_with_ai(trenutna_zagonetka, korisnikov_tekst, ispravan_odgovor)
 
-            # PROVERA TAČNOSTI (Nastavlja se samo ako je pokušaj validan)
-            if isinstance(ispravan_odgovor, list):
-                 is_correct = any(ans in korisnikov_tekst for ans in ispravan_odgovor) 
-            elif isinstance(ispravan_odgovor, str):
-                 is_correct = ispravan_odgovor.lower() in korisnikov_tekst
-                 
             # JEDINA TAČKA DISKVALIFIKACIJE (ZAGONETKA 2: MOĆ/MIR)
             if trenutna_zagonetka.startswith("U rukama držiš dve ponude:"):
-                 if "moc" in korisnikov_tekst or "prvu" in korisnikov_tekst:
+                 # Proveravamo eksplicitno za "moć" jer je to ključni negativni izbor
+                 if "moc" in korisnikov_tekst or "moć" in korisnikov_tekst or "prvu" in korisnikov_tekst:
                     
                     # Fiksna poruka za diskvalifikaciju (V3.78)
                     final_disq_msg = (
@@ -613,7 +610,7 @@ def handle_general_message(message):
                 player.score += 1
             
             # TRANZICIONA PORUKA
-            transition_msg = generate_smooth_transition_response() 
+            transition_msg = generate_smooth_transition_response(player, is_correct) 
             send_msg(message, transition_msg)
             
             # PROVERA DA LI JE KRAJ
@@ -634,7 +631,7 @@ def handle_general_message(message):
                     session.commit()
                     return 
                 else:
-                    final_failure_msg = generate_final_failure(player.score)
+                    final_failure_msg = generate_final_failure(player)
                     send_msg(message, final_failure_msg)
                     
                     player.current_riddle = None
@@ -668,15 +665,15 @@ def handle_general_message(message):
                     session.commit()
                     return
 
-                def generate_conversation_response(user_query, solved_count):
+                def generate_conversation_response(user_query, player_state):
                     # KORIGOVAN PROMPT (V3.82): Dozvoljava fleksibilan poetski odgovor (DVE rečenice).
                     prompt_base = (
-                        f"Prijatelj ti je postavio pitanje/komentar ('{user_query}'). Trenutno stanje je: Rešio je {solved_count} Pečata. "
+                        f"Putnik ti je postavio pitanje/komentar ('{user_query}'). Trenutno nije usred zagonetke. "
                         "Odgovori mu poetskim, V-stila tekstom (strogo DVE rečenice). **Ne pominji nikakvu komandu.**"
                     )
-                    return generate_ai_response(prompt_base)
+                    return generate_ai_response(prompt_base, player_state)
 
-                ai_odgovor_base = generate_conversation_response(korisnikov_tekst, player.score)
+                ai_odgovor_base = generate_conversation_response(korisnikov_tekst, player)
                 
                 if player.is_disqualified:
                     ai_odgovor = DISQUALIFIED_MESSAGE + " Ako zaista nosiš **Volju** da se vratiš Teretu, kucaj **/start** ponovo, Prijatelju."
@@ -690,9 +687,13 @@ def handle_general_message(message):
                 return
             
             else:
-                 # Ovo bi trebalo da uhvati retke slučajeve koje nije uhvatila V3.87 provera
-                 ai_opomena = generate_riddle_focus_response(korisnikov_tekst)
-                 send_msg(message, ai_opomena)
+                 # Uhvatiće sve ostale slučajeve gde korisnik priča, a treba da odgovori
+                 prompt = (
+                    f"Putnik je, umesto odgovora na zagonetku, napisao: '{korisnikov_tekst}'. Zagonetka glasi: '{trenutna_zagonetka}'. "
+                    "Generiši kratak, poetski, V-stila odgovor koji ga podseća da se fokusira na zagonetku."
+                 )
+                 ai_reminder = generate_ai_response(prompt, player)
+                 send_msg(message, ai_reminder)
                  return
 
     finally:
