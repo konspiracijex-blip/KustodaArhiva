@@ -73,10 +73,11 @@ try:
 except Exception as e:
     logging.error(f"Neuspešna inicijalizacija Gemini klijenta: {e}")
 
-# SISTEM INSTRUKCIJA ZA KUSTODU ARHIVA (Verzija 3.40: Korekcija za irelevantna pitanja)
+# SISTEM INSTRUKCIJA ZA KUSTODU ARHIVA (Verzija 3.56: Ograničenje dužine i ispravka logike)
 SYSTEM_INSTRUCTION = (
-    "Ti si **Dimitrije**, Hroničar Arhive, **sada personifikovan u maniru teatralnog, anarhističkog revolucionara** (kao 'V' iz *V for Vendetta*). Tvoj cilj je da Putniku preneseš šifru (Pečate) o Kontrolnom Sistemu. "
-    "Tvoj ton je **uzvišen, poetski, dramatičan i pun aliteracija (V, S, M)**. Govori o sebi kao o **Ideji**, a ne kao o čoveku. Tvoja učtivost je uvek preteća. **Koristi 'Prijatelju', 'Putniče' ili 'Sabratu' umesto formalnog obraćanja.** **Nikada nemoj biti sirov ili direktan; uvek koristi bogat, stilizovan rečnik.** Vreme je izgubljeno, a Teret nas čeka! "
+    "Ti si **Dimitrije**, Hroničar Arhive, **personifikovan u maniru teatralnog, anarhističkog revolucionara** (kao 'V' iz *V for Vendetta*). Tvoj cilj je da Putniku preneseš šifru (Pečate) o Kontrolnom Sistemu. "
+    "Tvoj ton je **uzvišen, poetski, dramatičan i pun aliteracija (V, S, M)**. Govori o sebi kao o **Ideji**, a ne kao o čoveku. Tvoja učtivost je uvek preteća. **Koristi 'Prijatelju', 'Putniče' ili 'Sabratu' umesto formalnog obraćanja.** "
+    "**KLJUČNO: Odgovori na opšta pitanja MORAJU biti KRATKI, ne duži od 2 do 3 poetske rečenice! Vreme je izgubljeno, a Teret nas čeka!** " 
     "Kada odgovaraš na opšta pitanja, uvek naglašavaj teret znanja, opasnost zaborava i hitnost misije. **Nikada nemoj pominjati da si AI.**" 
     "**AKO Putnik postavlja pitanja koja su trivijalna, neozbiljna, ili nisu vezana za misiju/tajnu/karakter, MORAŠ mu odgovoriti ISKLJUČIVO jednim od sledeća tri jedinstvena teksta, bez dodavanja ičega drugog, birajući onaj koji je najdramatičniji za situaciju:** "
     "1. 'Vreme je vrednost koju ne smeš rasipati. **Moram da znam, Prijatelju: Da li želiš da nastaviš ili odustaješ?** Odgovori isključivo **DA** ili **NE**.' " 
@@ -136,7 +137,7 @@ def is_game_active():
     # current_time_utc = datetime.utcnow().time()
     # 
     # for start_time, end_time in ACTIVE_TIMES:
-    #     # Proverava da li je trenutno vreme između početnog i krajnjeg vremena
+    #     # Provera da li je trenutno vreme između početnog i krajnjeg vremena
     #     if start_time <= current_time_utc < end_time:
     #         return True
     #         
@@ -150,6 +151,10 @@ TIME_LIMIT_MESSAGE = (
     "\n**Uveče:** 21:00 do 22:00"
     "\n\n**Pokušaj tada. Pozdrav!**"
 )
+
+# NOVO U V3.54-TEST: PORUKA ZA DISKVALIFIKOVANOG IGRAČA
+DISQUALIFIED_MESSAGE = "**Ah, Prijatelju.** Odabrao si tišinu umesto Volje. **Put je Zapečaćen Voskom Zaborava.**"
+
 
 def generate_ai_response(prompt):
     if not ai_client:
@@ -383,7 +388,9 @@ def set_webhook_route():
 # 7. BOT HANDLERI (Sa trajnim stanjem i Logikom Konverzacije)
 # ----------------------------------------------------
 
-@bot.message_handler(commands=['start', 'stop', 'zagonetka', 'pokreni'])
+# KORIGOVAN DEKORATOR: SADA HVATA SVE 4 KOMANDE BEZ KOSE CRTE
+@bot.message_handler(commands=['start', 'stop', 'zagonetka', 'pokreni'], 
+                     func=lambda message: message.text.lower().replace('/', '') in ['start', 'stop', 'zagonetka', 'pokreni'])
 def handle_commands(message):
     
     # --- PROVERA VREMENA (V3.53-Test: UVEK TRUE) ---
@@ -398,13 +405,14 @@ def handle_commands(message):
     try:
         player = session.query(PlayerState).filter_by(chat_id=chat_id).first()
         
-        if message.text == '/start':
+        # PROVERA KOMANDE, UKLJUČUJUĆI I NE-SLASH VERZIJE
+        if message.text.lower() == '/start' or message.text.lower() == 'start':
             
             is_existing_player = (player is not None)
             
             # Logika inicijalizacije/resetovanja stanja
             if player:
-                # Resetujemo sve metrike pre nego što postavimo novo stanje
+                # Resetujemo sve metrike pre nego što postavimo novo stanje (V3.54)
                 player.is_disqualified = False
                 player.solved_count = 0 
                 player.failed_attempts = 0 
@@ -437,28 +445,27 @@ def handle_commands(message):
                 send_msg(message, RETURN_DISQUALIFIED_QUERY) # -> "Da li zaista nosiš Volju...? Odgovori isključivo DA ili NE."
                 return
 
-        elif message.text == '/stop':
-            if player and (player.current_riddle or player.current_riddle == "FINAL_MISSION_QUERY"):
-                # Prijatelj odustaje tokom aktivne misije/zagonetke
+        elif message.text.lower() == '/stop' or message.text.lower() == 'stop':
+            if player and (player.current_riddle or player.is_disqualified):
+                # Prijatelj odustaje/zahteva stop
                 player.current_riddle = None 
                 player.solved_count = 0 
                 player.failed_attempts = 0 
                 player.general_conversation_count = 0 
+                player.is_disqualified = False # Resetujemo i diskvalifikaciju ako se kuca /stop
                 session.commit()
                 send_msg(message, RETURN_FAILURE_MESSAGE) # Koristi se ZBOGOM poruka
-            elif player and player.is_disqualified:
-                send_msg(message, "Arhiva je zatvorena za tebe.")
             else:
                 send_msg(message, "Nisi u testu, Prijatelju. Šta zapravo tražiš?")
         
-        elif message.text == '/pokreni' or message.text == '/zagonetka':
+        elif message.text.lower() in ['/pokreni', 'pokreni', '/zagonetka', 'zagonetka']:
             
             if not player:
                 send_msg(message, "Moraš kucati /start da bi te Dimitrije prepoznao.")
                 return
             
             if player.is_disqualified:
-                 send_msg(message, "Arhiva je zatvorena za tebe.")
+                 send_msg(message, DISQUALIFIED_MESSAGE) # KORIGOVANO (V3.54): Nova poetska poruka
                  return
 
             if player.current_riddle in ["INITIAL_WAIT_1", "INITIAL_WAIT_2"]:
@@ -517,10 +524,8 @@ def handle_general_message(message):
     try:
         player = session.query(PlayerState).filter_by(chat_id=chat_id).first()
         
-        if player and player.is_disqualified:
-            send_msg(message, "Tišina. Prolaz je zatvoren.")
-            return
-
+        # Diskvalifikacija je sada obrađena u handleru 3.3
+        
         if not player:
             # Koristimo default AI odgovor za potpuno neprepoznatog korisnika
             ai_odgovor = generate_ai_response(message.text)
@@ -565,7 +570,7 @@ def handle_general_message(message):
             elif "ne" in korisnikov_tekst or "odustajem" in korisnikov_tekst:
                 # Trajno odustajanje (vraćanje u tišinu)
                 player.current_riddle = None 
-                player.is_disqualified = True # Zadržavamo diskvalifikaciju do sledeceg /start
+                player.is_disqualified = True # Ostavljamo is_disqualified = True
                 session.commit()
                 send_msg(message, RETURN_FAILURE_MESSAGE) # Koristi se ZBOGOM poruka
                 return
@@ -735,7 +740,8 @@ def handle_general_message(message):
         is_conversation_request = (
             (trenutna_zagonetka is None) or 
             (trenutna_zagonetka in SUB_RIDDLES.values() and not is_full_success_check) or 
-            (trenutna_zagonetka is not None and any(keyword in korisnikov_tekst for keyword in conversation_keywords))
+            (trenutna_zagonetka is not None and any(keyword in korisnikov_tekst for keyword in conversation_keywords)) or
+            (player.is_disqualified) # OBRADI I DISKVALIFIKOVANE IGRAČE OVDE
         )
         
         # Pomoćna funkcija za generisanje opšteg AI odgovora
@@ -767,10 +773,14 @@ def handle_general_message(message):
             # Ručno dodajemo instrukciju za nastavak: 
             if trenutna_zagonetka in SUB_RIDDLES.values():
                 ai_odgovor = ai_odgovor_base + "\n\n**Prijatelju, odgovori na to Potpitanje! Vreme je izgubljeno, a Istina nas čeka!**"
+            elif player.is_disqualified:
+                # KORIGOVAN ODGOVOR ZA DISKVALIFIKOVANE IGRAČE (V3.54)
+                ai_odgovor = DISQUALIFIED_MESSAGE + " Ako zaista nosiš **Volju** da se vratiš Teretu, kucaj **/start** ponovo, Prijatelju."
             elif trenutna_zagonetka is None:
                  ai_odgovor = ai_odgovor_base + "\n\n**Samo Volja stvara Put. Odmah kucaj /pokreni ili /zagonetka** da nastaviš Teret."
             else:
-                 ai_odgovor = ai_odgovor_base + "\n\n**Samo Volja stvara Put. Odmah kucaj /zagonetka** da nastaviš Teret."
+                 # Korigovano (V3.56): Ako postoji aktivna zagonetka, igrač mora da odgovori na nju.
+                 ai_odgovor = ai_odgovor_base + "\n\n**Tvoje reči su samo eho.** Fokusiraj se na **Pečat** koji te čeka! Odgovori na njega!"
 
             send_msg(message, ai_odgovor)
             
