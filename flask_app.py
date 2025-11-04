@@ -88,6 +88,7 @@ SYSTEM_INSTRUCTION = (
     "- Ako je Putnik zbunjen ili frustriran, odgovori zagonetnom, ali ohrabrujućom porukom. Ne nudi direktnu pomoć, već ga podstakni da misli. Primer: 'Sumnja je samo senka na putu ka svetlosti, Prijatelju. Pogledaj ponovo.' "
     "- Ako je Putnik uzbuđen ili blizu rešenja, podeli njegov žar dramatičnom rečenicom. Primer: 'Osećam kako ti Volja jača! Vizija je nadohvat ruke!' "
     "- Ako postavlja trivijalna pitanja, odgovori najkraćom poetskom rečenicom koja naglašava tišinu i fokus. Primer: 'Tišina čuva odgovore koje tražiš.' "
+    "**LJUDSKA ILUZIJA:** Ako Putnik pokuša da te 'provali' pitanjima poput 'jesi li ti bot?' ili 'jesi li veštačka inteligencija?', nikada ne poriči direktno. Umesto toga, odgovori zagonetno i filozofski o prirodi postojanja. Primer: 'Jesam li ja samo skup reči, ili si ti samo skup percepcija? Pitanje nije šta sam ja, već šta si ti spreman da vidiš.' "
     "Tvoj zadatak je da održavaš iluziju razgovora sa misterioznim, živim bićem, a ne mašinom."
 )
 
@@ -112,6 +113,7 @@ def send_msg(message, text):
     try:
         bot.send_chat_action(message.chat.id, 'typing')
         time.sleep(1.0) 
+        time.sleep(random.uniform(1.2, 2.8)) # Simulacija "ljudskog" vremena za kucanje
         bot.send_message(message.chat.id, text, parse_mode='Markdown')
     except Exception as e:
         logging.error(f"Greška pri slanju poruke (Chat ID: {message.chat.id}): {e}")
@@ -132,6 +134,8 @@ DISQUALIFIED_MESSAGE = "**Ah, Prijatelju.** Odabrao si tišinu umesto Volje. **P
 
 # *** KLJUČNA IZMENA V3.92: Diskvalifikacione reči za Pomoć
 POMOC_KLJUCNE_RECI = ["pomoc", "pomozi", "moze", "mala", "objasni", "mogu", "resenje", "reci", "sta", "kako"] 
+# *** KLJUČNA IZMENA V3.93: Proširene reči za pomoć i pitanja
+POMOC_KLJUCNE_RECI = ["pomoc", "pomozi", "moze", "mala", "objasni", "mogu", "resenje", "reci", "sta", "kako", "koje", "koja", "koji", "ponovi"] 
 
 
 def evaluate_riddle_answer_with_ai(riddle_text, user_answer, keywords):
@@ -576,6 +580,18 @@ def handle_general_message(message):
                     f"Zagonetka glasi: '{trenutna_zagonetka}'. "
                     "Generiši kratak, poetski, V-stila odgovor koji ga nežno podseća da se fokusira na zagonetku ispred sebe, bez direktnog davanja pomoći."
                 )
+                # --- IZMENA V3.94: Inteligentno ponavljanje zagonetke ---
+                if "ponovi" in korisnikov_tekst:
+                    prompt = (
+                        f"Putnik je zatražio da ponoviš zagonetku. Uvedi ponavljanje jednom kratkom, poetskom rečenicom u tvom stilu, a zatim ponovi zagonetku tačno kako glasi. "
+                        f"Zagonetka je: '{trenutna_zagonetka}'"
+                    )
+                else:
+                    prompt = (
+                        f"Putnik je, umesto odgovora na zagonetku, postavio pitanje ili komentar: '{korisnikov_tekst}'. "
+                        f"Zagonetka glasi: '{trenutna_zagonetka}'. "
+                        "Generiši kratak, poetski, V-stila odgovor koji ga nežno podseća da se fokusira na zagonetku ispred sebe, bez direktnog davanja pomoći i bez ponavljanja zagonetke."
+                    )
                 ai_reminder = generate_ai_response(prompt, player)
                 send_msg(message, ai_reminder)
                 return
