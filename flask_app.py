@@ -14,6 +14,7 @@ from typing import List, Union
 from sqlalchemy import create_engine, Column, Integer, String, Boolean
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
+from datetime import datetime, time as dt_time 
 
 # ----------------------------------------------------
 # 2. RENDER KONFIGURACIJA & BAZE PODATAKA
@@ -116,6 +117,32 @@ def send_msg(message, text):
     except Exception as e:
         logging.error(f"Greška pri slanju poruke: {e}")
 
+# VREMENSKI PROZORI AKTIVNOSTI (9-10h i 21-22h UTC)
+# Vreme je fiksirano u UTC da bi server radio konzistentno
+ACTIVE_TIMES = [
+    (dt_time(9, 0), dt_time(10, 0)),
+    (dt_time(21, 0), dt_time(22, 0))
+]
+
+def is_game_active():
+    """Proverava da li je trenutno UTC vreme unutar definisanih prozora."""
+    current_time_utc = datetime.utcnow().time()
+    
+    for start_time, end_time in ACTIVE_TIMES:
+        # Proverava da li je trenutno vreme između početnog i krajnjeg vremena
+        if start_time <= current_time_utc < end_time:
+            return True
+            
+    return False
+
+# FIKSNI ODGOVOR VAN VREMENA (Konačan V3.48)
+TIME_LIMIT_MESSAGE = (
+    "**Prijatelju, trenutno sam zauzet!** Moji kanali su privremeno blokirani. "
+    "Biću ponovo na vezi u sledećim terminima: "
+    "\n\n**Pre podne:** 09:00 do 10:00 (Lokalno vreme Arhive) "
+    "\n**Uveče:** 21:00 do 22:00 (Lokalno vreme Arhive)"
+    "\n\n**Pokušaj tada. Pozdrav!**"
+)
 
 def generate_ai_response(prompt):
     if not ai_client:
@@ -132,12 +159,10 @@ def generate_ai_response(prompt):
         logging.error(f"Greška AI/Gemini API: {e}")
         return "Dubina arhiva je privremeno neprobojna. Pokušaj ponovo, Prijatelju. Kucaj /zagonetka."
 
-# --- FIKSNI UVODNI TEKST DIJALOG (Korekcija V3.42) ---
+# --- FIKSNI UVODNI TEKST DIJALOG ---
 INITIAL_QUERY_1 = "Da li vidiš poruku?"
 INITIAL_QUERY_2 = "Da li sada vidiš poruku?"
-# KORIGOVAN TEKST ZA POVRATAK (V3.39 - Jače i kraće)
 RETURN_DISQUALIFIED_QUERY = "**Vratio si se iz tišine! Ja te pamtim, Prijatelju.** Da li zaista nosiš **Volju** da nastaviš i poneseš **Teret**? Odgovori isključivo **DA** ili **NE**."
-# KORIGOVANO (V3.42): Kraća poruka bez /pokreni poziva, odmah sledi zagonetka
 RETURN_SUCCESS_MESSAGE = "**Ah, drago mi je! Vreme je dragoceno, pa da krenemo!**"
 RETURN_FAILURE_MESSAGE = "**Poštujem tvoju Volju, Prijatelju. Znanje je Teret koji nisi spreman da poneseš. Zbogom.**" 
 
@@ -254,7 +279,7 @@ Ono je iskra u tami neznanja, alat za one koji traže.
 * Pravi Savez je Ideja, ne organizacija.
 * Traži one koji razumeju simboliku i mogu da ponesu Teret.
 ## Izazivaj Kontrolni sistem
-* Prepoznaj i razotkrij lažne autoritete, lažne poruke i kontrolu.
+* Prepoznaj i razotkri lažne autoritete, lažne poruke i kontrolu.
 * Svaki proboj u percepciji oslobađa duhove.
 * Budi strpljiv, ali nemoj biti miran.
 * Promene se ne dešavaju preko noći.
@@ -295,7 +320,7 @@ Ako istina dospe u pogrešne ruke… svet koji vidiš postaće večna Orvelovska
 3. **NADZOR I FINANSIJSKA KONTROLA (DUBOKA DRŽAVA)**
     * KOMPANIJE: BlackRock, Vanguard, State Street
     * TAJNA DRUŠTVA: Slobodni Zidari, Iluminati
-    * AGENCIJE/KOMPLEKSI: CIA, Mosad, Vojno-industrijski kompleks
+    * AGENSIJE/KOMPLEKSI: CIA, Mosad, Vojno-industrijski kompleks
     * KRIMINAL: Karteli, Crno tržište
 4. **KONTROLNI SISTEMI**
     * FINANSIJE: MMF, Svetska banka, Kriptovalute, Velika tehnologija
@@ -348,6 +373,14 @@ def set_webhook_route():
 
 @bot.message_handler(commands=['start', 'stop', 'zagonetka', 'pokreni'])
 def handle_commands(message):
+    
+    # --- PROVERA VREMENA (V3.48) ---
+    # Svi zahtevi, uključujući /start, moraju poštovati vremenski prozor
+    if not is_game_active():
+        send_msg(message, TIME_LIMIT_MESSAGE)
+        return
+    # --- KRAJ PROVERE VREMENA ---
+    
     chat_id = str(message.chat.id)
     session = Session() 
 
@@ -356,7 +389,6 @@ def handle_commands(message):
         
         if message.text == '/start':
             
-            # Proveravamo da li igrač već postoji u bazi (KOREKCIJA V3.43)
             is_existing_player = (player is not None)
             
             # Logika inicijalizacije/resetovanja stanja
@@ -460,6 +492,13 @@ def handle_commands(message):
 
 @bot.message_handler(func=lambda message: True)
 def handle_general_message(message):
+    
+    # --- PROVERA VREMENA (V3.48) ---
+    if not is_game_active():
+        send_msg(message, TIME_LIMIT_MESSAGE)
+        return
+    # --- KRAJ PROVERE VREMENA ---
+    
     chat_id = str(message.chat.id)
     korisnikov_tekst = message.text.strip().lower()
     session = Session()
