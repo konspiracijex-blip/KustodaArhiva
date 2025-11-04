@@ -374,6 +374,16 @@ def handle_commands(message):
         
         if message.text.lower() == '/start' or message.text.lower() == 'start':
             
+            # --- PRIVREMENI KOD ZA MIGRACIJU ŠEME ---
+            # Proverava da li tabela ima novu kolonu, ako ne, briše je i pravi ponovo.
+            from sqlalchemy import inspect
+            inspector = inspect(Engine)
+            if 'player_states' in inspector.get_table_names() and 'conversation_history' not in [c['name'] for c in inspector.get_columns('player_states')]:
+                PlayerState.__table__.drop(Engine)
+                Base.metadata.create_all(Engine)
+                logging.warning("!!! Stara tabela 'player_states' je obrisana i kreirana je nova zbog promene šeme. !!!")
+            # --- KRAJ PRIVREMENOG KODA ---
+
             is_existing_player = (player is not None)
             
             if player:
