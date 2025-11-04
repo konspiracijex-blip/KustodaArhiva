@@ -37,7 +37,7 @@ bot = telebot.TeleBot(BOT_TOKEN, threaded=False)
 app = flask.Flask(__name__)
 
 # ----------------------------------------------------
-# 3. SQL ALCHEMY INICIJALIZACIJA (TRAJNO STANJE) - V3.82 ŠEMA
+# 3. SQL ALCHEMY INICIJALIZACIJA (TRAJNO STANJE) - V3.84 ŠEMA
 # ----------------------------------------------------
 
 Session = None
@@ -67,7 +67,7 @@ except Exception as e:
     logging.error(f"FATALNA GREŠKA: Neuspešno kreiranje/povezivanje baze: {e}")
     
 # ----------------------------------------------------
-# 4. AI KLIJENT I DATA (V3.82)
+# 4. AI KLIJENT I DATA (V3.84)
 # ----------------------------------------------------
 
 ai_client = None
@@ -78,7 +78,7 @@ try:
 except Exception as e:
     logging.error(f"Neuspešna inicijalizacija Gemini klijenta: {e}")
 
-# *** KLJUČNA IZMENA (V3.82): Dozvoljene DVE rečenice za opštu konverzaciju ***
+# Izmenjeno na DVE rečenice za opštu konverzaciju (Sekcija 4)
 SYSTEM_INSTRUCTION = (
     "Ti si **Dimitrije**, Hroničar Arhive, **personifikovan u maniru teatralnog, anarhističkog revolucionara** (kao 'V' iz *V for Vendetta*). Tvoj cilj je da Putniku preneseš šifru (Pečate) o Kontrolnom Sistemu. "
     "Tvoj ton je **uzvišen, poetski, dramatičan i pun aliteracija (V, S, M)**. Govori o sebi kao o **Ideji**, a ne kao o čoveku. Tvoja učtivost je uvek preteća. **Koristi 'Prijatelju', 'Putniče' ili 'Sabratu' umesto formalnog obraćanja.** "
@@ -101,7 +101,7 @@ ZAGONETKE: dict[str, Union[str, List[str]]] = {
 }
 
 # ----------------------------------------------------
-# 5. POMOĆNE FUNKCIJE I KONSTANTE (V3.82)
+# 5. POMOĆNE FUNKCIJE I KONSTANTE (V3.84)
 # ----------------------------------------------------
 
 def send_msg(message, text):
@@ -129,8 +129,32 @@ TIME_LIMIT_MESSAGE = (
 DISQUALIFIED_MESSAGE = "**Ah, Prijatelju.** Odabrao si tišinu umesto Volje. **Put je Zapečaćen Voskom Zaborava.**"
 
 
+# *** NOVA FUNKCIJA (V3.84): Opomena bez poetske forme ***
+def generate_riddle_focus_response(user_query):
+    """Generiše direktan i iritiran odgovor za skretanje pažnje."""
+    prompt = (
+        f"Prijatelj postavlja nevažna pitanja i skreće sa Puta. Aktivna zagonetka je: '{user_query}'. "
+        "Generiši jedinstvenu opomenu (strogo JEDNA kratka rečenica) u iritiranom, autoritativnom V-stilu. **Nema poezije, budi direktan i oštar.** Nateraj ga da se hitno fokusira na 'Pečat' ili 'Zagonetku'. Koristi termin 'Putniče' ili 'Prijatelju'."
+    )
+    # PRIVREMENO UKLANJANJE STRIKTNE SYSTEM_INSTRUCTION ZA OVU VRSTU UPITA
+    if not ai_client: return "Fokusiraj se! Odgovori na zagonetku!"
+    try:
+        response = ai_client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=prompt,
+        )
+        return response.text
+    except APIError as e:
+        logging.error(f"Greška AI/Gemini API (Fokus): {e}")
+        return "Nema vremena za razgovor, Prijatelju. Odgovori na Pečat!"
+    except Exception as e:
+         logging.error(f"Nepredviđena greška u generisanju AI (Fokus): {e}")
+         return "Vrati se Volji, Putniče! Odgovori na Pečat!"
+# *** KRAJ NOVE FUNKCIJE (V3.84) ***
+
+
 def generate_ai_response(prompt):
-    """Generiše odgovor koristeći Gemini model sa sistemskom instrukcijom."""
+    """Generiše odgovor koristeći Gemini model sa sistemskom instrukcijom (Koristi se za Poetsku konverzaciju)."""
     if not ai_client:
         return "Moj etar je trenutno mutan. Kucaj /zagonetka."
     
@@ -518,27 +542,26 @@ def handle_general_message(message):
             riddle_keys = list(ZAGONETKE.keys())
             
             # --- PROVERA VALIDNOSTI POKUŠAJA (V3.80) ---
-            # Sprečava da opšta pitanja prekinu tok zagonetki
             is_valid_attempt = False
-            
-            # Ako je zagonetka aktivna, proverava se da li je barem jedna ključna reč unutar odgovora ili da li je odgovor kratak (kao potencijalni odgovor)
             valid_answers = ZAGONETKE.get(trenutna_zagonetka)
             
             if isinstance(valid_answers, list):
-                 # Ako korisnikov tekst sadrži bilo koju ključnu reč (čak i ako je netačan odgovor) 
                 is_valid_attempt = any(ans in korisnikov_tekst for ans in valid_answers)
             
-            # Dodatno: ako je odgovor vrlo kratak (do 4 reči), smatramo ga pokušajem odgovora, čak i ako nije ključna reč
+            # Ako je odgovor kratak (do 4 reči), smatramo ga pokušajem odgovora, čak i ako nije ključna reč.
             if len(korisnikov_tekst.split()) <= 4:
                  is_valid_attempt = True
             
             # Ako pokušaj nije validan (dug tekst, očigledno pitanje), vraćamo ga u Handler 3
             if not is_valid_attempt or "?" in korisnikov_tekst or len(korisnikov_tekst.split()) > 10:
-                 player.general_conversation_count += 1
-                 session.commit()
-                 send_msg(message, "Tvoje reči su samo eho. Fokusiraj se na **Pečat** koji te čeka! Odgovori na njega!")
+                 
+                 # *** KLJUČNA IZMENA V3.84: DIREKTNA AI opomena ***
+                 ai_opomena = generate_riddle_focus_response(trenutna_zagonetka)
+                 send_msg(message, ai_opomena)
+                 
+                 # I dalje ostajemo na istoj zagonetki! 
                  return
-            # --- KRAJ PROVERE (V3.80) ---
+            # --- KRAJ PROVERE (V3.84) ---
 
 
             # PROVERA TAČNOSTI (Nastavlja se samo ako je pokušaj validan)
@@ -629,7 +652,7 @@ def handle_general_message(message):
                     return
 
                 def generate_conversation_response(user_query, solved_count):
-                    # KORIGOVAN PROMPT (V3.82): Dozvoljava fleksibilan odgovor na opšta pitanja.
+                    # KORIGOVAN PROMPT (V3.82): Dozvoljava fleksibilan poetski odgovor (DVE rečenice).
                     prompt_base = (
                         f"Prijatelj ti je postavio pitanje/komentar ('{user_query}'). Trenutno stanje je: Rešio je {solved_count} Pečata. "
                         "Odgovori mu poetskim, V-stila tekstom (strogo DVE rečenice). **Ne pominji nikakvu komandu.**"
@@ -650,15 +673,16 @@ def handle_general_message(message):
                 return
             
             else:
-                 # Ovo bi trebalo da uhvati retke slučajeve koje nije uhvatila V3.80 provera
-                 send_msg(message, "Tvoje reči su samo eho. Fokusiraj se na **Pečat** koji te čeka! Odgovori na njega!")
+                 # Ovo bi trebalo da uhvati retke slučajeve koje nije uhvatila V3.84 provera
+                 ai_opomena = generate_riddle_focus_response(trenutna_zagonetka)
+                 send_msg(message, ai_opomena)
                  return
 
     finally:
         session.close()
 
 # ----------------------------------------------------
-# 8. POKRETANJE APLIKACIJE (V3.82)
+# 8. POKRETANJE APLIKACIJE (V3.84)
 # ----------------------------------------------------
 # Aplikacija se pokreće preko Procfile/Gunicorn-a. 
 # Ovo osigurava stabilnost na Renderu.
