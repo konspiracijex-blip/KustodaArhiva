@@ -278,6 +278,7 @@ Ono je iskra u tami neznanja, alat za one koji traže.
 * Poveži se sa onima koji vide Viziju.
 * Pravi Savez je Ideja, ne organizacija.
 * Traži one koji razumeju simboliku i mogu da ponesu Teret.
+* Pravi Savez je Ideja, ne organizacija.
 ## Izazivaj Kontrolni sistem
 * Prepoznaj i razotkri lažne autoritete, lažne poruke i kontrolu.
 * Svaki proboj u percepciji oslobađa duhove.
@@ -339,19 +340,28 @@ Ovi slojevi moći formiraju strukturu koja je spremna da zadrži kontrolu nad č
 
 
 # ----------------------------------------------------
-# 6. WEBHOOK RUTE
+# 6. WEBHOOK RUTE (Korigovano V3.49)
 # ----------------------------------------------------
 
 @app.route('/' + BOT_TOKEN, methods=['POST'])
 def webhook():
     if flask.request.headers.get('content-type') == 'application/json':
         json_string = flask.request.get_data().decode('utf-8')
-        update = telebot.types.Update.from_json(json_string)
         
         if BOT_TOKEN == "DUMMY:TOKEN_FAIL":
             return "Bot nije konfigurisan. Token nedostaje."
             
-        bot.process_new_updates([update])
+        # KOREKCIJA V3.49: Ispravan način parsiranja JSON-a u Update objekat
+        try:
+             update = telebot.types.Update.de_json(json_string) 
+        except Exception as e:
+             logging.error(f"Greška pri parsiranju JSON-a (de_json): {e}")
+             return '' # Vraćamo prazan odgovor da ne bi Telegram ponavljao zahtev
+             
+        # Proveravamo da li je poruka validna pre obrade
+        if update.message or update.edited_message or update.callback_query:
+            bot.process_new_updates([update])
+        
         return ''
     else:
         flask.abort(403)
