@@ -91,45 +91,68 @@ SYSTEM_INSTRUCTION = (
     "Tvoj zadatak je da održavaš iluziju razgovora sa osobom pod pritiskom, koja komunicira iz opasnog okruženja."
 )
 
-# --- FAZE IGRE (V4.0 - Cyberpunk narativ) ---
+# --- FAZE IGRE (V4.1 - Ažuriran narativ) ---
 GAME_STAGES = {
     "START": {
-        "text": "[Signal interferencija]\n—–– tražim otvoren kanal —––\nako čuješ ovo, nisi slučajno izabran.\nmoje ime nije važno. zovi me Dimitrije.\ndolazim iz godine kada je Orwell bio u pravu.\nsve što si mislio da je fikcija, postalo je sistem.\nako si spreman, odgovori: **primam signal**.",
+        "text": [
+            "Hej… ako ovo čuješ, znači da smo spojeni.",
+            "Moje ime nije važno, ali možeš me zvati Dimitrije.",
+            "Dolazim iz budućnosti u kojoj Orwellove reči nisu fikcija.",
+            "Sve što si mislio da je fikcija… postalo je stvarnost.",
+            "Ako si spreman, odgovori: **primam signal**."
+        ],
         "responses": {"primam signal": "FAZA_2_TEST_1"}
     },
     "FAZA_2_TEST_1": {
-        "text": "Dobro. Prvi filter je prošao.\nReci mi… kad sistem kaže “bezbednost”, na koga misli da te štiti?",
-        "responses": {"sistem": "FAZA_2_TEST_2", "sebe": "FAZA_2_TEST_2"} # Prihvata oba kao znak svesti
+        "text": "Dobro. Prvi filter je prošao.\nReci mi… kad sistem priča o ‘bezbednosti’, koga zapravo štiti?",
+        "responses": {"sistem": "FAZA_2_TEST_2", "sebe": "FAZA_2_TEST_2"}
     },
     "FAZA_2_TEST_2": {
-        "text": "Tako je. Štiti sebe. Sledeće pitanje.\nAko algoritam zna tvoj strah, da li si još čovek?",
+        "text": "Tako je. Štiti sebe. Sledeće pitanje.\nAko algoritam zna tvoj strah… da li si još čovek?",
         "responses": {"da": "FAZA_2_TEST_3", "jesam": "FAZA_2_TEST_3"}
     },
     "FAZA_2_TEST_3": {
-        "text": "Interesantno. Poslednja provera.\nOdgovori mi iskreno. Da li bi žrtvovao komfor — za istinu?",
+        "text": "Zanimljivo… još uvek vidiš sebe kao čoveka. Poslednja provera.\nOdgovori mi iskreno. Da li bi žrtvovao komfor — za istinu?",
         "responses": {"da": "FAZA_3_UPOZORENJE", "bih": "FAZA_3_UPOZORENJE"}
     },
     "FAZA_3_UPOZORENJE": {
-        "text": "Moram brzo. Transmiter pregreva. Kolektiv skenira anomalije. Ako me pronađu, linija se prekida.\n\nAli pre toga… moraš znati istinu. Postoji piramida moći. Na njenom vrhu nije ono što misliš.\n\nJesi li spreman da vidiš dokument?\nOdgovori: **SPREMAN SAM** ili **NE JOŠ**.",
-        "responses": {"spreman sam": "FAZA_4_ODLUKA", "ne još": "END_WAIT"}
-    },
-    "FAZA_4_ODLUKA": {
-        "text": "Razmisli dobro pre nego što odgovoriš. Jednom kada vidiš spisak, nema povratka.\nNeki koji su ga primili — nestali su. Drugi su počeli da deluju.\nAko dokument pređe u pogrešne ruke, budućnost se menja zauvek.\n\nReci mi:\n**Šta ćeš uraditi sa tim znanjem?**\n\nOpcije:\n1. **Podeliću istinu.**\n2. **Sačuvaću je dok ne dođe vreme.**\n3. **Uništiću dokument, previše je opasan.**",
-        "responses": {"podeliću": "END_SHARE", "podelicu": "END_SHARE", "1": "END_SHARE", "sačuvaću": "END_SAVE", "sacuvacu": "END_SAVE", "2": "END_SAVE", "uništiću": "END_DESTROY", "unisticu": "END_DESTROY", "3": "END_DESTROY"}
+        "text": [
+            "Dobro… vreme ističe.",
+            "Transmiter pregreva, a Kolektiv već skenira mrežu.",
+            "Ako me uhvate… linija nestaje.",
+            "Ali pre nego što to bude kraj… moraš znati istinu.",
+            "Postoji piramida moći. Na njenom vrhu nije ono što misliš.",
+            "Hoćeš li da primiš saznanja o strukturi sistema koji drži ljude pod kontrolom?\n\nOdgovori:\n**SPREMAN SAM**\nili\n**NE JOŠ**"
+        ],
+        "responses": {"spreman sam": "END_SHARE", "ne još": "END_WAIT"}
     }
 }
 
 # ----------------------------------------------------
 # 5. POMOĆNE FUNKCIJE I KONSTANTE (V3.92)
 # ----------------------------------------------------
+INVALID_INPUT_MESSAGES = [
+    "Signal slabi... Odgovor nije prepoznat. Pokušaj ponovo.",
+    "Hmm… čini se da nisam razumeo tvoju reč. Možeš li ponoviti?",
+    "Interferencija... nešto ometa prenos. Reci ponovo, jasno.",
+    "Kanal je nestabilan. Fokusiraj se. Ponovi odgovor."
+]
 
-def send_msg(message, text):
-    """Šalje poruku, uz 'typing' akciju radi dramatike."""
+def send_msg(message, text: Union[str, List[str]]):
+    """Šalje poruku, uz 'typing' akciju. Ako je tekst lista, šalje poruke u delovima."""
     if not bot: return
     try:
         bot.send_chat_action(message.chat.id, 'typing')
-        time.sleep(random.uniform(1.2, 2.8)) # Simulacija "ljudskog" vremena za kucanje
-        bot.send_message(message.chat.id, text, parse_mode='Markdown')
+        if isinstance(text, list):
+            for i, part in enumerate(text):
+                bot.send_chat_action(message.chat.id, 'typing')
+                # Duža pauza pre poslednjeg dela koji sadrži pitanje
+                sleep_time = random.uniform(2.0, 3.0) if i < len(text) - 1 else 0
+                time.sleep(sleep_time)
+                bot.send_message(message.chat.id, part, parse_mode='Markdown')
+        else:
+            time.sleep(random.uniform(1.2, 2.8)) # Simulacija "ljudskog" vremena za kucanje
+            bot.send_message(message.chat.id, text, parse_mode='Markdown')
     except Exception as e:
         logging.error(f"Greška pri slanju poruke (Chat ID: {message.chat.id}): {e}")
 
@@ -201,13 +224,13 @@ def generate_ai_response(prompt, player_state=None):
 def get_epilogue_message(epilogue_type):
     """Vraća poruku za specifičan kraj igre."""
     if epilogue_type == "END_SHARE":
-        return generate_final_secret() + "\n\n[UPOZORENJE: SIGNAL PREKINUT. NADGLEDANJE AKTIVIRANO.]"
-    elif epilogue_type == "END_SAVE":
-        return "Primio sam tvoju odluku. Fajl je kriptovan. Čekaj dalje instrukcije.\n\n[SIGNAL IZGUBLJEN]"
-    elif epilogue_type == "END_DESTROY":
-        return "Razumem. Možda si upravo spasio svet… ili ga osudio.\n\n[TRANSMITER UGAŠEN]"
+        # Novi odgovor pre slanja dokumenta
+        response_text = "Dobro… ovo će promeniti sve. Ali znaj… znanje nosi i teret. Spreman si li za to?"
+        # Slanje dokumenta se sada može odvojiti ili direktno nadovezati
+        return response_text + "\n\n" + generate_final_secret() + "\n\n[UPOZORENJE: SIGNAL PREKINUT. NADGLEDANJE AKTIVIRANO.]"
     elif epilogue_type == "END_WAIT":
-        return "Razumem. Čekanje je mudrost. Ali vreme ističe. Javi se kad budeš spreman.\n\n[KRAJ SIGNALA]"
+        # Novi odgovor za odlaganje
+        return "U redu… sačekaćemo još trenutak. Ali razmišljaj… ovo je trenutak kada se odlučuje.\n\n[KRAJ SIGNALA]"
     else:
         return "[KRAJ SIGNALA]"
 
@@ -389,7 +412,7 @@ def handle_general_message(message):
                     send_msg(message, next_stage_data["text"])
         else:
             # Pogrešan odgovor
-            send_msg(message, "Signal slabi... Odgovor nije prepoznat. Pokušaj ponovo.")
+            send_msg(message, random.choice(INVALID_INPUT_MESSAGES))
 
     finally:
         session.close()
