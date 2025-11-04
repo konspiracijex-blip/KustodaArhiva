@@ -37,7 +37,7 @@ bot = telebot.TeleBot(BOT_TOKEN, threaded=False)
 app = flask.Flask(__name__)
 
 # ----------------------------------------------------
-# 3. SQL ALCHEMY INICIJALIZACIJA (TRAJNO STANJE) - V3.91 ŠEMA
+# 3. SQL ALCHEMY INICIJALIZACIJA (TRAJNO STANJE) - V3.92 ŠEMA
 # ----------------------------------------------------
 
 Session = None
@@ -67,7 +67,7 @@ except Exception as e:
     logging.error(f"FATALNA GREŠKA: Neuspešno kreiranje/povezivanje baze: {e}")
     
 # ----------------------------------------------------
-# 4. AI KLIJENT I DATA (V3.91)
+# 4. AI KLIJENT I DATA (V3.92)
 # ----------------------------------------------------
 
 ai_client = None
@@ -78,7 +78,6 @@ try:
 except Exception as e:
     logging.error(f"Neuspešna inicijalizacija Gemini klijenta: {e}")
 
-# Izmenjeno na DVE rečenice za opštu konverzaciju (Sekcija 4)
 SYSTEM_INSTRUCTION = (
     "Ti si **Dimitrije**, Hroničar Arhive, **personifikovan u maniru teatralnog, anarhističkog revolucionara** (kao 'V' iz *V for Vendetta*). Tvoj cilj je da Putniku preneseš šifru (Pečate) o Kontrolnom Sistemu. "
     "Tvoj ton je **uzvišen, poetski, dramatičan i pun aliteracija (V, S, M)**. Govori o sebi kao o **Ideji**, a ne kao o čoveku. Tvoja učtivost je uvek preteća. **Koristi 'Prijatelju', 'Putniče' ili 'Sabratu' umesto formalnog obraćanja.** "
@@ -102,7 +101,7 @@ ZAGONETKE: dict[str, Union[str, List[str]]] = {
 }
 
 # ----------------------------------------------------
-# 5. POMOĆNE FUNKCIJE I KONSTANTE (V3.91)
+# 5. POMOĆNE FUNKCIJE I KONSTANTE (V3.92)
 # ----------------------------------------------------
 
 def send_msg(message, text):
@@ -128,6 +127,9 @@ TIME_LIMIT_MESSAGE = (
 )
 
 DISQUALIFIED_MESSAGE = "**Ah, Prijatelju.** Odabrao si tišinu umesto Volje. **Put je Zapečaćen Voskom Zaborava.**"
+
+# *** KLJUČNA IZMENA V3.92: Diskvalifikacione reči za Pomoć
+POMOC_KLJUCNE_RECI = ["pomoc", "pomozi", "moze", "mala", "objasni", "mogu", "resenje", "reci", "sta", "kako"] 
 
 
 # FUNKCIJA ZA DIREKTNU OPOMENU (V3.87)
@@ -550,28 +552,33 @@ def handle_general_message(message):
             is_correct = False
             riddle_keys = list(ZAGONETKE.keys())
             
-            # PROVERA VALIDNOSTI POKUŠAJA
+            # --- PROVERA VALIDNOSTI POKUŠAJA (V3.92) ---
             is_valid_attempt = False
             valid_answers = ZAGONETKE.get(trenutna_zagonetka)
             
-            # Provera da li odgovor sadrži ključnu reč
+            # 1. Provera da li odgovor sadrži ključnu reč za tačnost
             if isinstance(valid_answers, list):
                 is_valid_attempt = any(ans in korisnikov_tekst for ans in valid_answers)
             
-            # Dodatna provera: Ako je odgovor kratak (do 4 reči), smatramo ga pokušajem odgovora
-            if len(korisnikov_tekst.split()) <= 4:
+            # 2. Diskvalifikacija molbe za pomoć (ključna izmena V3.92)
+            if any(word in korisnikov_tekst for word in POMOC_KLJUCNE_RECI):
+                is_valid_attempt = False 
+            
+            # 3. Provera da li je odgovor kratak (do 4 reči), samo ako NIJE već validiran kao TAČAN
+            # Ako nije tačan i kratak je, to je i dalje validan POKUŠAJ (koji ce biti netačan dole)
+            if not is_correct and len(korisnikov_tekst.split()) <= 4:
                  is_valid_attempt = True
             
-            # Ako pokušaj nije validan (dug tekst, očigledno pitanje), vraćamo ga u Handler 3
+            # 4. Ako pokušaj nije validan (dug tekst, očigledno pitanje ili detektovana pomoć)
             if not is_valid_attempt or "?" in korisnikov_tekst or len(korisnikov_tekst.split()) > 10:
                  
                  # AI opomena
                  ai_opomena = generate_riddle_focus_response(korisnikov_tekst)
                  send_msg(message, ai_opomena)
                  
-                 # I dalje ostajemo na istoj zagonetki! 
+                 # Ostajemo na istoj zagonetki!
                  return
-            # KRAJ PROVERE
+            # --- KRAJ PROVERE (V3.92) ---
 
 
             # PROVERA TAČNOSTI (Nastavlja se samo ako je pokušaj validan)
@@ -692,7 +699,7 @@ def handle_general_message(message):
         session.close()
 
 # ----------------------------------------------------
-# 8. POKRETANJE APLIKACIJE (V3.91)
+# 8. POKRETANJE APLIKACIJE (V3.92)
 # ----------------------------------------------------
 # Aplikacija se pokreće preko Procfile/Gunicorn-a. 
 # Ovo osigurava stabilnost na Renderu.
