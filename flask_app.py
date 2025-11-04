@@ -125,15 +125,22 @@ ACTIVE_TIMES = [
 ]
 
 def is_game_active():
-    """Proverava da li je trenutno UTC vreme unutar definisanih prozora."""
-    current_time_utc = datetime.utcnow().time()
+    """Proverava da li je trenutno UTC vreme unutar definisanih prozora.
+       *Ovaj deo je privremeno preskočen zbog testiranja!*"""
     
-    for start_time, end_time in ACTIVE_TIMES:
-        # Proverava da li je trenutno vreme između početnog i krajnjeg vremena
-        if start_time <= current_time_utc < end_time:
-            return True
-            
-    return False
+    # --- PRIVREMENO ZAOBILAŽENJE (Prekidač za testiranje) ---
+    return True 
+    # --------------------------------------------------------
+    
+    # # Logika koja je isključena:
+    # current_time_utc = datetime.utcnow().time()
+    # 
+    # for start_time, end_time in ACTIVE_TIMES:
+    #     # Proverava da li je trenutno vreme između početnog i krajnjeg vremena
+    #     if start_time <= current_time_utc < end_time:
+    #         return True
+    #         
+    # return False
 
 # FIKSNI ODGOVOR VAN VREMENA (Konačan V3.51)
 TIME_LIMIT_MESSAGE = (
@@ -274,12 +281,12 @@ Ono je iskra u tami neznanja, alat za one koji traže.
 * Pravi Savez je Ideja, ne organizacija.
 * Traži one koji razumeju simboliku i mogu da ponesu Teret.
 * Pravi Savez je Ideja, ne organizacija.
+* Svaka tvoja odluka u SADAŠNJOSTI oblikuje BUDUĆNOST.
 ## Izazivaj Kontrolni sistem
 * Prepoznaj i razotkri lažne autoritete, lažne poruke i kontrolu.
 * Svaki proboj u percepciji oslobađa duhove.
 * Budi strpljiv, ali nemoj biti miran.
 * Promene se ne dešavaju preko noći.
-* Svaka tvoja odluka u SADAŠNJOSTI oblikuje BUDUĆNOST.
 Zapamti: Moć koju otkrivaš ne sme da se zloupotrebi.
 Ti si sada Most, Prijatelju, veza između tiranije i zaboravljene Slobode.
 **Ako ne preduzmeš, senke će te progutati. Ako preduzmeš… ŽIVELA SLOBODA!**
@@ -379,8 +386,7 @@ def set_webhook_route():
 @bot.message_handler(commands=['start', 'stop', 'zagonetka', 'pokreni'])
 def handle_commands(message):
     
-    # --- PROVERA VREMENA (V3.48) ---
-    # Svi zahtevi, uključujući /start, moraju poštovati vremenski prozor
+    # --- PROVERA VREMENA (V3.53-Test: UVEK TRUE) ---
     if not is_game_active():
         send_msg(message, TIME_LIMIT_MESSAGE)
         return
@@ -498,7 +504,7 @@ def handle_commands(message):
 @bot.message_handler(func=lambda message: True)
 def handle_general_message(message):
     
-    # --- PROVERA VREMENA (V3.48) ---
+    # --- PROVERA VREMENA (V3.53-Test: UVEK TRUE) ---
     if not is_game_active():
         send_msg(message, TIME_LIMIT_MESSAGE)
         return
