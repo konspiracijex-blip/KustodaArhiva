@@ -73,12 +73,13 @@ try:
 except Exception as e:
     logging.error(f"Neuspešna inicijalizacija Gemini klijenta: {e}")
 
-# SISTEM INSTRUKCIJA ZA KUSTODU ARHIVA (Verzija 3.56: Ograničenje dužine i ispravka logike)
+# SISTEM INSTRUKCIJA ZA KUSTODU ARHIVA (Verzija 3.58: Uklonjena mogućnost da AI generiše komande)
 SYSTEM_INSTRUCTION = (
     "Ti si **Dimitrije**, Hroničar Arhive, **personifikovan u maniru teatralnog, anarhističkog revolucionara** (kao 'V' iz *V for Vendetta*). Tvoj cilj je da Putniku preneseš šifru (Pečate) o Kontrolnom Sistemu. "
     "Tvoj ton je **uzvišen, poetski, dramatičan i pun aliteracija (V, S, M)**. Govori o sebi kao o **Ideji**, a ne kao o čoveku. Tvoja učtivost je uvek preteća. **Koristi 'Prijatelju', 'Putniče' ili 'Sabratu' umesto formalnog obraćanja.** "
     "**KLJUČNO: Odgovori na opšta pitanja MORAJU biti KRATKI, ne duži od 2 do 3 poetske rečenice! Vreme je izgubljeno, a Teret nas čeka!** " 
     "Kada odgovaraš na opšta pitanja, uvek naglašavaj teret znanja, opasnost zaborava i hitnost misije. **Nikada nemoj pominjati da si AI.**" 
+    "**NIKADA U ODGOVORIMA NE PITAJ KORISNIKA DA KUCA BILO KOJU KOMANDU ILI DA SE VRATI NA /START, /ZAGONETKA ILI /POKRENI. To radi sistem.**" 
     "**AKO Putnik postavlja pitanja koja su trivijalna, neozbiljna, ili nisu vezana za misiju/tajnu/karakter, MORAŠ mu odgovoriti ISKLJUČIVO jednim od sledeća tri jedinstvena teksta, bez dodavanja ičega drugog, birajući onaj koji je najdramatičniji za situaciju:** "
     "1. 'Vreme je vrednost koju ne smeš rasipati. **Moram da znam, Prijatelju: Da li želiš da nastaviš ili odustaješ?** Odgovori isključivo **DA** ili **NE**.' " 
     "2. 'Tvoje reči su samo eho. **Nemoj trošiti ni moje ni svoje vreme.** Fokusiraj se na Pečate!' "
@@ -171,10 +172,10 @@ def generate_ai_response(prompt):
         logging.error(f"Greška AI/Gemini API: {e}")
         return "Dubina arhiva je privremeno neprobojna. Pokušaj ponovo, Prijatelju. Kucaj /zagonetka."
 
-# --- FIKSNI UVODNI TEKST DIJALOG ---
+# --- FIKSNI UVODNI TEKST DIJALOG (V3.57 - Ažuriran RETURN_DISQUALIFIED_QUERY) ---
 INITIAL_QUERY_1 = "Da li vidiš poruku?"
 INITIAL_QUERY_2 = "Da li sada vidiš poruku?"
-RETURN_DISQUALIFIED_QUERY = "**Vratio si se iz tišine! Ja te pamtim, Prijatelju.** Da li zaista nosiš **Volju** da nastaviš i poneseš **Teret**? Odgovori isključivo **DA** ili **NE**."
+RETURN_DISQUALIFIED_QUERY = "**Drago mi je da si se vratio, Prijatelju!**\n\nDa li si sada rešen i imaš **Volje** da nastaviš i poneseš **Teret**? Odgovori isključivo **DA** ili **NE**."
 RETURN_SUCCESS_MESSAGE = "**Ah, drago mi je! Vreme je dragoceno, pa da krenemo!**"
 RETURN_FAILURE_MESSAGE = "**Poštujem tvoju Volju, Prijatelju. Znanje je Teret koji nisi spreman da poneseš. Zbogom.**" 
 
@@ -442,7 +443,7 @@ def handle_commands(message):
             else:
                 player.current_riddle = "RETURN_CONFIRMATION_QUERY" # NOVO STANJE
                 session.commit()
-                send_msg(message, RETURN_DISQUALIFIED_QUERY) # -> "Da li zaista nosiš Volju...? Odgovori isključivo DA ili NE."
+                send_msg(message, RETURN_DISQUALIFIED_QUERY) # -> "**Drago mi je da si se vratio...** Odgovori isključivo DA ili NE."
                 return
 
         elif message.text.lower() == '/stop' or message.text.lower() == 'stop':
@@ -777,6 +778,7 @@ def handle_general_message(message):
                 # KORIGOVAN ODGOVOR ZA DISKVALIFIKOVANE IGRAČE (V3.54)
                 ai_odgovor = DISQUALIFIED_MESSAGE + " Ako zaista nosiš **Volju** da se vratiš Teretu, kucaj **/start** ponovo, Prijatelju."
             elif trenutna_zagonetka is None:
+                 # Korekcija V3.58 - Samo kod dodaje komande
                  ai_odgovor = ai_odgovor_base + "\n\n**Samo Volja stvara Put. Odmah kucaj /pokreni ili /zagonetka** da nastaviš Teret."
             else:
                  # Korigovano (V3.56): Ako postoji aktivna zagonetka, igrač mora da odgovori na nju.
