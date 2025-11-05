@@ -68,8 +68,11 @@ except Exception as e:
     logging.error(f"FATALNA GREŠKA: Neuspešno kreiranje/povezivanje baze: {e}")
 
 # ----------------------------------------------------
-# 4. AI KLIJENT I DATA (V4.6)
+# 4. AI KLIJENT I DATA (V4.7 - Fiksiran Model Name)
 # ----------------------------------------------------
+
+# KRITIČNA ISPRAVKA: Korišćenje ispravnog naziva modela za v1beta API
+GEMINI_MODEL_NAME = 'gemini-1.5-flash-latest' 
 
 ai_client = None
 try:
@@ -80,7 +83,6 @@ except Exception as e:
     logging.error(f"Neuspešna inicijalizacija Gemini klijenta: {e}")
 
 # --- KONSPIRATOR (TESTER) KONSTANTE (Uklonjeno, nije relevantno za fix) ---
-# Ostavljam praznu listu kao placeholder
 TESTER_CHAT_IDS: List[str] = [] 
 # --------------------------------------------------------------------------
 
@@ -164,7 +166,7 @@ GAME_STAGES = {
 }
 
 # ----------------------------------------------------
-# 5. POMOĆNE FUNKCIJE I KONSTANTE (V4.6 - Fiksiran AI poziv)
+# 5. POMOĆNE FUNKCIJE I KONSTANTE (V4.7 - Fiksiran Model Name)
 # ----------------------------------------------------
 INVALID_INPUT_MESSAGES = [
     "Signal slabi... Odgovor nije prepoznat. Pokušaj ponovo.",
@@ -183,7 +185,6 @@ AI_FALLBACK_MESSAGES = [
 
 def is_tester(chat_id: str) -> bool:
     """Proverava da li je chat_id na listi testera (Konspirator)."""
-    # Lista TESTER_CHAT_IDS je definisana u sekciji 4.
     return chat_id in TESTER_CHAT_IDS
 
 def get_required_phrase(current_stage_key):
@@ -196,7 +197,6 @@ def get_required_phrase(current_stage_key):
     
     if current_stage_key == "FAZA_3_UPOZORENJE":
         # Poseban format za kraj
-        # Koristi obe opcije da ne bi morao da pogodi koju da kuca
         return "\n\nOdgovori tačno sa:\n**SPREMAN SAM**\nili\n**NE JOŠ**"
     elif current_stage_key == "START":
         return f"\n\nAko si i dalje tu, reci: **{required_phrase_raw}**."
@@ -250,11 +250,11 @@ def evaluate_intent_with_ai(question_text, user_answer, expected_intent_keywords
         "Odgovori samo sa jednom rečju: 'TAČNO' ako je odgovor prihvatljiv, ili 'NETAČNO' ako nije."
     )
     try:
-        # FIX: Ispravljanje SDK poziva i argumenata
+        # KRITIČNA ISPRAVKA: Korišćenje ispravne konstante za naziv modela
         response = ai_client.models.generate_content(
-            model='gemini-1.5-flash',
+            model=GEMINI_MODEL_NAME, 
             contents=[prompt],
-            config={"temperature": 0.0} # Ispravljeno sa generation_config na config
+            config={"temperature": 0.0}
         )
         return "TAČNO" in response.text.upper()
     except APIError as e:
@@ -315,14 +315,15 @@ def generate_ai_response(user_input, player, current_stage_key):
 
         try:
             # 2. Direktni API poziv (one-shot)
+            # KRITIČNA ISPRAVKA: Korišćenje ispravne konstante za naziv modela
             response = ai_client.models.generate_content(
-                model='gemini-1.5-flash',
+                model=GEMINI_MODEL_NAME, 
                 contents=full_contents
             )
             
             narrative_starter = response.text.strip()
             
-            # 3. Dodatna provera za prazan odgovor (ili previše kratak, npr. samo interpunkcija)
+            # 3. Dodatna provera za prazan odgovor (ili previše kratak)
             if not narrative_starter or len(narrative_starter) < 5:
                 raise ValueError("AI vratio prazan ili neadekvatan odgovor.")
                 
@@ -337,7 +338,6 @@ def generate_ai_response(user_input, player, current_stage_key):
     # --- ZAVRŠNO AŽURIRANJE (Bez obzira na uspeh/neuspjeh AI poziva) ---
     if ai_text:
         # Ažuriranje istorije sa odgovorom modela/fallback-om
-        # Koristimo narrative_starter jer je on "čist" narativni deo odgovora
         final_history = json.loads(player.conversation_history) + [{'role': 'model', 'content': narrative_starter or ai_text}]
         player.conversation_history = json.dumps(final_history)
         player.general_conversation_count += 1 
