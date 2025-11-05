@@ -107,7 +107,7 @@ GAME_STAGES = {
     "START": {
         "text": [ 
             [
-                "DA LI VIDIŠ MOJU PORUKU?" # Čista poruka, glitch dodajemo dinamički
+                "DA LI VIDIŠ MOJU PORUKU?" # Čista poruka
             ]
         ]
     },
@@ -156,7 +156,7 @@ END_MESSAGES = {
 }
 
 # ----------------------------------------------------
-# 5. POMOĆNE FUNKCIJE I KONSTANTE (V9.7)
+# 5. POMOĆNE FUNKCIJE I KONSTANTE (V9.9)
 # ----------------------------------------------------
 
 TIME_LIMIT_MESSAGE = "Vreme za igru je isteklo. Pokušaj ponovo kasnije."
@@ -165,14 +165,16 @@ GLITCH_CHARS = "$#%&!@*^"
 
 def is_game_active(): return GAME_ACTIVE 
 
-def generate_glitch_text(length=20, max_lines=3):
-    """Generiše nasumičan tekst koji simulira grešku/glitch."""
-    num_lines = random.randint(1, max_lines)
+def generate_glitch_text(length=30, max_lines=4):
+    """Generiše nasumičan tekst koji simulira grešku/glitch. V9.9"""
+    num_lines = random.randint(2, max_lines) # Bar 2 linije
     glitch_parts = []
     
     for _ in range(num_lines):
-        line_length = random.randint(5, length)
+        line_length = random.randint(10, length)
         line = "".join(random.choice(GLITCH_CHARS) for _ in range(line_length))
+        
+        # Dinamičko dodavanje formata
         if random.random() < 0.5:
              line = f"##{line}##"
         elif random.random() < 0.2:
@@ -180,7 +182,7 @@ def generate_glitch_text(length=20, max_lines=3):
         
         glitch_parts.append(line)
         
-    return "\n".join(glitch_parts) + "\n"
+    return "\n".join(glitch_parts)
 
 def get_required_phrase(current_stage_key):
     if current_stage_key == "START_PROVERA":
@@ -196,9 +198,10 @@ def send_msg(message, text: Union[str, List[str]]):
     if not bot: return
     try:
         if isinstance(text, list):
+            # Šalje jednu poruku za drugom sa pauzom
             for part in text:
                 bot.send_chat_action(message.chat.id, 'typing')
-                time.sleep(random.uniform(1.5, 2.5)) 
+                time.sleep(random.uniform(1.0, 2.5)) # Kraće pauze za dinamičniji uvod
                 bot.send_message(message.chat.id, part, parse_mode='Markdown')
         else:
             bot.send_chat_action(message.chat.id, 'typing')
@@ -357,7 +360,7 @@ def set_webhook_route():
 
 
 # ----------------------------------------------------
-# 7. BOT HANDLERI (V9.8 - DB izolacija i popravka)
+# 7. BOT HANDLERI (V9.9 - Fragmentirani Glitch)
 # ----------------------------------------------------
 
 @bot.message_handler(commands=['start', 'stop', 'pokreni'])
@@ -374,9 +377,10 @@ def handle_commands(message):
         if not is_db_active: 
             send_msg(message, "⚠️ UPOZORENJE: Trajno stanje (DB) nije dostupno. Igrate u test modu bez pamćenja napretka.")
             if message.text.lower() in ['/start', 'start']:
+                # V9.9 Glitch Logic za test mod
                 glitch_prefix = generate_glitch_text()
                 start_message_raw = GAME_STAGES["START"]["text"][0][-1]
-                send_msg(message, glitch_prefix + start_message_raw)
+                send_msg(message, glitch_prefix + "\n" + start_message_raw)
             return
 
         chat_id = str(message.chat.id)
@@ -389,7 +393,7 @@ def handle_commands(message):
                 player.score = 0
                 player.general_conversation_count = 0
                 player.conversation_history = '[]' 
-                player.is_disqualified = False # Važan reset
+                player.is_disqualified = False
             else:
                 user = message.from_user
                 display_name = user.username or f"{user.first_name} {user.last_name or ''}".strip()
@@ -401,9 +405,26 @@ def handle_commands(message):
 
             session.commit()
             
-            glitch_prefix = generate_glitch_text()
-            start_message_raw = GAME_STAGES["START"]["text"][0][-1]
-            send_msg(message, glitch_prefix + start_message_raw)
+            # V9.9: Generisanje i slanje fragmentirane uvodne poruke
+            raw_message = GAME_STAGES["START"]["text"][0][-1]
+            glitch_lines = generate_glitch_text(length=30, max_lines=4).strip().split('\n')
+            
+            messages_to_send = []
+            
+            # 1. Poruka: Prva Glitch linija
+            if len(glitch_lines) >= 1:
+                messages_to_send.append(glitch_lines[0])
+            
+            # 2. Poruka: Srednji Glitch deo (kombinovane linije ako ih ima dovoljno)
+            if len(glitch_lines) > 2:
+                 messages_to_send.append(glitch_lines[1] + "\n" + glitch_lines[2])
+            elif len(glitch_lines) == 2:
+                 messages_to_send.append(glitch_lines[1])
+
+            # 3. Poruka: Čisto Pitanje
+            messages_to_send.append(raw_message)
+
+            send_msg(message, messages_to_send)
 
         elif message.text.lower() in ['/stop', 'stop']:
             player = session.query(PlayerState).filter_by(chat_id=chat_id).first()
