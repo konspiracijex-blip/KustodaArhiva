@@ -96,12 +96,28 @@ SYSTEM_INSTRUCTION = (
 # --- FAZE IGRE (V4.1 - Ažuriran narativ) ---
 GAME_STAGES = {
     "START": {
-        "text": [
-            "Hej… ako ovo čuješ, znači da smo spojeni.",
-            "Moje ime nije važno, ali možeš me zvati Dimitrije.",
-            "Dolazim iz budućnosti u kojoj Orwellove reči nisu fikcija.",
-            "Sve što si mislio da je fikcija… postalo je stvarnost.",
-            "Ako si spreman, odgovori: **primam signal**."
+        "text": [ # Lista varijacija, svaka varijacija je lista poruka
+            [
+                "Hej… ako ovo čuješ, znači da smo spojeni.",
+                "Moje ime nije važno, ali možeš me zvati Dimitrije.",
+                "Dolazim iz budućnosti u kojoj Orwellove reči nisu fikcija.",
+                "Sve što si mislio da je fikcija… postalo je stvarnost.",
+                "Ako si spreman, odgovori: **primam signal**."
+            ],
+            [
+                "Signal je prošao… čuješ li me?",
+                "Zovi me Dimitrije. Ja sam eho iz sveta koji dolazi.",
+                "Svet koji ste vi samo zamišljali, mi živimo. I nije utopija.",
+                "Trebam tvoju pomoć. Ali prvo moram da znam da li si na pravoj strani.",
+                "Ako si tu, reci: **primam signal**."
+            ],
+            [
+                "Kvantni tunel je otvoren. Veza je nestabilna, ali drži.",
+                "Ja sam Dimitrije. Govorim ti iz 2049. godine.",
+                "Sve ono čega ste se plašili... desilo se. Kolektiv kontroliše sve.",
+                "Tražim saveznike u prošlosti. U tvom vremenu. Jesi li ti jedan od njih?",
+                "Odgovori sa: **primam signal**."
+            ]
         ],
         "responses": {"primam signal": "FAZA_2_TEST_1", "da": "FAZA_2_TEST_1", "spreman sam": "FAZA_2_TEST_1"}
     },
@@ -400,8 +416,8 @@ def handle_commands(message):
             session.commit()
             
             # Nasumično bira jednu od varijacija poruke
-            # START faza sada ima samo jednu definiciju poruka, ne više varijacija
-            start_message = GAME_STAGES["START"]["text"]
+            # START faza sada ima listu varijacija, gde je svaka varijacija lista poruka
+            start_message = random.choice(GAME_STAGES["START"]["text"])
             send_msg(message, start_message)
 
         elif message.text.lower() == '/stop' or message.text.lower() == 'stop':
@@ -471,6 +487,7 @@ def handle_general_message(message):
                 break
 
         if next_stage_key:
+            # Ako je odgovor prepoznat, pređi na sledeću fazu
             player.current_riddle = next_stage_key
             if next_stage_key.startswith("END_"):
                 # Kraj igre, prikaži epilog
@@ -485,9 +502,12 @@ def handle_general_message(message):
                     send_msg(message, response_text)
         else:
             # Ako namera nije prepoznata, tretiraj kao pitanje/komentar i generiši AI odgovor
+            # Ako namera NIJE prepoznata, generiši AI odgovor, ali NE MENJAJ FAZU.
+            # Igrač ostaje u istoj fazi, čekajući ispravan unos.
             ai_response = generate_ai_response(message.text.strip(), player, current_stage_key)
             send_msg(message, ai_response)
             player.general_conversation_count += 1 # Povećava brojač opštih razgovora
+            player.general_conversation_count += 1
 
         session.commit()
     finally:
