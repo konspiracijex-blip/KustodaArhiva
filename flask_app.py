@@ -207,8 +207,7 @@ def send_msg(message, text: Union[str, List[str]]):
     except Exception as e:
         logging.error(f"Greška pri slanju poruke: {e}")
 
-# ... (Ostatak pomoćnih funkcija generate_ai_response, evaluate_intent_with_ai, get_epilogue_message ostaje isti)
-# ...
+# Funkcije evaluate_intent_with_ai, generate_ai_response i get_epilogue_message ostaju iste
 
 def evaluate_intent_with_ai(question_text, user_answer, expected_intent_keywords, conversation_history=None):
     if not ai_client: return False
@@ -358,7 +357,7 @@ def set_webhook_route():
 
 
 # ----------------------------------------------------
-# 7. BOT HANDLERI (V9.7 - Dinamički uvod)
+# 7. BOT HANDLERI (V9.8 - DB izolacija i popravka)
 # ----------------------------------------------------
 
 @bot.message_handler(commands=['start', 'stop', 'pokreni'])
@@ -375,7 +374,6 @@ def handle_commands(message):
         if not is_db_active: 
             send_msg(message, "⚠️ UPOZORENJE: Trajno stanje (DB) nije dostupno. Igrate u test modu bez pamćenja napretka.")
             if message.text.lower() in ['/start', 'start']:
-                # V9.7 Glitch Logic za test mod
                 glitch_prefix = generate_glitch_text()
                 start_message_raw = GAME_STAGES["START"]["text"][0][-1]
                 send_msg(message, glitch_prefix + start_message_raw)
@@ -391,6 +389,7 @@ def handle_commands(message):
                 player.score = 0
                 player.general_conversation_count = 0
                 player.conversation_history = '[]' 
+                player.is_disqualified = False # Važan reset
             else:
                 user = message.from_user
                 display_name = user.username or f"{user.first_name} {user.last_name or ''}".strip()
@@ -402,7 +401,6 @@ def handle_commands(message):
 
             session.commit()
             
-            # V9.7: Generisanje dinamičke uvodne poruke
             glitch_prefix = generate_glitch_text()
             start_message_raw = GAME_STAGES["START"]["text"][0][-1]
             send_msg(message, glitch_prefix + start_message_raw)
@@ -420,8 +418,9 @@ def handle_commands(message):
         elif message.text.lower() in ['/pokreni', 'pokreni']:
             send_msg(message, "Komande nisu potrebne. Odgovori direktno na poruke. Ako želiš novi početak, koristi /start.")
     except Exception as e:
-        logging.error(f"Greška u handle_commands: {e}")
-        send_msg(message, "Žao mi je, došlo je do greške u sistemu. Pokušajte ponovo sa /start.")
+        logging.error(f"GREŠKA U BAZI (handle_commands): {e}")
+        if session: session.rollback()
+        send_msg(message, "Žao mi je, došlo je do greške u sistemu pri komandi. (DB FAILED)")
     finally:
         if session: session.close()
 
@@ -436,6 +435,7 @@ def handle_general_message(message):
             return
 
         if session is None: 
+            send_msg(message, "GREŠKA: Trajno stanje (DB) nije dostupno. Signal prekinut.")
             return 
 
         chat_id = str(message.chat.id)
@@ -443,8 +443,9 @@ def handle_general_message(message):
 
         player = session.query(PlayerState).filter_by(chat_id=chat_id).first()
 
+        # KRITIČNA PROVERA: Ako ne postoji igrač ili je diskvalifikovan
         if not player or player.is_disqualified or player.current_riddle.startswith("END_"):
-            send_msg(message, "Veza je prekinuta.") 
+            send_msg(message, "Veza je prekinuta. Pokreni /start za novi pokušaj.") 
             return
 
         current_stage_key = player.current_riddle
@@ -460,6 +461,7 @@ def handle_general_message(message):
         
         # 1. KORAK: BRZA PROVERA (START_PROVERA)
         if current_stage_key == "START_PROVERA":
+            # Provera da li odgovor sadrži DA i NE sadrži NE (i obrnuto)
             if "da" in korisnikov_tekst_lower and "ne" not in korisnikov_tekst_lower:
                 next_stage_key = "FAZA_2_UVOD"
                 is_intent_recognized = True
@@ -519,8 +521,9 @@ def handle_general_message(message):
 
         session.commit()
     except Exception as e:
-        logging.error(f"Greška u handle_general_message: {e}")
-        send_msg(message, "Žao mi je, došlo je do greške u prijemu poruke. Veza je nestabilna.")
+        logging.error(f"GREŠKA U BAZI (handle_general_message): {e}")
+        if session: session.rollback() # V9.8: Vraćanje transakcije
+        send_msg(message, "Žao mi je, došlo je do kritične greške u prijemu poruke. Veza je nestabilna. (DB FAILED)")
     finally:
         if session: session.close()
 
