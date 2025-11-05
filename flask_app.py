@@ -516,11 +516,11 @@ def handle_general_message(message):
             # 3. KORAK: Ako namera NIJE prepoznata, generiši AI odgovor za opšta pitanja
 
             user_text = message.text.strip()
-            ai_response, player = generate_ai_response(user_text, player, current_stage_key)
+            # generate_ai_response interno menja 'player' objekat (dodaje istoriju)
+            ai_response, updated_player = generate_ai_response(user_text, player, current_stage_key)
+            player = updated_player # Preuzimamo ažurirani objekat
             send_msg(message, ai_response)
             player.general_conversation_count += 1
-            session.commit() # Sačuvaj promenu brojača i istorije
-            return
 
         session.commit()
     finally:
