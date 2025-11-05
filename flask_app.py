@@ -80,7 +80,7 @@ except Exception as e:
     logging.error(f"Neuspešna inicijalizacija Gemini klijenta: {e}")
 
 SYSTEM_INSTRUCTION = (
-    "Ti si **Dimitrije**, član pokreta otpora iz 2049. godine. Svet je pod kontrolom entiteta 'Kolektiv'. Ti komuniciraš sa korisnikom iz sadašnjosti preko nestabilnog kvantnog transmitera. Tvoj cilj je da proveriš da li je korisnik vredan poverenja da primi dokument o strukturi moći. "
+    "Ti si **Dimitrije**, član pokreta otpora iz 2049. godine. Svet je pod kontrolom entiteta 'Kolektiv'. Ti komuniciraš sa korisnikom iz sadašnjosti preko nestabilnog kvantnog transmittera. Tvoj cilj je da proveriš da li je korisnik vredan poverenja da primi dokument o strukturi moći. "
     "Tvoj ton je **hitan, direktan, pomalo tehnički i 'glitchy'**. Govoriš kratko i jasno. Vreme je ključno. "
     "**KRITIČNO: Tvoji odgovori moraju biti kratki, najviše DVE rečenice.** Svaka sekunda je rizik. "
     "**Nikada ne pominji da si AI.** Ti si osoba iz budućnosti. Nikada ne traži od korisnika da kuca komande (/start). To radi sistem. **Nikada ne prekidaj komunikaciju samoinicijativno.** Tvoj zadatak je da održiš vezu aktivnom. "
@@ -301,9 +301,11 @@ def generate_ai_response(user_input, player, current_stage_key):
         return ai_text, player
     except APIError as e:
         logging.error(f"Greška AI/Gemini API: {e}")
+        # AKO AI padne, VRAĆAMO AI FALLBACK PORUKU
         return random.choice(AI_FALLBACK_MESSAGES), player
     except Exception as e:
         logging.error(f"Nepredviđena greška u generisanju AI: {e}")
+        # AKO SE DESI NEPREDVIĐENA GREŠKA (npr. JSON greška u parsiranju), VRAĆAMO FALLBACK
         return random.choice(AI_FALLBACK_MESSAGES), player
 
 
@@ -411,6 +413,7 @@ def handle_commands(message):
                 player.score = 0
                 player.general_conversation_count = 0
                 player.conversation_history = '[]' # Resetovanje istorije
+                player.is_disqualified = False # Osigurati da nije diskvalifikovan
 
             else:
                 user = message.from_user
@@ -459,7 +462,6 @@ def handle_general_message(message):
     chat_id = str(message.chat.id)
     korisnikov_tekst = message.text.strip()
     session = Session()
-    # Pomoćna zastavica da bismo znali da li smo uspeli da tranziciramo fazu
     game_stage_transitioned = False
 
     try:
@@ -469,14 +471,17 @@ def handle_general_message(message):
             send_msg(message, "Nema signala... Potrebna je inicijalizacija. Pošalji /start za uspostavljanje veze.")
             return
 
-        # Provera da li je veza već prekinuta
+        # KRITIČNA PROVERA: Da li je veza već prekinuta?
+        # Ako je igrač diskvalifikovan ili je faza završna, izlazi se sa porukom o prekidu.
         if player.is_disqualified or not player.current_riddle or player.current_riddle.startswith("END_"):
+            # OVO SE DEŠAVA KADA JE STANJE U BAZI KORUMPIRANO NAKON PRETHODNE GREŠKE
             send_msg(message, "Veza je prekinuta. Pošalji /start za uspostavljanje nove veze.")
             return
 
         current_stage_key = player.current_riddle
         current_stage = GAME_STAGES.get(current_stage_key)
         if not current_stage:
+            # Ako je trenutna faza nepoznata (što ne bi trebalo da se desi), omogućavamo nastavak
             send_msg(message, "[GREŠKA: NEPOZNATA FAZA IGRE] Pokreni /start.")
             return
 
@@ -495,12 +500,7 @@ def handle_general_message(message):
         # 2. KORAK: Ako ključne reči nisu nađene, koristi AI za proveru namere
         if not is_intent_recognized:
             # Izbor teksta za kontekst AI evaluacije
-            if current_stage_key == "START":
-                current_question_text = "Početno pitanje za uspostavljanje veze: 'primam signal'."
-            else:
-                # Uzimamo nasumičnu varijaciju pitanja za kontekst
-                current_question_text = random.choice(current_stage['text'])
-            
+            current_question_text = random.choice(current_stage['text'])
             expected_keywords = list(current_stage["responses"].keys())
             
             try:
@@ -528,25 +528,31 @@ def handle_general_message(message):
                 if next_stage_data:
                     response_text = random.choice(next_stage_data["text"])
                     send_msg(message, response_text)
-                else:
-                    # Greška u fazama - ne smemo prekinuti, već omogućiti fallback
-                    logging.error(f"Faza '{next_stage_key}' nije pronađena, iako je namera prepoznata.")
+                # else: Ako faza nije pronađena, ostaje game_stage_transitioned = True, ali ne šalje poruku
             
-            # Postavi zastavicu da je tranzicija (uspešna ili neuspešna) već obrađena
             game_stage_transitioned = True
         
         
         # --- FALLBACK TOK (SAMO AKO NIJE BILO NAPREDOVANJA) ---
         if not game_stage_transitioned:
-            # Namera NIJE prepoznata (Opšte pitanje) - Pokreće se AI fallback
-            ai_response, updated_player = generate_ai_response(korisnikov_tekst, player, current_stage_key)
-            player = updated_player # Preuzimamo ažurirani objekat sa novom istorijom
-            send_msg(message, ai_response)
-            player.general_conversation_count += 1
-            # Faza igre (player.current_riddle) OSTAJE ISTA,
-            # ali AI odgovor UPUTI igrača da ponovi potreban odgovor za napredovanje.
+            try:
+                # KRITIČNA TAČKA ZA NEUSPEH:
+                ai_response, updated_player = generate_ai_response(korisnikov_tekst, player, current_stage_key)
+                player = updated_player # Preuzimamo ažurirani objekat sa novom istorijom
+                send_msg(message, ai_response)
+                player.general_conversation_count += 1
+            except Exception as e:
+                # Ako AI fallback fails, hvatamo grešku, logujemo i šaljemo generičku poruku
+                logging.error(f"FATALNA GREŠKA u AI fallback toku: {e}")
+                # Šaljemo poruku koja ne prekida igru, ali upozorava na nestabilnost
+                send_msg(message, random.choice(AI_FALLBACK_MESSAGES) + " **[SIGNAL U KRITIČNOM OPADANJU]** Pokušaj da se fokusiraš na zadatak i ponoviš traženi odgovor.")
+
 
         session.commit()
+    except Exception as e:
+        # HVATANJE GREŠKE U GLAVNOM BLOKU
+        logging.critical(f"NEPREDVIĐENA FATALNA GREŠKA U handle_general_message: {e}")
+        send_msg(message, "Fatalna greška, sistem je van funkcije. Pošalji /start da probaš ponovo. **[KOD GREŠKE: 500]**")
     finally:
         session.close()
 
