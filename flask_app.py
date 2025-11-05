@@ -474,12 +474,14 @@ def handle_general_message(message):
         next_stage_key = None
         
         # Ispravka: Uvek koristi poslednju poruku iz niza kao pitanje za kontekst.
-        stage_text_or_list = current_stage['text']
-        if isinstance(stage_text_or_list, list):
-            current_question_text = stage_text_or_list[-1] # Uzmi poslednji element kao pitanje
+        if current_stage_key == "START":
+            # Za START fazu, kontekst je uvek isti, bez obzira na varijaciju.
+            current_question_text = "Početno pitanje za uspostavljanje veze."
         else:
-            current_question_text = stage_text_or_list
-
+            # Za sve ostale faze, uzmi nasumičnu (ali reprezentativnu) varijaciju pitanja.
+            stage_text_or_list = current_stage['text']
+            current_question_text = random.choice(stage_text_or_list) if isinstance(stage_text_or_list, list) else stage_text_or_list
+            
         for response_keyword, next_key in current_stage["responses"].items():
             # Koristimo AI za prepoznavanje namere umesto prostog 'in'
             if evaluate_intent_with_ai(current_question_text, korisnikov_tekst, [response_keyword]):
@@ -507,7 +509,6 @@ def handle_general_message(message):
             ai_response = generate_ai_response(message.text.strip(), player, current_stage_key)
             send_msg(message, ai_response)
             player.general_conversation_count += 1 # Povećava brojač opštih razgovora
-            player.general_conversation_count += 1
 
         session.commit()
     finally:
