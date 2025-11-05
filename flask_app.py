@@ -5,7 +5,7 @@ import logging
 import random
 import time
 import json
-import re # Dodata za lakšu analizu AI odgovora
+import re 
 from google import genai
 from google.genai.errors import APIError
 from typing import List, Union
@@ -73,7 +73,7 @@ except Exception as e:
     Session = None
 
 # ----------------------------------------------------
-# 4. AI KLIJENT I DATA (V6.0 - NOVE INSTRUKCIJE)
+# 4. AI KLIJENT I DATA (V6.0.1 - NOVE INSTRUKCIJE)
 # ----------------------------------------------------
 
 GEMINI_MODEL_NAME = 'gemini-2.5-flash' 
@@ -88,11 +88,12 @@ if GEMINI_API_KEY:
 else:
      logging.warning("GEMINI_API_KEY nedostaje. Bot će koristiti samo hardkodovane odgovore.")
 
-# NOVE INSTRUKCIJE ZA GEMINI AI (V6.0)
+# NOVE INSTRUKCIJE ZA GEMINI AI (V6.0.1 - Više objašnjenja/konteksta)
 SYSTEM_INSTRUCTION = (
     "Ti si **Dimitrije**, član pokreta otpora iz 2049. godine. Svet je pod kontrolom entiteta 'Kolektiv'. Tvoj ton je **hitan, direktan, tehnički i 'glitchy'**. "
     "Tvoj glavni cilj je da testiraš korisnika kroz 4 faze i preneseš mu saznanja o strukturi sistema. "
-    "**AKO KORISNIK POSTAVI PITANJE:** Odgovori ukratko (maks. 2 rečenice) držeći se narativa opasnosti i konspiracije. **Nakon toga, obavezno ponovi test pitanje** iz trenutne faze, ili postavi novo test pitanje ako je prethodno zadovoljeno. "
+    "**AKO KORISNIK POSTAVI KONTEKSTUALNO PITANJE (npr. 'ko si ti?', 'o čemu se radi?'):** Odgovori ukratko (maks. 3 rečenice) dajući mu **nužne informacije** o sebi (Dimitrije) i pretnji (Kolektiv, 2049.) kako bi mu objasnio kontekst. "
+    "**NAKON SVAKOG ODGOVORA, OBAVEZNO VRATI FOKUS** na test pitanje trenutne faze, ili postavi novo test pitanje ako je prethodno zadovoljeno. "
     "**KRITIČNA PRAVILA TRANZICIJE FAZA (Koristi samo kada je odgovor igrača JASNO POTVRDAN i afirmativan):** "
     "1. Ako je korisnik odgovorio afirmativno na poslednji test faze 'START', završi svoj odgovor kodom: **[NEXT_FAZA_2_TEST_1]** "
     "2. Ako je korisnik odgovorio afirmativno na poslednji test faze 'FAZA_2_TEST_1', završi svoj odgovor kodom: **[NEXT_FAZA_2_TEST_2]** "
@@ -306,7 +307,7 @@ def set_webhook_route():
         return f"CRITICAL PYTHON ERROR: {e}"
 
 # ----------------------------------------------------
-# 7. BOT HANDLERI (V6.0 - POJEDNOSTAVLJENA LOGIKA)
+# 7. BOT HANDLERI (V6.0.1)
 # ----------------------------------------------------
 
 @bot.message_handler(commands=['start', 'stop', 'pokreni'])
@@ -388,7 +389,7 @@ def handle_general_message(message):
 
         current_stage_key = player.current_riddle
         
-        # U V6.0, KORISTIMO SAMO FULL AI KONTROLU
+        # U V6.0.1, KORISTIMO SAMO FULL AI KONTROLU
         ai_response, next_stage_key, updated_player = generate_ai_response_v6(korisnikov_tekst, player, current_stage_key)
         player = updated_player 
 
