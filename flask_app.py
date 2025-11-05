@@ -18,6 +18,7 @@ from datetime import datetime, time as dt_time
 # ----------------------------------------------------
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
+# BITNO: Bot sada očekuje da WEBHOOK_URL koristi vaš BOT_TOKEN za rutiranje.
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
 DATABASE_URL = os.environ.get('DATABASE_URL')
@@ -94,21 +95,27 @@ GAME_STAGES = {
     },
     "FAZA_2_TEST_1": {
         "text": [
-            "Dobro. Prvi filter je prošao.\nReci mi… kad sistem priča o ‘bezbednosti’, koga zapravo štiti?"
+            "Dobro. Prvi filter je prošao.\nReci mi… kad sistem priča o ‘bezbednosti’, koga zapravo štiti?",
+            "U redu. Prošao si prvu proveru.\nSledeće pitanje: Kad sistem obećava ‘bezbednost’, čije interese on zaista čuva?",
+            "Signal je stabilan. Idemo dalje.\nRazmisli o ovome: Kada čuješ reč ‘bezbednost’ od sistema, koga on štiti?"
         ],
         "responses": {"sistem": "FAZA_2_TEST_2", "sebe": "FAZA_2_TEST_2", "vlast": "FAZA_2_TEST_2"}
     },
     "FAZA_2_TEST_2": {
         "text": [
-            "Tako je. Štiti sebe. Sledeće pitanje.\nAko algoritam zna tvoj strah… da li si još čovek?"
+            "Tako je. Štiti sebe. Sledeće pitanje.\nAko algoritam zna tvoj strah… da li si još čovek?",
+            "Da. Sebe. To je ključno. Idemo dalje.\nAko mašina predviđa tvoje želje pre tebe... da li su te želje i dalje tvoje?",
+            "Tačno. Njegova prva briga je sam za sebe. Sledeće.\nAko algoritam zna tvoj strah… da li si još uvek slobodan?"
         ],
         "responses": {"da": "FAZA_2_TEST_3", "jesam": "FAZA_2_TEST_3", "naravno": "FAZA_2_TEST_3"}
     },
     "FAZA_2_TEST_3": {
         "text": [
-            "Zanimljivo… još uvek veruješ u to. Poslednja provera.\nOdgovori mi iskreno. Da li bi žrtvovao komfor — za istinu?"
+            "Zanimljivo… još uvek veruješ u to. Poslednja provera.\nOdgovori mi iskreno. Da li bi žrtvovao komfor — za istinu?",
+            "Držiš se za tu ideju... Dobro. Finalno pitanje.\nDa li bi menjao udobnost neznanja za bolnu istinu?",
+            "To je odgovor koji sam očekivao. Poslednji test.\nReci mi, da li je istina vredna gubljenja sigurnosti?"
         ],
-        "responses": {"da": "FAZA_3_UPOZORENJE", "bih": "FAZA_3_UPOZORENJE", "žrtvovao bih": "FAZA_3_UPOZORENJE"}
+        "responses": {"da": "FAZA_3_UPOZORENJE", "bih": "FAZA_3_UPOZORENJE", "žrtvovao bih": "FAZA_3_UPOZORENJE", "zrtvovao bih": "FAZA_3_UPOZORENJE"}
     },
     "FAZA_3_UPOZORENJE": {
         "text": [
@@ -158,6 +165,7 @@ def evaluate_intent_with_ai(question_text, user_answer, expected_intent_keywords
     if not ai_client:
         return any(kw in user_answer.lower() for kw in expected_intent_keywords)
 
+    # Pojednostavljeni prompt za AI evaluaciju
     prompt = f"Ti si Dimitrije. Proceni da li korisnikov odgovor ('{user_answer}') zadovoljava očekivanu nameru: {expected_intent_keywords}. Odgovori samo sa TAČNO ili NETAČNO."
     try:
         response = ai_client.generate_content(
@@ -167,6 +175,7 @@ def evaluate_intent_with_ai(question_text, user_answer, expected_intent_keywords
         )
         return "TAČNO" in response.text.upper()
     except:
+        # Fallback na ključne reči u slučaju greške
         return any(kw in user_answer.lower() for kw in expected_intent_keywords)
 
 def generate_ai_response(user_input, player, current_stage_key):
@@ -182,10 +191,14 @@ def generate_ai_response(user_input, player, current_stage_key):
         history = history[-MAX_HISTORY_ITEMS:]
 
     gemini_history = [{'role': 'user' if e['role']=='user' else 'model', 'parts':[{'text': e['content']}]} for e in history]
+    
+    # Ažuriranje istorije sa porukom korisnika
     updated_history = history + [{'role':'user','content':user_input}]
     player.conversation_history = json.dumps(updated_history)
 
     required_phrase = "Nema zadatka. Molim te pošalji /start."
+    
+    # Prisilno generisanje tražene fraze za vraćanje na zadatak
     if current_stage_key in GAME_STAGES:
         responses = GAME_STAGES[current_stage_key].get("responses", {})
         if responses:
@@ -205,10 +218,12 @@ def generate_ai_response(user_input, player, current_stage_key):
         chat = model.start_chat(history=gemini_history)
         response = chat.send_message(f"{task_reminder_prompt}\n\nKorisnik kaže: {user_input}")
         ai_text = response.text
+        # Ažuriranje istorije sa odgovorom modela
         final_history = json.loads(player.conversation_history) + [{'role':'model','content':ai_text}]
         player.conversation_history = json.dumps(final_history)
         return ai_text, player
-    except:
+    except Exception as e:
+        logging.error(f"Greška u generisanju AI: {e}")
         return random.choice(INVALID_INPUT_MESSAGES), player
 
 def get_epilogue_message(epilogue_type):
@@ -243,75 +258,153 @@ Samo oni koji prepoznaju nivoe… imaju šansu da se oslobode manipulacije.
 # ----------------------------------------------------
 @bot.message_handler(commands=['start'])
 def handle_start(message):
+    if Session is None: return
+
     session = Session()
     chat_id = str(message.chat.id)
-    player = session.query(PlayerState).filter_by(chat_id=chat_id).first()
-    if not player:
-        player = PlayerState(chat_id=chat_id, username=message.from_user.username, current_riddle='START')
-        session.add(player)
-    session.commit()
-    stage_text = GAME_STAGES['START']['text'][0]
-    send_msg(message, stage_text)
+    try:
+        player = session.query(PlayerState).filter_by(chat_id=chat_id).first()
+        
+        if player:
+            # RESETOVANJE STANJA POSTOJEĆEG IGRAČA (KRITIČNA POPRAVKA)
+            player.current_riddle = "START"
+            player.solved_count = 0
+            player.score = 0
+            player.general_conversation_count = 0
+            player.conversation_history = '[]'
+            player.is_disqualified = False
+        else:
+            # Kreiranje novog igrača
+            user = message.from_user
+            display_name = user.username or f"{user.first_name} {user.last_name or ''}".strip()
+            player = PlayerState(
+                chat_id=chat_id, 
+                current_riddle='START', 
+                username=display_name
+            )
+            session.add(player)
+            
+        session.commit()
+        
+        # Slanje poruke (koristi prvu varijaciju, jer je samo jedna)
+        stage_text = GAME_STAGES['START']['text'][0]
+        send_msg(message, stage_text)
+    except Exception as e:
+        logging.error(f"Greška u handle_start: {e}")
+        # Možete dodati fallback poruku korisniku ako želite
+    finally:
+        session.close() # OBAVEZNO ZATVARANJE SESIJE
 
 @bot.message_handler(func=lambda m: True)
 def handle_message(message):
+    if Session is None: return
+
     session = Session()
     chat_id = str(message.chat.id)
-    player = session.query(PlayerState).filter_by(chat_id=chat_id).first()
-    if not player:
-        send_msg(message, "Signal ne prepoznaje tvoj ID. Počni sa /start.")
-        return
-
-    if player.is_disqualified:
-        send_msg(message, DISQUALIFIED_MESSAGE)
-        return
-
-    current_stage_key = player.current_riddle
-    stage_data = GAME_STAGES.get(current_stage_key, {})
-    expected_responses = stage_data.get("responses", {})
-    user_input = message.text.strip().lower()
-
-    matched_stage = None
-    for key, next_stage in expected_responses.items():
-        if key.lower() in user_input:
-            matched_stage = next_stage
-            break
-
-    if matched_stage:
-        player.current_riddle = matched_stage
-        session.commit()
-        if matched_stage.startswith("END"):
-            send_msg(message, get_epilogue_message(matched_stage))
-        else:
-            next_text = GAME_STAGES[matched_stage]['text'][0] if 'text' in GAME_STAGES[matched_stage] else "..."
-            send_msg(message, next_text)
-    else:
-        ai_response, player = generate_ai_response(user_input, player, current_stage_key)
-        session.commit()
-        send_msg(message, ai_response)
-
-# ----------------------------------------------------
-# 7. FLASK WEBHOOK
-# ----------------------------------------------------
-@app.route('/webhook', methods=['POST'])
-def webhook():
     try:
-        json_str = flask.request.get_data().decode('utf-8')
-        update = telebot.types.Update.de_json(json_str)
-        bot.process_new_updates([update])
-        return '', 200
+        player = session.query(PlayerState).filter_by(chat_id=chat_id).first()
+        if not player or player.current_riddle.startswith("END") or player.is_disqualified:
+            send_msg(message, "Veza je prekinuta. Pošalji /start za uspostavljanje nove veze.")
+            return
+
+        current_stage_key = player.current_riddle
+        stage_data = GAME_STAGES.get(current_stage_key, {})
+        expected_responses = stage_data.get("responses", {})
+        user_input = message.text.strip().lower()
+
+        matched_stage = None
+        is_intent_recognized = False
+
+        # 1. Provera ključnih reči
+        for key, next_stage in expected_responses.items():
+            if key.lower() in user_input:
+                matched_stage = next_stage
+                is_intent_recognized = True
+                break
+        
+        # 2. AI Evaluacija namere ako ključne reči nisu nađene
+        if not is_intent_recognized and current_stage_key not in ["START"]: # Faza START zahteva tačnu frazu
+            # Ekstrakcija pitanja za AI
+            current_question_text = random.choice(stage_data.get('text', ["..."])).replace('\n', ' ')
+            expected_keywords = list(expected_responses.keys())
+            
+            try:
+                conversation_history = json.loads(player.conversation_history)
+            except:
+                conversation_history = []
+                
+            if evaluate_intent_with_ai(current_question_text, user_input, expected_keywords, conversation_history):
+                is_intent_recognized = True
+                # Uzmi prvi mogući sledeći korak jer je AI potvrdio nameru
+                matched_stage = list(expected_responses.values())[0]
+
+
+        if matched_stage:
+            # Potez prepoznat - prelazak na sledeću fazu
+            player.current_riddle = matched_stage
+            if matched_stage.startswith("END"):
+                send_msg(message, get_epilogue_message(matched_stage))
+            else:
+                next_text = random.choice(GAME_STAGES[matched_stage]['text'])
+                send_msg(message, next_text)
+        else:
+            # Potez neprepoznat - AI odgovor (vraćanje na zadatak)
+            ai_response, player = generate_ai_response(user_input, player, current_stage_key)
+            send_msg(message, ai_response)
+            player.general_conversation_count += 1
+            
+        session.commit()
     except Exception as e:
-        logging.error(f"Webhook greška: {e}")
-        return '', 500
+        logging.error(f"Greška u handle_message: {e}")
+        send_msg(message, "Signal je nestabilan. Nešto nije u redu sa mrežom.")
+    finally:
+        session.close() # OBAVEZNO ZATVARANJE SESIJE
+
+# ----------------------------------------------------
+# 7. FLASK WEBHOOK I RUTIRANJE (Korigovano na standardnu praksu)
+# ----------------------------------------------------
+@app.route('/' + BOT_TOKEN, methods=['POST']) # Standardna ruta za Telegram webhook
+def webhook():
+    if Session is None:
+        logging.error("Database Session nije uspostavljen. Bot ne može obrađivati poruke.")
+        return "Internal Error: Database not ready", 500
+        
+    if flask.request.headers.get('content-type') == 'application/json':
+        try:
+            json_str = flask.request.get_data().decode('utf-8')
+            update = telebot.types.Update.de_json(json_str)
+            bot.process_new_updates([update])
+            return '', 200
+        except Exception as e:
+            logging.error(f"Webhook greška: {e}")
+            return '', 500
+    else:
+        flask.abort(403)
 
 @app.route('/')
 def index():
-    return "Bot je aktivan."
+    return "Dimitrije Bot je aktivan i čeka na signal. Webhook putanja: /" + BOT_TOKEN
 
 # ----------------------------------------------------
-# 8. START WEBHOOK
+# 8. POKRETANJE (WEBHOOK SETUP)
 # ----------------------------------------------------
+# Dodajemo rutu za setovanje webhooka, što je korisno za deployment.
+@app.route('/set_webhook_manual', methods=['GET'])
+def set_webhook_route():
+    webhook_url_with_token = WEBHOOK_URL.rstrip('/') + '/' + BOT_TOKEN
+    s = bot.set_webhook(url=webhook_url_with_token)
+
+    if s:
+        return f"Webhook uspešno postavljen! URL: {webhook_url_with_token}"
+    else:
+        return "Neuspelo postavljanje webhooka."
+
 if __name__ == "__main__":
-    bot.remove_webhook()
-    bot.set_webhook(url=WEBHOOK_URL + "webhook")
+    # Uklanjamo i ponovo postavljamo webhook pre pokretanja lokalnog servera.
+    # U produkciji (Gunicorn), ovo treba biti deo deployment procesa, ne unutar __main__.
+    if BOT_TOKEN != "DUMMY:TOKEN_FAIL":
+        webhook_url_with_token = WEBHOOK_URL.rstrip('/') + '/' + BOT_TOKEN
+        logging.info(f"Pokušaj postavljanja webhook-a na: {webhook_url_with_token}")
+        bot.set_webhook(url=webhook_url_with_token)
+    
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
