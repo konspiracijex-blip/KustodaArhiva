@@ -457,8 +457,10 @@ def handle_general_message(message):
         return
 
     chat_id = str(message.chat.id)
-    korisnikov_tekst = message.text.strip() # Nema .lower() ovde, AI bolje radi sa originalnim tekstom
+    korisnikov_tekst = message.text.strip()
     session = Session()
+    # Pomoćna zastavica da bismo znali da li smo uspeli da tranziciramo fazu
+    game_stage_transitioned = False
 
     try:
         player = session.query(PlayerState).filter_by(chat_id=chat_id).first()
@@ -496,6 +498,7 @@ def handle_general_message(message):
             if current_stage_key == "START":
                 current_question_text = "Početno pitanje za uspostavljanje veze: 'primam signal'."
             else:
+                # Uzimamo nasumičnu varijaciju pitanja za kontekst
                 current_question_text = random.choice(current_stage['text'])
             
             expected_keywords = list(current_stage["responses"].keys())
@@ -511,9 +514,8 @@ def handle_general_message(message):
                 next_stage_key = list(current_stage["responses"].values())[0]
 
 
-        # --- OBRADA REZULTATA ---
+        # --- OBRADA REZULTATA (PRIMARNI TOK) ---
         if is_intent_recognized:
-            # Namena je prepoznata, tranzicija u sledeću fazu
             player.current_riddle = next_stage_key
             
             if next_stage_key.startswith("END_"):
@@ -527,10 +529,15 @@ def handle_general_message(message):
                     response_text = random.choice(next_stage_data["text"])
                     send_msg(message, response_text)
                 else:
-                    # Ne bi se smelo desiti ako je GAME_STAGES dobro definisan
-                    send_msg(message, "[GREŠKA U FAZAMA] Pokreni /start.")
+                    # Greška u fazama - ne smemo prekinuti, već omogućiti fallback
+                    logging.error(f"Faza '{next_stage_key}' nije pronađena, iako je namera prepoznata.")
+            
+            # Postavi zastavicu da je tranzicija (uspešna ili neuspešna) već obrađena
+            game_stage_transitioned = True
         
-        elif not is_intent_recognized:
+        
+        # --- FALLBACK TOK (SAMO AKO NIJE BILO NAPREDOVANJA) ---
+        if not game_stage_transitioned:
             # Namera NIJE prepoznata (Opšte pitanje) - Pokreće se AI fallback
             ai_response, updated_player = generate_ai_response(korisnikov_tekst, player, current_stage_key)
             player = updated_player # Preuzimamo ažurirani objekat sa novom istorijom
