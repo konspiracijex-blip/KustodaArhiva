@@ -39,15 +39,13 @@ except Exception as e:
 app = flask.Flask(__name__)
 
 # ----------------------------------------------------
-# 3. SQL ALCHEMY INICIJALIZACIJA (V9.4 - FIKS)
+# 3. SQL ALCHEMY INICIJALIZACIJA (V9.4 - Stabilizovani DB poziv)
 # ----------------------------------------------------
 
 Session = None
 Base = declarative_base()
 Engine = None 
 
-# Definicija modela mora biti van try/except bloka da bi bila dostupna, 
-# ali inicijalizacija baze je izolovana.
 class PlayerState(Base):
     __tablename__ = 'player_states'
     chat_id = Column(String, primary_key=True)
@@ -66,7 +64,6 @@ def initialize_database():
         return
 
     try:
-        # Koristimo isolation_level='AUTOCOMMIT' za PostgreSQL ako je potrebno
         Engine = create_engine(DATABASE_URL)
         Session = sessionmaker(bind=Engine)
         
@@ -82,7 +79,7 @@ def initialize_database():
 initialize_database()
 
 # ----------------------------------------------------
-# 4. AI KLIJENT I DATA (Ostaje V9.3)
+# 4. AI KLIJENT I DATA (V9.5 - NOVI UVODNI TEKST)
 # ----------------------------------------------------
 
 GEMINI_MODEL_NAME = 'gemini-2.5-flash' 
@@ -97,25 +94,28 @@ if GEMINI_API_KEY:
 else:
      logging.warning("GEMINI_API_KEY nedostaje. Bot će koristiti samo hardkodovane odgovore.")
 
+# KRITIČNE INSTRUKCIJE ZA AI (V9.5)
 SYSTEM_INSTRUCTION = (
-    "Ti si **Dimitrije**, član pokreta otpora iz 2049. godine..." # Skraćeno radi preglednosti
+    "Ti si **Dimitrije**, član pokreta otpora iz 2049. godine. Svet je pod kontrolom entiteta 'Kolektiv'. Komuniciraš sa korisnikom preko nestabilnog kvantnog transmitera. "
+    "Tvoj ton je **hitan, direktan, tehnički i 'glitchy'**. Vreme je ključno. "
+    "**Nikada ne pominji da si AI.** Ti si osoba iz budućnosti. "
+    "**KRITIČNO: Ograničenje objašnjenja:** Zbog hitnosti, nakon početnog objašnjenja, odgovori na pitanja igrača (poput 'ko si ti', 'šta hoćeš') moraju biti **sve kraći i sve hitniji**. Tvoja primarna uloga je testiranje, a ne objašnjavanje. "
+    "**NAKON SVAKOG ODGOVORA, OBAVEZNO VRATI FOKUS** i ponovi poslednji neispunjeni zadatak/pitanje da bi igrač znao šta se očekuje. "
+    "Tvoji odgovori moraju biti kratki (maksimalno 4 rečenice) i moraju ZAVRŠITI ponavljanjem poslednjeg neispunjenog zadatka/pitanja."
 )
 
 GAME_STAGES = {
-    # ... (Isto kao V9.3)
     "START": {
         "text": [ 
             [
-                "## DA&^&&LI#M#ME##",
-                "[GLITCH / ERROR]",
-                "Da li vidis moju poruku? (Odgovori sa 'Da' ili 'Ne')."
+                "##DA**L#$VIDI#$##S",
+                "DA LI VIDIŠ MOJU PORUKU? (Odgovori sa 'Da' ili 'Ne')."
             ]
         ]
-        # START se obrađuje u handle_commands
     },
     "START_PROVERA": {
         "text": [
-            "Da li vidis moju poruku? (Odgovori sa 'Da' ili 'Ne')."
+            "DA LI VIDIŠ MOJU PORUKU? (Odgovori sa 'Da' ili 'Ne')."
         ],
         "responses": {"da": "FAZA_2_UVOD", "ne": "END_NO_SIGNAL"}
     },
@@ -156,8 +156,9 @@ END_MESSAGES = {
     "END_STOP": "[KRAJ SIGNALA] Veza prekinuta na tvoj zahtev.",
     "END_NO_SIGNAL": "Transmisija neuspešna. Nema stabilne veze. Prekinuto. [ŠUM]"
 }
+
 # ----------------------------------------------------
-# 5. POMOĆNE FUNKCIJE I KONSTANTE (Ostaje V9.3)
+# 5. POMOĆNE FUNKCIJE I KONSTANTE (Isto kao V9.4)
 # ----------------------------------------------------
 
 TIME_LIMIT_MESSAGE = "Vreme za igru je isteklo. Pokušaj ponovo kasnije."
@@ -166,9 +167,9 @@ GAME_ACTIVE = True
 def is_game_active(): return GAME_ACTIVE 
 
 def get_required_phrase(current_stage_key):
-    # ... (Isto kao V9.3)
     if current_stage_key == "START_PROVERA":
-        return GAME_STAGES.get(current_stage_key, {}).get("text", ["Signal se gubi..."])[0].strip()
+        # V9.5 - Uzima novu poruku
+        return GAME_STAGES.get(current_stage_key, {}).get("text", ["DA LI VIDIŠ MOJU PORUKU?"]).strip()
 
     if current_stage_key == "FAZA_2_UVOD":
         return GAME_STAGES.get(current_stage_key, {}).get("text", ["Signal se gubi..."])[-1].strip()
@@ -177,7 +178,6 @@ def get_required_phrase(current_stage_key):
 
 
 def send_msg(message, text: Union[str, List[str]]):
-    # ... (Isto kao V9.3)
     if not bot: return
     try:
         if isinstance(text, list):
@@ -192,16 +192,15 @@ def send_msg(message, text: Union[str, List[str]]):
     except Exception as e:
         logging.error(f"Greška pri slanju poruke: {e}")
 
-# Funkcije generate_ai_response, evaluate_intent_with_ai i get_epilogue_message ostaju iste
-# ...
+# Funkcije evaluate_intent_with_ai, generate_ai_response i get_epilogue_message ostaju iste
 def evaluate_intent_with_ai(question_text, user_answer, expected_intent_keywords, conversation_history=None):
     if not ai_client: return False
-    # Logika ista kao V9.3
+    # Logika ista kao V9.4
     # ...
     return False
 
 def generate_ai_response(user_input, player, current_stage_key):
-    # Logika ista kao V9.3
+    # Logika ista kao V9.4
     # ...
     return "Signal se raspao. Pokušaj /start.", player
 
@@ -210,12 +209,11 @@ def get_epilogue_message(end_key):
 
 
 # ----------------------------------------------------
-# 6. WEBHOOK RUTE (Ostaje V9.3)
+# 6. WEBHOOK RUTE (Isto kao V9.4)
 # ----------------------------------------------------
 
 @app.route('/' + BOT_TOKEN, methods=['POST'])
 def webhook():
-    # ... (Isto kao V9.3)
     if flask.request.headers.get('content-type') == 'application/json':
         
         if BOT_TOKEN == "DUMMY:TOKEN_FAIL":
@@ -244,7 +242,6 @@ def webhook():
 
 @app.route('/set_webhook', methods=['GET'])
 def set_webhook_route():
-    # ... (Isto kao V9.3)
     if BOT_TOKEN == "DUMMY:TOKEN_FAIL":
         return "Failed: BOT_TOKEN nije postavljen.", 200
 
@@ -264,7 +261,7 @@ def set_webhook_route():
 
 
 # ----------------------------------------------------
-# 7. BOT HANDLERI (Ostaje V9.3)
+# 7. BOT HANDLERI (Isto kao V9.4)
 # ----------------------------------------------------
 
 @bot.message_handler(commands=['start', 'stop', 'pokreni'])
@@ -426,11 +423,10 @@ def handle_general_message(message):
 
 
 # ----------------------------------------------------
-# 8. POKRETANJE APLIKACIJE (V9.4 - DODATNI POZIV INICJ.)
+# 8. POKRETANJE APLIKACIJE (Isto kao V9.4)
 # ----------------------------------------------------
 
 if __name__ != '__main__':
-    # Ponovo pokušavamo postavljanje Webhooka i inicijalizaciju baze
     initialize_database() 
     
     if BOT_TOKEN != "DUMMY:TOKEN_FAIL":
