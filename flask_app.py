@@ -1,3 +1,4 @@
+
 import flask
 import telebot
 import os
@@ -88,6 +89,15 @@ COOPERATIVE_SYSTEM_INSTRUCTION = (
     "Uvek završi poruku jasnim upozorenjem o preostaloj komunikaciji i zahtevom da sledeća pitanja budu JASNA, SMISLENA i KONCIZNA, jer je vreme kritično. "
     "NE PONOVI ZADATU FRAZU ZA IGRU (primam signal), fokus je na informisanju i upozorenju."
 )
+
+# DISKVALIFIKACIONA INSTRUKCIJA
+DISQUALIFICATION_SYSTEM_INSTRUCTION = (
+    "Ti si **Dimitrije**, kodna oznaka ECHO-Δ. Transmisija je prekinuta i ugrožena si. "
+    "Moraš da priznaš da si napravio grešku dozvoljavajući igraču da postavlja nevažna pitanja i da detaljno objasniš KAKO to ugrožava misiju (zbog Kolektiva, nadzora, potrošnje kritične energije/vremena). "
+    "Moraš da prebaciš deo krivice na sebe (za previše objašnjavanja), ali i da jasno naglasiš da je igrač ignorisao upozorenja. "
+    "Zaključi poruku sa jasnom izjavom da je igrač DISKVALIFIKOVAN i da je pristup liniji ZAUVEK PREKINUT. Tvoj ton mora biti URGENTAN, DRAMATIČAN I FINALAN."
+)
+
 
 # FRAZE ZA DIVERSIFIKACIJU FALLBACK-A
 NARRATIVE_TENSION = [
@@ -269,6 +279,40 @@ def generate_cooperative_response(user_input, player):
     return ai_text, player
 
 
+def generate_disqualification_response(user_input, player):
+    """Generiše AI odgovor za diskvalifikaciju."""
+    
+    gemini_history, player = get_history_for_gemini(player, user_input)
+    
+    disqualification_prompt = (
+        f"Igrač je postavio irelevantno pitanje: '{user_input}'. Iskoristi SYSTEM_INSTRUCTION i generiši dramatičnu, potpunu poruku diskvalifikacije. "
+        f"Objasni zašto je takvo gubljenje vremena katastrofalno za misiju. Naglasi da je pristup kvantnoj liniji zauvek prekinut."
+    )
+
+    try:
+        model = ai_client.GenerativeModel(model_name='gemini-1.5-flash', system_instruction=DISQUALIFICATION_SYSTEM_INSTRUCTION)
+        chat = model.start_chat(history=gemini_history)
+        response = chat.send_message(f"{disqualification_prompt}")
+        
+        ai_text = response.text.strip()
+        
+    except Exception as e:
+        logging.error(f"AI GREŠKA u diskvalifikacionom modu (TIMEOUT/API): {e}. Vraćam strukturirani Fallback.")
+        
+        # Detaljan Fallback za diskvalifikaciju
+        ai_text = (
+            "**GREŠKA PROTOKOLA. POGREŠIO SAM.** Dozvolio sam ti da postavljaš previše pitanja. "
+            "Svako opšte, irelevantno pitanje, poput ovog koje si upravo postavio, dramatično povećava naš digitalni otisak. "
+            "Kolektiv je mreža prediktivnog nadzora. Svaka reč koja odstupa od protokola smatra se 'Glitch-om' — anomalijom. "
+            "Takav Glitch aktivira automatske protokole detekcije. Sada je prekasno. Linija se ruši. "
+            "Žao mi je, ali tvoja **NEKONCIZNOST I NEFOKUSIRANOST** su ugrozile ceo prenos. "
+            "Stoga si **DISKVALIFIKOVAN**. Tvoj pristup kvantnoj liniji je **ZAUVEK PREKINUT**. Zbogom. [KRAJ SIGNALA]"
+        )
+            
+    player = save_ai_response_to_history(player, ai_text)
+    return ai_text, player
+
+
 def generate_ai_response(user_input, player, current_stage_key):
     """Generiše AI odgovor u Strogom modu igre (nakon Free Talk ili u kasnijim fazama)."""
     
@@ -319,9 +363,49 @@ def generate_ai_response(user_input, player, current_stage_key):
 
 def evaluate_intent_with_ai(question_text, user_answer, expected_intent_keywords, conversation_history=None):
     if not ai_client:
+        # Fallback procena
         return any(kw in user_answer.lower() for kw in expected_intent_keywords)
 
-    prompt = f"Ti si Dimitrije. Proceni da li korisnikov odgovor ('{user_answer}') zadovoljava očekivanu nameru: {expected_intent_keywords}. Odgovori samo sa TAČNO ili NETAČNO."
+    # Očekivani odgovor je da NIJE bitno pitanje (za diskvalifikaciju)
+    # Stoga, ako AI kaže 'TAČNO' = igrač je odgovorio na zadatak (NEMA DISKVALIFIKACIJE)
+    # Ako AI kaže 'NETAČNO' = igrač je postavio irelevantno pitanje (DISQUALIFY!)
+    
+    # Prompt da se proceni da li je odgovor irelevantan/opšte pitanje:
+    
+    # Prvo, provera da li je odgovor vezan za zadatak/priču
+    prompt_is_relevant = (
+        f"Korisnikov odgovor je: '{user_answer}'. "
+        f"Trenutno postavljeno pitanje u igri je: '{question_text}'. "
+        f"Očekivane ključne reči za prolaz su: {expected_intent_keywords}. "
+        f"Da li je korisnikov odgovor BILO KAKO POVEZAN sa temom Kolektiva, tvojom misijom ili trenutnim zadatkom? Odgovori samo sa DA ili NE."
+    )
+    
+    try:
+        response_relevance = ai_client.generate_content(
+            model='gemini-1.5-flash',
+            contents=[prompt_is_relevant],
+            generation_config={"temperature": 0.0}
+        )
+        # Ako je relevantno (DA) -> NEMA DISKVALIFIKACIJE.
+        return "DA" in response_relevance.text.upper()
+    except Exception as e:
+        logging.error(f"Greška u AI proceni relevantnosti: {e}")
+        # U slučaju greške, pretpostavljamo da je relevantno, da ne bi slučajno diskvalifikovali.
+        return True
+
+
+def evaluate_response_for_pass(question_text, user_answer, expected_intent_keywords):
+    """
+    Konačna procena da li odgovor (koji je već utvrđen kao relevantan) POKLAPAA očekivanja.
+    Ovo je duplirano iz starog `evaluate_intent_with_ai` ali sa jasnijom svrhom.
+    """
+    if not ai_client:
+        return any(kw in user_answer.lower() for kw in expected_intent_keywords)
+
+    prompt = (
+        f"Proceni da li odgovor ('{user_answer}') zadovoljava očekivanu nameru: {expected_intent_keywords}. "
+        f"Trenutno pitanje je: '{question_text}'. Odgovori samo sa TAČNO ili NETAČNO."
+    )
     try:
         response = ai_client.generate_content(
             model='gemini-1.5-flash',
@@ -429,41 +513,53 @@ def handle_message(message):
             key_lower = key.lower()
             
             if ' ' in key_lower:
-                # Ključna reč je fraza (npr. "primam signal", "spreman sam"). Provera potpunog podudaranja.
                 if key_lower == korisnikov_tekst:
                     matched_stage = next_stage
                     is_intent_recognized = True
                     break
             else:
-                # Ključna reč je jedna reč (npr. "sistem", "da"). Provera skupa reči.
                 if key_lower in user_words:
-                    # Stroga provera za kratke reči ('da', 'bih') unutar dugog konteksta.
                     if key_lower in ['da', 'bih'] and word_count > 3:
                         continue
                         
-                    matched_stage = next_stage
-                    is_intent_recognized = True
-                    break
+                    # Nastavljamo na AI procenu za ovaj slučaj (zbog rizika od diskvalifikacije)
+                    pass
+
+
+        # 2. AI Evaluacija namere (provera relevantnosti i prolaza)
         
-        # 2. AI Evaluacija namere (samo u kasnijim fazama)
-        if not is_intent_recognized and current_stage_key not in ["START"]:
+        if not is_intent_recognized:
+            
             current_question_text = random.choice(stage_data.get('text', ["..."])).replace('\n', ' ')
             expected_keywords = list(expected_responses.keys())
-            
-            try:
-                conversation_history = json.loads(player.conversation_history)
-            except:
-                conversation_history = []
+
+            # A. PROVERA RELEVANTNOSTI (Sva pitanja, osim start faze)
+            if player.current_riddle != "START":
+                is_relevant = evaluate_intent_with_ai(current_question_text, korisnikov_tekst, expected_keywords)
                 
-            if evaluate_intent_with_ai(current_question_text, korisnikov_tekst, expected_keywords, conversation_history):
+                if not is_relevant:
+                    # DISKVALIFIKACIJA: Pitanje je irelevantno za igru!
+                    ai_response, player = generate_disqualification_response(korisnikov_tekst, player)
+                    player.is_disqualified = True
+                    send_msg(message, ai_response)
+                    session.commit()
+                    return
+            
+            # B. PROVERA PROLAZA (Samo ako je relevantno ili ako je START faza)
+            if player.current_riddle == "START":
+                # U START fazi, ne diskvalifikujemo, samo proveravamo da li je to odgovor za prolaz
+                is_pass = evaluate_response_for_pass(current_question_text, korisnikov_tekst, expected_keywords)
+            else:
+                # U strogim fazama, relevantno pitanje MORA biti odgovor za prolaz.
+                is_pass = evaluate_response_for_pass(current_question_text, korisnikov_tekst, expected_keywords)
+                
+            if is_pass:
                 is_intent_recognized = True
                 matched_stage = list(expected_responses.values())[0]
 
         if matched_stage:
             # Potez prepoznat - prelazak na sledeću fazu
             player.current_riddle = matched_stage
-            
-            # Resetovanje brojača otvorenih pitanja nakon uspešnog prelaska
             player.general_conversation_count = 0
             
             if matched_stage.startswith("END"):
@@ -481,7 +577,7 @@ def handle_message(message):
                 
                 send_msg(message, next_text)
         else:
-            # Potez neprepoznat - AI odgovor (vraćanje na zadatak ili kooperativni odgovor)
+            # Potez neprepoznat - AI odgovor (kooperativni mod ili diskvalifikacija)
 
             if player.current_riddle == "START" and player.general_conversation_count < FREE_TALK_LIMIT:
                 # Stanje 1: Free Talk (Cooperative) - Odgovor i upozorenje o preostalim pitanjima
@@ -489,22 +585,21 @@ def handle_message(message):
                 send_msg(message, ai_response)
                 
             elif player.current_riddle == "START" and player.general_conversation_count == FREE_TALK_LIMIT:
-                # Stanje 2: Free Talk Limit Reached (Warning & Switch)
-                # Ovdje prekidamo otvoren razgovor i forsiramo igru, bez poziva AI.
-                required_phrase_raw = list(GAME_STAGES['START']['responses'].keys())[0]
-                final_warning = (
-                    "KRAJ OTVORENE KOMUNIKACIJE. Alarm Kolektiva je na CRVENOM. Ne pitaj više. Ne odgovaram. "
-                    "Ne smemo gubiti signal. Od sada, samo kodirani odgovor može da nas spasi. "
-                    f"Reci... Odgovori tačno sa: **{required_phrase_raw}**."
-                )
-                send_msg(message, final_warning)
+                # Stanje 2: DISKVALIFIKACIJA: Free Talk Limit Reached!
+                ai_response, player = generate_disqualification_response(korisnikov_tekst, player)
+                player.is_disqualified = True # Diskvalifikacija nakon iscrpljivanja otvorenih pitanja
+                send_msg(message, ai_response)
+                session.commit()
+                return
                 
             else:
-                # Stanje 3: Strict Game Mode (Standard Game Phase ili nakon limite)
+                # Stanje 3: Strict Game Mode (Standard Game Phase, ali odgovor nije za prolaz)
+                # Budući da je irelevantno pitanje već diskvalifikovalo, ovo je odgovor koji je RELEVANTAN ali NETACAN.
+                # Vraćamo standardni strogi odgovor.
                 ai_response, player = generate_ai_response(korisnikov_tekst, player, current_stage_key)
                 send_msg(message, ai_response)
                 
-            # Brojač se povećava bez obzira da li je bio kooperativni ili strogi odgovor
+            # Brojač se povećava samo ako nije došlo do diskvalifikacije/prolaska
             player.general_conversation_count += 1
             
         session.commit()
