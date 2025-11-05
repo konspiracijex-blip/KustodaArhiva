@@ -78,7 +78,7 @@ def initialize_database():
 initialize_database()
 
 # ----------------------------------------------------
-# 4. AI KLIJENT I DATA (V10.3 - Pojačane Instrukcije za pritisak)
+# 4. AI KLIJENT I DATA (V10.4 - Fiksirana logika namere)
 # ----------------------------------------------------
 
 GEMINI_MODEL_NAME = 'gemini-2.5-flash' 
@@ -213,39 +213,7 @@ def send_msg(message, text: Union[str, List[str]]):
     except Exception as e:
         logging.error(f"Greška pri slanju poruke: {e}")
 
-# Funkcije evaluate_intent_with_ai, generate_ai_response i get_epilogue_message ostaju iste
-
-def evaluate_intent_with_ai(question_text, user_answer, expected_intent_keywords, conversation_history=None):
-    if not ai_client: return False
-    # Logika ista kao V9.4
-    prompt = (
-        f"Ti si sistem za evaluaciju namere. "
-    )
-    if conversation_history:
-        recent_history = conversation_history[-8:] 
-        prompt += "\n".join([f"{msg['role']}: {msg['content']}" for msg in recent_history])
-    
-    prompt += (
-        f"\nTvoje pitanje je bilo: '{question_text}'\n"
-        f"Korisnikov odgovor je: '{user_answer}'\n"
-        f"Očekivana namera je JASNO AFIRMATIVAN odgovor ili odgovor koji sadrži ključnu reč: {expected_intent_keywords}. "
-        "**KRITIČNO**: Odgovori koji sadrže upitne reči (ko, šta, gde, zašto, kako) ili su izbegavajući, **NISU** ispunjenje namere. "
-        "Odgovori samo sa jednom rečju: 'TAČNO' ako je namera ispunjena, ili 'NETAČNO' ako nije."
-    )
-    
-    try:
-        response = ai_client.models.generate_content(
-            model=GEMINI_MODEL_NAME, 
-            contents=[prompt],
-            config={"temperature": 0.0}
-        )
-        return "TAČNO" in response.text.upper()
-    except APIError as e: 
-        logging.error(f"Greška AI/Gemini API (Evaluacija namere): {e}")
-        return False
-    except Exception as e:
-        logging.error(f"Nepredviđena greška u generisanju AI (Evaluacija): {e}")
-        return False
+# Funkcija evaluate_intent_with_ai je uklonjena/ignorisana u logici handlera
 
 def generate_ai_response(user_input, player, current_stage_key):
     required_phrase = get_required_phrase(current_stage_key) 
@@ -363,7 +331,7 @@ def set_webhook_route():
 
 
 # ----------------------------------------------------
-# 7. BOT HANDLERI (V10.3 - Pojačani Pritisak)
+# 7. BOT HANDLERI (V10.4 - Fiksiranje Logike Faze)
 # ----------------------------------------------------
 
 @bot.message_handler(commands=['start', 'stop', 'pokreni'])
@@ -497,7 +465,7 @@ def handle_general_message(message):
                 next_stage_key = "END_NO_SIGNAL" 
                 is_intent_recognized = True
         
-        # 2. KORAK: PROVERA OSTALIH FAZA (Python ili AI)
+        # 2. KORAK: PROVERA OSTALIH FAZA (Samo Python ključne reči)
         if current_stage_key != "START_PROVERA":
              # Python ključne reči
             korisnikove_reci = set(korisnikov_tekst_lower.replace(',', ' ').replace('?', ' ').split())
@@ -508,20 +476,13 @@ def handle_general_message(message):
                     is_intent_recognized = True
                     break
 
-            # AI provera (samo ako Python nije našao ključnu reč)
-            if not is_intent_recognized and ai_client:
-                current_question_text = get_required_phrase(current_stage_key)
-                expected_keywords = list(current_stage["responses"].keys())
-                
-                try: conversation_history = json.loads(player.conversation_history)
-                except: conversation_history = []
-                
-                if evaluate_intent_with_ai(current_question_text, korisnikov_tekst, expected_keywords, conversation_history):
-                    is_intent_recognized = True
-                    next_stage_key = list(current_stage["responses"].values())[0]
+            # V10.4 FIKS: UKLONJENA AI evaluacija namere koja je izazvala grešku
+            # Ako AI nije aktivan, ne možemo ništa drugo da uradimo osim da čekamo ključnu reč.
+
 
         # OBRADA REZULTATA
         if is_intent_recognized:
+            # 3. KORAK: AKO JE PREPOZNAT KLJUČNI ODGOVOR (Prelazak u novu fazu)
             player.current_riddle = next_stage_key
             
             if next_stage_key.startswith("END_"):
@@ -531,14 +492,15 @@ def handle_general_message(message):
             else:
                 next_stage_data = GAME_STAGES.get(next_stage_key)
                 if next_stage_data:
-                    # V10.2: Koristimo send_msg za slanje sekvence poruka (jedna po jedna)
+                    # Slanje sekvence poruka za novu fazu (jedna po jedna)
                     response_text = next_stage_data["text"]
                     send_msg(message, response_text)
                 else:
                     send_msg(message, "[GREŠKA: NEPOZNATA SLEDEĆA FAZA] Signal se gubi.")
 
         if not is_intent_recognized:
-            # 3. KORAK: Ako namera NIJE prepoznata, generiši AI odgovor/objašnjenje
+            # 4. KORAK: Ako NIJE PREPOZNATO (Hardkodovano ili ključna reč), generiši AI odgovor/objašnjenje
+            # Ovo će ostaviti player.current_riddle na staroj vrednosti, ali će odgovoriti
             ai_response, updated_player = generate_ai_response(korisnikov_tekst, player, current_stage_key)
             player = updated_player 
             send_msg(message, ai_response)
