@@ -357,8 +357,7 @@ def set_webhook_route():
 # ----------------------------------------------------
 # 7. BOT HANDLERI 
 # ----------------------------------------------------
-@bot.message_handler(commands=['start', 'stop', 'zagonetka', 'pokreni'], 
-                     func=lambda message: message.text.lower().replace('/', '') in ['start', 'stop', 'zagonetka', 'pokreni'])
+@bot.message_handler(commands=['start', 'stop', 'pokreni'])
 def handle_commands(message):
     
     if Session is None: return 
@@ -423,14 +422,14 @@ def handle_commands(message):
             else:
                 send_msg(message, "Nema aktivne veze za prekid.")
         
-        elif message.text.lower() in ['/pokreni', 'pokreni', '/zagonetka', 'zagonetka']:
+        elif message.text.lower() in ['/pokreni', 'pokreni']:
             # Ove komande više nisu primarni način interakcije
             send_msg(message, "Komande nisu potrebne. Odgovori direktno na poruke. Ako želiš novi početak, koristi /start.")
             
     finally:
         session.close() 
 
-@bot.message_handler(func=lambda message: True)
+@bot.message_handler(func=lambda message: not message.text.startswith('/'))
 def handle_general_message(message):
     
     if Session is None: return 
