@@ -8,6 +8,7 @@ from google import genai
 from google.genai.errors import APIError
 from typing import List, Union
 import json
+import re # Dodat import za regex
 from sqlalchemy import create_engine, Column, Integer, String, Boolean
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
@@ -323,19 +324,26 @@ def handle_message(message):
         current_stage_key = player.current_riddle
         stage_data = GAME_STAGES.get(current_stage_key, {})
         expected_responses = stage_data.get("responses", {})
-        user_input = message.text.strip().lower()
-
+        
+        korisnikov_tekst = message.text.strip().lower()
+        
+        # KLJUČNA POPRAVKA: Parsiranje teksta u reči za strogo podudaranje
+        # Uklanja interpunkciju i razbija na reči
+        user_words = re.split(r'\W+', korisnikov_tekst)
+        user_words = set(filter(None, user_words)) # Uklanja prazne stringove
+        
         matched_stage = None
         is_intent_recognized = False
 
-        # 1. Provera ključnih reči
+        # 1. Provera ključnih reči (sada se proverava podudarnost cele reči)
         for key, next_stage in expected_responses.items():
-            if key.lower() in user_input:
+            # Da bi ključna reč bila prepoznata, mora da bude cela reč unutar unosa
+            if key.lower() in user_words:
                 matched_stage = next_stage
                 is_intent_recognized = True
                 break
         
-        # 2. AI Evaluacija namere ako ključne reči nisu nađene
+        # 2. AI Evaluacija namere (preskače se za START jer START zahteva tačan početak)
         if not is_intent_recognized and current_stage_key not in ["START"]:
             current_question_text = random.choice(stage_data.get('text', ["..."])).replace('\n', ' ')
             expected_keywords = list(expected_responses.keys())
@@ -345,10 +353,9 @@ def handle_message(message):
             except:
                 conversation_history = []
                 
-            if evaluate_intent_with_ai(current_question_text, user_input, expected_keywords, conversation_history):
+            if evaluate_intent_with_ai(current_question_text, korisnikov_tekst, expected_keywords, conversation_history):
                 is_intent_recognized = True
-                matched_stage = list(expected_responses.values())[0]
-
+                matched_stage = list(expected_responses.values())[0] # Uzima prvi mogući sledeći korak
 
         if matched_stage:
             # Potez prepoznat - prelazak na sledeću fazu
@@ -361,16 +368,18 @@ def handle_message(message):
                 # Dinamičko biranje teksta, podržava i liste stringova i liste listi
                 text_options = next_stage_data['text']
                 if isinstance(text_options[0], list):
-                    next_text = random.choice(text_options)[-1] # START poruka
+                    # START poruka: uvek biramo poslednju frazu iz liste
+                    next_text = random.choice(text_options)[-1] 
                 elif isinstance(text_options[0], str):
-                    next_text = random.choice(text_options) # FAZA_2 poruke
+                    # FAZA_2 poruke: nasumično biramo jednu od varijacija
+                    next_text = random.choice(text_options) 
                 else:
-                     next_text = "Signal je prekinut."
+                     next_text = "Signal je prekinut." # Trebalo bi da se ne desi
                 
                 send_msg(message, next_text)
         else:
             # Potez neprepoznat - AI odgovor (vraćanje na zadatak)
-            ai_response, player = generate_ai_response(user_input, player, current_stage_key)
+            ai_response, player = generate_ai_response(korisnikov_tekst, player, current_stage_key)
             send_msg(message, ai_response)
             player.general_conversation_count += 1
             
