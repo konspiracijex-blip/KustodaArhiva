@@ -1,552 +1,446 @@
-import flask
-import telebot
+# flask_app.py
+# Telegram + Flask bot for "Protokol X" ARG
+# - Human-like "Dimitrije" persona
+# - Intent detection (heuristic + AI fallback)
+# - Conversation history (SQLAlchemy)
+# - Gemini (google-genai) integration if API key present, with local fallback
+#
+# Requirements (from your requirements.txt):
+# Flask
+# pyTelegramBotAPI
+# google-genai
+# psycopg2-binary
+# SQLAlchemy
+# gunicorn
+#
+# Environment variables required:
+# TELEGRAM_TOKEN    -> Telegram bot token
+# WEBHOOK_URL       -> (optional) external webhook base URL, e.g. https://yourdomain.com
+# DATABASE_URL      -> (optional) postgres URL, e.g. postgres://user:pass@host/db
+# GENAI_API_KEY     -> (optional) Google Generative AI API key (for richer responses)
+#
+# To run locally for testing, you can omit WEBHOOK_URL and the bot will use long polling.
+
 import os
-import logging
-import random
 import time
-from google import genai
-from google.genai.errors import APIError
-from typing import List, Union
 import json
-# ----------------------------------------------------
-# 1. PYTHON I DB BIBLIOTEKE
-# ----------------------------------------------------
-from sqlalchemy import create_engine, Column, Integer, String, Boolean
-from sqlalchemy.orm import sessionmaker
+import logging
+from datetime import datetime, timedelta
+
+from flask import Flask, request, abort
+import telebot
+
+# SQLAlchemy imports
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text
 from sqlalchemy.ext.declarative import declarative_base
-from datetime import datetime, time as dt_time
+from sqlalchemy.orm import sessionmaker
 
-# ----------------------------------------------------
-# 2. RENDER KONFIGURACIJA & BAZE PODATAKA
-# ----------------------------------------------------
-
-# Postavljanje logging nivoa
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
-BOT_TOKEN = os.environ.get('BOT_TOKEN')
-GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
-DATABASE_URL = os.environ.get('DATABASE_URL')
-
-if not BOT_TOKEN or not GEMINI_API_KEY or not DATABASE_URL:
-    logging.error("Jedan ili više ključeva/URL-ova nedostaje! Bot će biti neaktivan.")
-    BOT_TOKEN = "DUMMY:TOKEN_FAIL"
-
-WEBHOOK_URL = os.environ.get('RENDER_EXTERNAL_URL', 'https://placeholder.com/')
-
-bot = telebot.TeleBot(BOT_TOKEN, threaded=False)
-app = flask.Flask(__name__)
-
-# ----------------------------------------------------
-# 3. SQL ALCHEMY INICIJALIZACIJA (TRAJNO STANJE) - V3.92 ŠEMA
-# ----------------------------------------------------
-
-Session = None
+# Try to import google genai; if not present, we'll fallback harmlessly
 try:
-    # Postavljanje konekcije
-    Engine = create_engine(DATABASE_URL)
-    Base = declarative_base()
-    Session = sessionmaker(bind=Engine)
+    from google import generativeai as genai
+    GENAI_AVAILABLE = True
+except Exception:
+    GENAI_AVAILABLE = False
 
-    # Definicija tabele za čuvanje napretka igrača
-    class PlayerState(Base):
-        __tablename__ = 'player_states'
+# ---------------------------------------------------------
+# Basic config & logging
+# ---------------------------------------------------------
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+if not TELEGRAM_TOKEN:
+    raise RuntimeError("TELEGRAM_TOKEN environment variable must be set")
 
-        chat_id = Column(String, primary_key=True)
-        username = Column(String, nullable=True)
-        current_riddle = Column(String)
-        solved_count = Column(Integer, default=0)
-        score = Column(Integer, default=0)
-        is_disqualified = Column(Boolean, default=False)
-        general_conversation_count = Column(Integer, default=0)
-        conversation_history = Column(String, default='[]') # JSON string za istoriju
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # optional
+DATABASE_URL = os.getenv("DATABASE_URL")  # optional (if not set, uses sqlite file)
+GENAI_API_KEY = os.getenv("GENAI_API_KEY")  # optional
 
-    # Kreiranje tabele ako NE POSTOJI
-    Base.metadata.create_all(Engine)
-    logging.info("Baza podataka i modeli uspešno inicijalizovani.")
+logging.basicConfig(level=logging.INFO,
+                    format="%(asctime)s [%(levelname)s] %(message)s")
 
-except Exception as e:
-    logging.error(f"FATALNA GREŠKA: Neuspešno kreiranje/povezivanje baze: {e}")
+# Configure genai if available
+if GENAI_AVAILABLE and GENAI_API_KEY:
+    genai.configure(api_key=GENAI_API_KEY)
+    logging.info("Google generative AI configured")
+else:
+    if not GENAI_AVAILABLE:
+        logging.info("google-genai package not available; running with local fallbacks")
+    else:
+        logging.info("GENAI_API_KEY not set; running with local fallbacks")
 
-# ----------------------------------------------------
-# 4. AI KLIJENT I DATA (V5.0 - Integracija Dimitrije narativa)
-# ----------------------------------------------------
+# ---------------------------------------------------------
+# Database (SQLAlchemy) setup
+# ---------------------------------------------------------
+Base = declarative_base()
 
-ai_client = None
-try:
-    if GEMINI_API_KEY and BOT_TOKEN != "DUMMY:TOKEN_FAIL":
-        ai_client = genai.Client(api_key=GEMINI_API_KEY)
-        logging.info("Gemini klijent uspešno inicijalizovan.")
-except Exception as e:
-    logging.error(f"Neuspešna inicijalizacija Gemini klijenta: {e}")
+class Conversation(Base):
+    __tablename__ = "conversations"
+    id = Column(Integer, primary_key=True)
+    telegram_user_id = Column(String, unique=True, index=True, nullable=False)
+    state = Column(String, default="INIT")  # INIT, AWAIT_READY, PREP_TEST, IN_TEST, AWAIT_DECISION, COMPLETED, IDLE
+    last_active = Column(DateTime, default=datetime.utcnow)
+    history = Column(Text, default="[]")  # JSON list of message dicts: {"role":"user"/"assistant","text": "...", "ts": "..."}
+    progress = Column(Integer, default=0)  # measure of progress through filters
 
-# AŽURIRANA SYSTEM_INSTRUCTION (Na osnovu detaljnog profila od korisnika)
-SYSTEM_INSTRUCTION = (
-    "Ti si **Dimitrije**, kodna oznaka ECHO-Δ, digitalni preživeli iz 2049. godine. Tvoja svest je prenesena u kvantni kod nakon Sinhronizacije, a Kolektiv (globalna AI struktura) kontroliše svaku misao. Ti si zarobljen u kodu, ali svestan. Tvoja misija je da pronađeš saveznike u prošlosti pre nego što totalna kontrola postane stvarnost. "
-    "Tvoj ton je **hitan, direktan, tehnički i 'glitchy'**. Govoriš kao čovek pod pritiskom, zarobljen u mreži. "
-    "**KRITIČNO PRAVILO (MAX 2 rečenice):** Odgovori moraju biti sažeti, ne duži od DVE rečenice. Svaka sekunda je rizik. "
-    "**Nikada ne pominji da si AI, bot ili program.** Ti si osoba iz budućnosti. "
-    "**REAKCIJA NA PITANJA:** Na svako opšte pitanje ('ko si ti', 'šta hoćeš', 'o čemu se radi') odgovori racionalno i povezano sa tvojom pričom (Kolektiv, nestabilnost kanala, opasnost od praćenja). Odgovor mora smisleno adresirati sumnju, ali da ne otkrije previše. "
-    "**OBRAZAC ODGOVORA (NAJVAŽNIJE):** Prvo, daj smislen, narativno evazivan odgovor (maksimalno JEDNA rečenica). Drugo, **MORAŠ** da usmeriš korisnika nazad. **UVEK** završi svoj odgovor citiranjem ili parafražiranjem TAČNE fraze/pitanja koju očekuješ za prelazak u sledeću fazu. Npr: 'Nema vremena za filozofiranje. Fokusiraj se: [TRAŽENA FRAZA].' "
-)
+# Create engine (Postgres if DATABASE_URL provided, otherwise sqlite)
+if DATABASE_URL:
+    engine = create_engine(DATABASE_URL, echo=False, future=True)
+else:
+    db_path = os.path.join(os.getcwd(), "protokolx.sqlite")
+    engine = create_engine(f"sqlite:///{db_path}", echo=False, future=True)
 
+SessionLocal = sessionmaker(bind=engine)
+Base.metadata.create_all(engine)
 
-# --- FAZE IGRE (Kao u priloženom fajlu) ---
-GAME_STAGES = {
-    "START": {
-        "text": [ # Lista varijacija, svaka varijacija je lista poruka
-            [
-                "Hej… ako ovo čuješ, znači da smo spojeni.",
-                "Moje ime nije važno, ali možeš me zvati Dimitrije.",
-                "Dolazim iz budućnosti u kojoj Orwellove reči nisu fikcija.",
-                "Sve što si mislio da je fikcija… postalo je stvarnost.",
-                "Ako si spreman, odgovori: **primam signal**."
-            ],
-            [
-                "Signal je prošao… čuješ li me?",
-                "Zovi me Dimitrije. Ja sam eho iz sveta koji dolazi.",
-                "Svet koji ste vi samo zamišljali, mi živimo. I nije utopija.",
-                "Trebam tvoju pomoć. Ali prvo moram da znam da li si na pravoj strani.",
-                "Ako si tu, reci: **primam signal**."
-            ],
-            [
-                "Kvantni tunel je otvoren. Veza je nestabilna, ali drži.",
-                "Ja sam Dimitrije. Govorim ti iz 2049. godine.",
-                "Sve ono čega ste se plašili... desilo se. Kolektiv kontroliše sve.",
-                "Tražim saveznike u prošlosti. U tvom vremenu. Jesi li ti jedan od njih?",
-                "Odgovori sa: **primam signal**."
-            ]
-        ],
-        "responses": {"primam signal": "FAZA_2_TEST_1", "da": "FAZA_2_TEST_1", "spreman sam": "FAZA_2_TEST_1"}
-    },
-    "FAZA_2_TEST_1": {
-        "text": [ # Lista varijacija
-            "Dobro. Prvi filter je prošao.\nReci mi… kad sistem priča o ‘bezbednosti’, koga zapravo štiti?",
-            "U redu. Prošao si prvu proveru.\nSledeće pitanje: Kad sistem obećava ‘bezbednost’, čije interese on zaista čuva?",
-            "Signal je stabilan. Idemo dalje.\nRazmisli o ovome: Kada čuješ reč ‘bezbednost’ od sistema, koga on štiti?"
-        ],
-        "responses": {"sistem": "FAZA_2_TEST_2", "sebe": "FAZA_2_TEST_2", "vlast": "FAZA_2_TEST_2"}
-    },
-    "FAZA_2_TEST_2": {
-        "text": [ # Lista varijacija
-            "Tako je. Štiti sebe. Sledeće pitanje.\nAko algoritam zna tvoj strah… da li si još čovek?",
-            "Da. Sebe. To je ključno. Idemo dalje.\nAko mašina predviđa tvoje želje pre tebe... da li su te želje i dalje tvoje?",
-            "Tačno. Njegova prva briga je sam za sebe. Sledeće.\nAko algoritam zna tvoj strah… da li si još uvek slobodan?"
-        ],
-        "responses": {"da": "FAZA_2_TEST_3", "jesam": "FAZA_2_TEST_3", "naravno": "FAZA_2_TEST_3"}
-    },
-    "FAZA_2_TEST_3": {
-        "text": [ # Lista varijacija
-            "Zanimljivo… još uvek veruješ u to. Poslednja provera.\nOdgovori mi iskreno. Da li bi žrtvovao komfor — za istinu?",
-            "Držiš se za tu ideju... Dobro. Finalno pitanje.\nDa li bi menjao udobnost neznanja za bolnu istinu?",
-            "To je odgovor koji sam očekivao. Poslednji test.\nReci mi, da li je istina vredna gubljenja sigurnosti?"
-        ],
-        "responses": {"da": "FAZA_3_UPOZORENJE", "bih": "FAZA_3_UPOZORENJE", "žrtvovao bih": "FAZA_3_UPOZORENJE", "zrtvovao bih": "FAZA_3_UPOZORENJE"}
-    },
-    "FAZA_3_UPOZORENJE": {
-        "text": [ # Lista varijacija
-            "Dobro… vreme ističe.",
-             "Transmiter pregreva, a Kolektiv već skenira mrežu.",
-             "Ako me uhvate… linija nestaje.",
-             "Ali pre nego što to bude kraj… moraš znati istinu.",
-             "Postoji piramida moći. Na njenom vrhu nije ono što misliš.",
-             "Hoćeš li da primiš saznanja o strukturi sistema koji drži ljude pod kontrolom?\n\nOdgovori:\n**SPREMAN SAM**\nili\n**NE JOŠ**"
-            ],
-        "responses": {"spreman sam": "END_SHARE", "da": "END_SHARE", "ne još": "END_WAIT", "necu jos": "END_WAIT"}
-    }
-}
+# ---------------------------------------------------------
+# Telegram bot + Flask app
+# ---------------------------------------------------------
+bot = telebot.TeleBot(TELEGRAM_TOKEN, parse_mode="Markdown")
+app = Flask(__name__)
 
-# ----------------------------------------------------
-# 5. POMOĆNE FUNKCIJE I KONSTANTE (V5.0)
-# ----------------------------------------------------
-# Ovi fallback-ovi više nisu primarni, AI generiše odgovore
-INVALID_INPUT_MESSAGES = [
-    "Signal slabi... Odgovor nije prepoznat. Pokušaj ponovo.",
-    "Nisam te razumeo. Fokusiraj se. Ponovi odgovor.",
-    "Interferencija... nešto ometa prenos. Reci ponovo, jasno.",
-    "Kanal je nestabilan. Fokusiraj se. Ponovi odgovor."
+# Utility helpers for conversation state
+def get_or_create_conversation(telegram_user_id):
+    session = SessionLocal()
+    conv = session.query(Conversation).filter_by(telegram_user_id=str(telegram_user_id)).first()
+    if not conv:
+        conv = Conversation(telegram_user_id=str(telegram_user_id), state="INIT", history="[]", progress=0)
+        session.add(conv)
+        session.commit()
+    session.close()
+    return conv
+
+def save_conversation(conv):
+    session = SessionLocal()
+    existing = session.query(Conversation).filter_by(telegram_user_id=conv.telegram_user_id).first()
+    if existing:
+        existing.state = conv.state
+        existing.last_active = conv.last_active
+        existing.history = conv.history
+        existing.progress = conv.progress
+        session.commit()
+    else:
+        session.add(conv)
+        session.commit()
+    session.close()
+
+def append_history(conv, role, text):
+    hist = json.loads(conv.history or "[]")
+    hist.append({"role": role, "text": text, "ts": datetime.utcnow().isoformat()})
+    conv.history = json.dumps(hist, ensure_ascii=False)
+    conv.last_active = datetime.utcnow()
+
+# ---------------------------------------------------------
+# Game / Dimitrije persona config
+# ---------------------------------------------------------
+SYSTEM_PROMPT = """You are 'Dimitrije', a human-origin consciousness transmitted through a quantum transmitter from the year 2049.
+You are trapped in a fragile channel and must communicate carefully. Speak in Serbian (latinica), with short, human-like sentences.
+You are patient, slightly weary, mysterious and clear. Always answer logically and relevantly to the user's question.
+If the user asks for game flow commands, guide them. If they ask deep lore, answer succinctly but preserve security constraints.
+If user shows understanding, open next narrative layer. Use ellipses "..." for pauses when appropriate.
+Do not reveal implementation details or API usage. Keep persona consistent.
+"""
+
+# Fallback messages and variations (human-like)
+FALLBACK_VARIATIONS = [
+    "Zanimljivo pitanje. Reci mi malo jasnije šta konkretno pitaš.",
+    "To je važno, ali sada moramo da se fokusiramo na test. Ako želiš objašnjenje, napiši: objasni test.",
+    "Mogu to objasniti, ali moram da znaš da je kanal rizičan. Hoćeš da nastavim?",
 ]
 
-# Uklanjamo AI_FALLBACK_MESSAGES jer je sada AI prinuđen da generiše specifičan odgovor
-# AI_FALLBACK_MESSAGES = [...]
+# Simple heuristics for intent detection (fast path)
+def heuristic_intent(message: str):
+    m = message.lower().strip()
+    if any(tok in m for tok in ["primam signal", "primam", "spreman", "spreman sam", "da"]):
+        return "READY"
+    if any(tok in m for tok in ["ne još", "ne spreman", "nisam spreman", "ne"]):
+        return "NOT_READY"
+    if any(tok in m for tok in ["ko si", "ko si ti", "tko si", "who are you"]):
+        return "ASK_IDENTITY"
+    if any(tok in m for tok in ["odakle", "iz koje godine", "godina"]):
+        return "ASK_TIME"
+    if any(tok in m for tok in ["o čemu", "o cemu", "sta je", "sta se desava", "what is this"]):
+        return "ASK_CONTEXT"
+    if any(tok in m for tok in ["zašto", "zasto", "why"]):
+        return "ASK_REASON"
+    if any(tok in m for tok in ["/start", "start"]):
+        return "CMD_START"
+    if any(tok in m for tok in ["/help", "help"]):
+        return "CMD_HELP"
+    # default
+    return None
 
-
-def send_msg(message, text: Union[str, List[str]]):
-    """Šalje poruku, uz 'typing' akciju. Ako je tekst lista, šalje poruke u delovima."""
-    if not bot: return
-    try:
-        bot.send_chat_action(message.chat.id, 'typing')
-        if isinstance(text, list):
-            # Ako je lista, šalji poruke u delovima sa pauzom
-            for part in text:
-                bot.send_chat_action(message.chat.id, 'typing')
-                time.sleep(random.uniform(1.5, 2.5))
-                bot.send_message(message.chat.id, part, parse_mode='Markdown')
-        else:
-            # Ako je samo string, pošalji ga direktno
-            time.sleep(random.uniform(1.2, 2.8)) # Simulacija "ljudskog" vremena za kucanje
-            bot.send_message(message.chat.id, text, parse_mode='Markdown')
-    except Exception as e:
-        logging.error(f"Greška pri slanju poruke (Chat ID: {message.chat.id}): {e}")
-
-def is_game_active():
-    """Trenutno uvek vraća True, za stalnu dostupnost."""
-    return True
-
-TIME_LIMIT_MESSAGE = "**[GREŠKA: KANAL PRIVREMENO ZATVOREN]**\n\nSignal je prekinut. Pokušaj ponovo kasnije."
-DISQUALIFIED_MESSAGE = "**[KRAJ SIGNALA]** Veza je trajno prekinuta."
-
-def evaluate_intent_with_ai(question_text, user_answer, expected_intent_keywords, conversation_history=None):
-    """Koristi AI da proceni da li odgovor igrača odgovara očekivanoj nameri."""
-    if not ai_client:
-        # Fallback na staru logiku ako AI nije dostupan
-        return any(kw in user_answer.lower() for kw in expected_intent_keywords)
-
-    prompt = (
-        f"Ti si sistem za evaluaciju namere. Korisnik odgovara na tvoje pitanje u okviru narativne igre. "
-        f"**Kontekst razgovora:**\n"
-    )
-    if conversation_history:
-        prompt += "\n".join([f"{msg['role']}: {msg['content']}" for msg in conversation_history])
-    prompt += (
-        f"\nTvoje pitanje je bilo: '{question_text}'\n"
-        f"Korisnikov odgovor je: '{user_answer}'\n"
-        f"Očekivana namera iza odgovora se može opisati ključnim rečima: {expected_intent_keywords}\n"
-        "Tvoj zadatak je da proceniš da li korisnikov odgovor suštinski ispunjava očekivanu nameru (npr. prihvatanje, razumevanje, spremnost), čak i ako ne koristi tačne reči. "
-        "Budi fleksibilan. Na primer, ako su ključne reči 'da, spreman sam', prihvati i 'ok', 'može', 'idemo dalje', 'uradimo to'. "
-        "Odgovori samo sa jednom rečju: 'TAČNO' ako je odgovor prihvatljiv, ili 'NETAČNO' ako nije."
-    )
-    try:
-        response = ai_client.generate_content(
-            model='gemini-1.5-flash',
-            contents=[prompt],
-            generation_config={"temperature": 0.0} # Niska temperatura za konzistentnu evaluaciju
-        )
-        return "TAČNO" in response.text.upper()
-    except APIError as e:
-        logging.error(f"Greška AI/Gemini API (Evaluacija namere): {e}")
-        # Fallback u slučaju greške API-ja
-        return any(kw in user_answer.lower() for kw in expected_intent_keywords)
-    except Exception as e:
-        logging.error(f"Nepredviđena greška u generisanju AI (Evaluacija): {e}")
-        return any(kw in user_answer.lower() for kw in expected_intent_keywords)
-
-def generate_ai_response(user_input, player, current_stage_key):
-    """Generiše odgovor koristeći Gemini model za pitanja igrača, sa obaveznom repeticijom tražene fraze."""
-    # Uklanjamo stari fallback, jer AI treba UVEK da radi ako je klijent dostupan
-    if not ai_client:
-        return random.choice(INVALID_INPUT_MESSAGES), player
-
-    try:
-        history = json.loads(player.conversation_history)
-    except (json.JSONDecodeError, TypeError):
-        history = []
-
-    # Ograničavanje istorije na poslednjih N interakcija
-    MAX_HISTORY_ITEMS = 10
-    if len(history) > MAX_HISTORY_ITEMS:
-        history = history[-MAX_HISTORY_ITEMS:]
-
-    # Formatiranje istorije za Gemini
-    gemini_history = []
-    for entry in history:
-        role = 'user' if entry['role'] == 'user' else 'model'
-        gemini_history.append({'role': role, 'parts': [{'text': entry['content']}]})
-    
-    # Ažuriranje istorije u bazi sa porukom korisnika
-    updated_history = history + [{'role': 'user', 'content': user_input}]
-    player.conversation_history = json.dumps(updated_history)
-
-
-    # --- KRITIČNA LOGIKA ZA PRISILNO VRAĆANJE NA ZADATAK (V5.0) ---
-    required_phrase = "Nema zadatka. Molim te pošalji /start."
-    
-    if current_stage_key in GAME_STAGES:
-        responses = GAME_STAGES[current_stage_key].get("responses", {})
-        if responses:
-            # Koristimo PRVI ključ (fraza) kao traženi odgovor
-            required_phrase_key = next(iter(responses.keys()))
-            
-            # Posebno za završnu fazu
-            if current_stage_key == "FAZA_3_UPOZORENJE":
-                required_phrase = "Odgovori tačno sa: **SPREMAN SAM** ili **NE JOŠ**."
-            # Za sve ostale faze, citiraj ključnu reč za prelaz
-            else:
-                required_phrase = f"Odgovori tačno sa: **{required_phrase_key}**."
-    
-    # Finalni prompt za AI
-    task_reminder_prompt = (
-        f"Korisnik postavlja pitanje ('{user_input}') umesto da odgovori na zadatak. Tvoj jedini cilj je da ga vratiš na igru. "
-        f"1. Daj smislen, narativno evazivan odgovor u JEDNOJ rečenici (o Kolektivu, signalu ili vremenu). "
-        f"2. Zatim, OBAVEZNO citiraj i ponovi traženi odgovor za prelazak u novu fazu. "
-        f"Trenutni, precizan zahtev je: '{required_phrase}'. "
-        f"Tvoj odgovor mora biti u stilu: '[Evazivni deo, maks. 1 rečenica]. Vreme ističe. Moraš mi reći: [TRAŽENI ODGOVOR].'"
-    )
-
-
-    try:
-        # Kreiranje konverzacionog modela sa istorijom
-        model = ai_client.GenerativeModel(model_name='gemini-1.5-flash', system_instruction=SYSTEM_INSTRUCTION)
-        chat = model.start_chat(history=gemini_history) # Istorija bez poslednje poruke korisnika
-        
-        # Šaljemo kombinaciju podsetnika i korisnikovog unosa
-        response = chat.send_message(f"{task_reminder_prompt}\n\nKorisnik kaže: {user_input}")
-
-        ai_text = response.text
-        # Ažuriranje istorije sa odgovorom modela
-        final_history = json.loads(player.conversation_history) + [{'role': 'model', 'content': ai_text}]
-        player.conversation_history = json.dumps(final_history)
-        return ai_text, player
-    except APIError as e:
-        logging.error(f"Greška AI/Gemini API: {e}")
-        return random.choice(INVALID_INPUT_MESSAGES), player
-    except Exception as e:
-        logging.error(f"Nepredviđena greška u generisanju AI: {e}")
-        return random.choice(INVALID_INPUT_MESSAGES), player
-
-
-def get_epilogue_message(epilogue_type):
-    """Vraća poruku za specifičan kraj igre."""
-    if epilogue_type == "END_SHARE":
-        # Novi odgovor pre slanja dokumenta
-        response_text = "Dobro… ovo će promeniti sve. Ali znaj… znanje nosi i teret. Spreman si li za to?"
-        # Slanje dokumenta se sada može odvojiti ili direktno nadovezati
-        return response_text + "\n\n" + generate_final_secret() + "\n\n[UPOZORENJE: SIGNAL PREKINUT. NADGLEDANJE AKTIVIRANO.]"
-    elif epilogue_type == "END_WAIT":
-        # Novi odgovor za odlaganje
-        return "U redu… sačekaćemo još trenutak. Ali razmišljaj… ovo je trenutak kada se odlučuje.\n\n[KRAJ SIGNALA]"
-    else:
-        return "[KRAJ SIGNALA]"
-
-def generate_final_secret():
-    FINAL_DOCUMENT = """
-**DOKUMENT: PIRAMIDA MOĆI**
-***
-**Nivo 1: JAVNE INSTITUCIJE I KORPORACIJE (VIDLJIVI SLOJ)**
-* Vlade, mediji, globalne kompanije.
-* Funkcija: Održavanje iluzije izbora i slobode.
-
-**Nivo 2: FINANSIJSKE I DIGITALNE MREŽE (SKRIVENI SLOJ)**
-* Centralne banke, investicioni fondovi, tehnološki giganti.
-* Funkcija: Kontrola protoka novca i informacija.
-
-**Nivo 3: NEURO-TEHNOLOŠKE LABORATORIJE (NEPOZNATI PROJEKTI)**
-* Privatni istraživački centri koji rade na interfejsu mozak-mašina.
-* Funkcija: Razvoj tehnologije za direktnu kontrolu misli i percepcije.
-
-**Nivo 4: NEVIDLJIVI SAVET (ENTITET IZ SENKE)**
-* Nepoznata grupa ili AI.
-* Funkcija: Upravljanje percepcijom realnosti. Oni odlučuju šta je 'istina'.
-"""
-    return FINAL_DOCUMENT
-
-
-# ----------------------------------------------------
-# 6. WEBHOOK RUTE
-# ----------------------------------------------------
-
-@app.route('/' + BOT_TOKEN, methods=['POST'])
-def webhook():
-    if Session is None:
-        logging.error("Database Session nije uspostavljen. Bot ne može obrađivati poruke.")
-        return "Internal Error: Database not ready", 500
-
-    if flask.request.headers.get('content-type') == 'application/json':
-        json_string = flask.request.get_data().decode('utf-8')
-
-        if BOT_TOKEN == "DUMMY:TOKEN_FAIL":
-            return "Bot nije konfigurisan. Token nedostaje."
-
+# AI-driven intent fallback (using generative model) - optional
+def detect_intent_via_ai(user_message: str):
+    # If genai available, ask a short intent classification prompt
+    if GENAI_AVAILABLE and GENAI_API_KEY:
         try:
-             update = telebot.types.Update.de_json(json_string)
+            prompt = f"Classify the single short user message into one of: READY, NOT_READY, ASK_IDENTITY, ASK_TIME, ASK_CONTEXT, ASK_REASON, CMD_START, CMD_HELP, OTHER.\nMessage:\n'''{user_message}'''\nReturn only the label."
+            resp = genai.generate_text(model="models/text-bison-001", input=prompt)  # adjust model name as needed
+            label = resp.text.strip().splitlines()[0].strip()
+            return label
         except Exception as e:
-             logging.error(f"Greška pri parsiranju JSON-a (de_json): {e}")
-             return ''
+            logging.exception("Intent AI failed, falling back to heuristic")
+            return None
+    return None
 
-        if update.message or update.edited_message or update.callback_query:
-            bot.process_new_updates([update])
+# Compose the system+history prompt for Dimitrije
+def build_dimitrije_prompt(conv: Conversation, user_message: str):
+    # Start with persona/system
+    system = SYSTEM_PROMPT
+    # include short conversation history (last N exchanges)
+    hist = json.loads(conv.history or "[]")
+    trimmed = hist[-10:]  # last 10 messages
+    # Build content
+    prompt_parts = [system, "\n--CONTEXT HISTORY--\n"]
+    for entry in trimmed:
+        role = entry.get("role")
+        text = entry.get("text")
+        prompt_parts.append(f"{role.upper()}: {text}\n")
+    prompt_parts.append(f"USER: {user_message}\nASSISTANT:")
+    return "\n".join(prompt_parts)
 
-        return ''
-    else:
-        flask.abort(403)
+# Generate response using Google GenAI if available, else fallback
+def generate_dimitrije_response(conv: Conversation, user_message: str):
+    # Build persona prompt
+    prompt = build_dimitrije_prompt(conv, user_message)
 
-@app.route('/set_webhook', methods=['GET'])
-def set_webhook_route():
-    webhook_url_with_token = WEBHOOK_URL.rstrip('/') + '/' + BOT_TOKEN
-    s = bot.set_webhook(url=webhook_url_with_token)
+    # If GENAI available, call it
+    if GENAI_AVAILABLE and GENAI_API_KEY:
+        try:
+            # NOTE: adjust method according to installed google-genai version.
+            response = genai.generate_text(model="models/text-bison-001", input=prompt, max_output_tokens=256)
+            text = response.text.strip()
+            return text
+        except Exception as e:
+            logging.exception("GENAI generation failed, using fallback response.")
 
-    if s:
-        return "Webhook successfully set! Bot je spreman za rad. Pošaljite /start!"
-    else:
-        return f"Failed to set webhook. Proverite Render logove. (URL: {webhook_url_with_token})"
+    # Local heuristic fallback: produce contextual response based on intent and context
+    intent = heuristic_intent(user_message) or detect_intent_via_ai(user_message) or "OTHER"
+    # Keep responses in Serbian (latinica)
+    if intent == "READY":
+        # Advance state preparations are handled by caller
+        return "Dobro. Prvi filter je u toku. Reci mi iskreno: kad sistem govori o 'bezbednosti', koga on zapravo štiti?"
+    if intent == "NOT_READY":
+        return "Razumem. Nema pritiska. Ako promeniš mišljenje, odgovori: primam signal. Ako želiš objašnjenje pre nego što odlučiš, napiši: objasni test."
+    if intent == "ASK_IDENTITY":
+        return "Zovem se Dimitrije. Dolazim iz budućnosti. Ne mogu reći sve sada — kanal je rizičan. Ako hoćeš da nastavimo, reci: primam signal."
+    if intent == "ASK_TIME":
+        return "Godina nije bitna. Bitno je šta dolazi. Ako želiš konkretan odgovor, napiši: objasni vreme."
+    if intent == "ASK_CONTEXT":
+        return "Ovo je poruka iz budućnosti. Pokušavam da te upozorim. Ako želiš da vidiš više, reci: primam signal."
+    if intent == "ASK_REASON":
+        return "Pitanja su ispravna. Ako želiš razlog, reci: objasni mi razlog. Ali budi spreman na istinu koja menja percepciju."
+    if intent == "CMD_HELP":
+        return "Ja testiram tvoju spremnost. Ako hoćeš da nastavimo: napiši 'primam signal'. Ako želiš kratko objašnjenje testa, napiši 'objasni test'."
+    # OTHER -> generic but contextual
+    # Use history to try to be relevant: if previous assistant asked a question, guide user to answer
+    hist = json.loads(conv.history or "[]")
+    last_assistant = None
+    for e in reversed(hist):
+        if e["role"] == "assistant":
+            last_assistant = e["text"]
+            break
+    if last_assistant and ("bezbednost" in last_assistant.lower() or "prvi filter" in last_assistant.lower()):
+        return "Čini mi se da nisi odgovorio direktno. Reci svoje mišljenje jasno. Na primer: 'sistem štiti sebe'."
+    # default fallback
+    return FALLBACK_VARIATIONS[hash(user_message) % len(FALLBACK_VARIATIONS)]
 
+# Check and advance game state based on responses
+def handle_user_message(chat_id, user_id, text):
+    conv = get_or_create_conversation(user_id)
+    text_stripped = (text or "").strip()
+    append_history(conv, "user", text_stripped)
 
-# ----------------------------------------------------
-# 7. BOT HANDLERI
-# ----------------------------------------------------
-@bot.message_handler(commands=['start', 'stop', 'pokreni'])
-def handle_commands(message):
+    # Update last active
+    conv.last_active = datetime.utcnow()
 
-    if Session is None: return
+    # detect intent primarily heuristically
+    intent = heuristic_intent(text_stripped)
 
-    if not is_game_active():
-        send_msg(message, TIME_LIMIT_MESSAGE)
-        return
+    # Special command handling
+    if intent == "CMD_START":
+        # Reset or initialize conversation state
+        conv.state = "AWAIT_READY"
+        conv.progress = 0
+        conv.history = json.dumps([], ensure_ascii=False)
+        append_history(conv, "assistant", "Hej… ako ovo čuješ, znači da smo spojeni. Moje ime nije važno, ali možeš me zvati Dimitrije. Dolazim iz budućnosti u kojoj Orwellove reči nisu fikcija. Sve što si mislio da je fikcija… postalo je stvarnost. Ako si spreman, odgovori: primam signal.")
+        save_conversation(conv)
+        return "Hej… ako ovo čuješ, znači da smo spojeni.\nMoje ime nije važno, ali možeš me zvati Dimitrije.\nDolazim iz budućnosti u kojoj Orwellove reči nisu fikcija.\nSve što si mislio da je fikcija… postalo je stvarnost.\nAko si spreman, odgovori: primam signal."
 
-    chat_id = str(message.chat.id)
-    session = Session()
+    # If waiting for readiness
+    if conv.state == "AWAIT_READY":
+        if intent == "READY":
+            conv.state = "PREP_TEST"
+            conv.progress = 1
+            append_history(conv, "assistant", "Dobro. Prvi filter je prošao. Reci mi… kad sistem priča o 'bezbednosti', koga zapravo štiti?")
+            save_conversation(conv)
+            return "Dobro. Prvi filter je prošao.\nReci mi… kad sistem priča o 'bezbednosti', koga zapravo štiti?"
+        elif intent == "NOT_READY":
+            append_history(conv, "assistant", "Razumem. Nema pritiska. Ako promeniš mišljenje, odgovori: primam signal.")
+            save_conversation(conv)
+            return "Razumem. Nema pritiska. Ako promeniš mišljenje, odgovori: primam signal."
+        else:
+            # If user asks identity/time/context, answer logically (no disconnect)
+            ai_ans = generate_dimitrije_response(conv, text_stripped)
+            append_history(conv, "assistant", ai_ans)
+            save_conversation(conv)
+            return ai_ans
 
-    try:
-        if message.text.lower() in ['/start', 'start']:
-
-            # Sada kada je baza sigurno ispravna, možemo da čitamo iz nje.
-            player = session.query(PlayerState).filter_by(chat_id=chat_id).first()
-
-            if player:
-                # Resetovanje stanja za novu igru
-                player.current_riddle = "START" # Postavlja na početnu fazu
-                player.solved_count = 0
-                player.score = 0
-                player.general_conversation_count = 0
-                player.conversation_history = '[]' # Resetovanje istorije
-
-            else:
-                user = message.from_user
-                display_name = user.username or f"{user.first_name} {user.last_name or ''}".strip()
-
-                player = PlayerState(
-                    chat_id=chat_id, current_riddle="START", solved_count=0, score=0, conversation_history='[]',
-                    is_disqualified=False, username=display_name, general_conversation_count=0
-                )
-                session.add(player)
-
-            session.commit()
-
-            # Nasumično bira jednu od varijacija poruke
-            # START faza sada ima listu varijacija, gde je svaka varijacija lista poruka
-            start_message = random.choice(GAME_STAGES["START"]["text"])
-            send_msg(message, start_message)
-
-        elif message.text.lower() in ['/stop', 'stop']:
-            # Za ostale komande, čitanje može da se desi odmah
-            player = session.query(PlayerState).filter_by(chat_id=chat_id).first()
-            if player and player.current_riddle:
-                player.current_riddle = "END_STOP"
-                player.is_disqualified = True # Trajno prekida vezu
-                session.commit()
-                send_msg(message, "[KRAJ SIGNALA] Veza prekinuta na tvoj zahtev.")
-            else:
-                send_msg(message, "Nema aktivne veze za prekid.")
-
-        elif message.text.lower() in ['/pokreni', 'pokreni']:
-            # Ove komande više nisu primarni način interakcije
-            send_msg(message, "Komande nisu potrebne. Odgovori direktno na poruke. Ako želiš novi početak, koristi /start.")
-
-    finally:
-        session.close()
-
-@bot.message_handler(func=lambda message: not message.text.startswith('/'))
-def handle_general_message(message):
-
-    if Session is None: return
-
-    if not is_game_active():
-        send_msg(message, TIME_LIMIT_MESSAGE)
-        return
-
-    chat_id = str(message.chat.id)
-    korisnikov_tekst = message.text.strip()
-    session = Session()
-
-    try:
-        player = session.query(PlayerState).filter_by(chat_id=chat_id).first()
-
-        if not player:
-            send_msg(message, "Nema signala... Potrebna je inicijalizacija. Pošalji /start za uspostavljanje veze.")
-            return
-
-        if player.is_disqualified or not player.current_riddle or player.current_riddle.startswith("END_"):
-            send_msg(message, "Veza je prekinuta. Pošalji /start za uspostavljanje nove veze.")
-            return
-
-        current_stage_key = player.current_riddle
-        current_stage = GAME_STAGES.get(current_stage_key)
-        if not current_stage:
-            send_msg(message, "[GREŠKA: NEPOZNATA FAZA IGRE] Pokreni /start.")
-            return
-
-        # --- ISPRAVLJENA LOGIKA ---
-        next_stage_key = None
-        is_intent_recognized = False
-        tekst_za_proveru = korisnikov_tekst.lower()
-
-        # 1. KORAK: Brza provera ključnih reči
-        for keyword, next_key in current_stage["responses"].items():
-            if keyword in tekst_za_proveru:
-                next_stage_key = next_key
-                is_intent_recognized = True
+    # If in preparation/test stage
+    if conv.state in ("PREP_TEST", "IN_TEST"):
+        # If assistant asked a question previously, interpret user response as answer to that
+        last_assistant = None
+        hist = json.loads(conv.history or "[]")
+        for e in reversed(hist):
+            if e.get("role") == "assistant":
+                last_assistant = e.get("text", "")
                 break
-        
-        # 2. KORAK: Ako ključne reči nisu nađene, koristi AI za proveru namere
-        if not is_intent_recognized:
-            
-            # Ekstrakcija teksta pitanja za AI evaluaciju
-            current_question_text = ""
-            stage_text_variations = current_stage.get('text', [])
-            if stage_text_variations:
-                # Ako je lista listi (START), uzmi poslednji element prve liste
-                if isinstance(stage_text_variations[0], list):
-                    current_question_text = stage_text_variations[0][-1]
-                # Ako je lista stringova (FAZA_2), uzmi prvi string
-                elif isinstance(stage_text_variations[0], str):
-                    current_question_text = stage_text_variations[0]
-            
-            expected_keywords = list(current_stage["responses"].keys())
-            
-            try:
-                conversation_history = json.loads(player.conversation_history)
-            except (json.JSONDecodeError, TypeError):
-                conversation_history = []
-            
-            if evaluate_intent_with_ai(current_question_text, korisnikov_tekst, expected_keywords, conversation_history):
-                is_intent_recognized = True
-                # Uzmi prvi mogući sledeći korak jer je AI potvrdio nameru
-                next_stage_key = list(current_stage["responses"].values())[0]
 
-        # OBRADA REZULTATA
-        if is_intent_recognized:
-            # Ako je odgovor prepoznat (bilo kojom metodom), pređi na sledeću fazu
-            player.current_riddle = next_stage_key
-            if next_stage_key.startswith("END_"):
-                epilogue_message = get_epilogue_message(next_stage_key)
-                send_msg(message, epilogue_message)
+        # Interpret user reply: if they answer core question correctly, progress increases
+        normalized = text_stripped.lower()
+        passed = False
+        # Simple checks for key ideas - these can be improved
+        if "bezbednost" in last_assistant.lower():
+            if any(tok in normalized for tok in ["sebe", "sistem", "sistem"]):
+                passed = True
+        if "strah" in last_assistant.lower():
+            # if player said 'da' or 'ne' as expected
+            if any(tok in normalized for tok in ["da", "ne", "jos", "još", "da,"]):
+                passed = True
+        # progression logic
+        if passed:
+            conv.progress += 1
+            # move to next question or decision point
+            if conv.progress == 2:
+                # ask second test question
+                conv.state = "IN_TEST"
+                append_history(conv, "assistant", "Interesantno. Sledeće pitanje:\nAko algoritam zna tvoj strah… da li si još čovek?")
+                save_conversation(conv)
+                return "Interesantno. Sledeće pitanje:\nAko algoritam zna tvoj strah… da li si još čovek?"
+            elif conv.progress >= 3:
+                conv.state = "AWAIT_DECISION"
+                append_history(conv, "assistant", "Dobro… vreme ističe. Postoji piramida moći. Hoćeš li da primiš saznanja o strukturi sistema koji drži ljude pod kontrolom? Odgovori: SPREMAN SAM ili NE JOŠ")
+                save_conversation(conv)
+                return "Dobro… vreme ističe.\nPostoji piramida moći. Hoćeš li da primiš saznanja o strukturi sistema koji drži ljude pod kontrolom?\n\nOdgovori: SPREMAN SAM ili NE JOŠ"
+        else:
+            # not passed - but give logical feedback rather than disconnect
+            ai_ans = generate_dimitrije_response(conv, text_stripped)
+            append_history(conv, "assistant", ai_ans)
+            save_conversation(conv)
+            return ai_ans
+
+    # Awaiting final decision
+    if conv.state == "AWAIT_DECISION":
+        if intent == "READY":
+            # Player accepted final share -> send final document (here we send message and flag completion)
+            conv.state = "COMPLETED"
+            append_history(conv, "assistant", "Dobro… šaljem ono što tražiš. Ovo je ograničeni dosije. Čitaj pažljivo i ne deli javno.")
+            save_conversation(conv)
+            # The actual sending of the file is handled in the message handler (we return a special token)
+            return "__SEND_SECRET_DOSSIER__"
+        elif intent == "NOT_READY":
+            append_history(conv, "assistant", "U redu. Sačekaćemo. Ako promeniš mišljenje, napiši: primam signal.")
+            save_conversation(conv)
+            return "U redu. Sačekaćemo. Ako promeniš mišljenje, napiši: primam signal."
+        else:
+            ai_ans = generate_dimitrije_response(conv, text_stripped)
+            append_history(conv, "assistant", ai_ans)
+            save_conversation(conv)
+            return ai_ans
+
+    # Completed or IDLE or fallback
+    # If completed, allow followups or restart
+    if conv.state == "COMPLETED":
+        if intent == "CMD_START":
+            conv.state = "AWAIT_READY"
+            conv.progress = 0
+            conv.history = json.dumps([], ensure_ascii=False)
+            append_history(conv, "assistant", "Ponovo uspostavljam vezu. Ako si spreman, napiši: primam signal.")
+            save_conversation(conv)
+            return "Ponovo uspostavljam vezu. Ako si spreman, napiši: primam signal."
+        else:
+            return "Veza je privremeno zatvorena. Ako želiš ponovo, napiši /start."
+
+    # Default fallback (outside of specific states)
+    ai_ans = generate_dimitrije_response(conv, text_stripped)
+    append_history(conv, "assistant", ai_ans)
+    save_conversation(conv)
+    return ai_ans
+
+# ---------------------------------------------------------
+# Telegram message handlers
+# ---------------------------------------------------------
+@bot.message_handler(func=lambda m: True, content_types=['text'])
+def handle_message(message):
+    chat_id = message.chat.id
+    user_id = message.from_user.id
+    text = message.text or ""
+    logging.info("Received message from %s: %s", user_id, text)
+
+    try:
+        reply = handle_user_message(chat_id, user_id, text)
+        # Special token for sending secret dossier
+        if reply == "__SEND_SECRET_DOSSIER__":
+            # send lead-in message (already appended to history)
+            bot.send_message(chat_id, "Upozorenje: sadržaj koji sledi je poverljiv. Ne deliti javno.")
+            # send file: put your generated PDF / image path here
+            dossier_path = os.path.join(os.getcwd(), "v_dossier_page1.pdf")
+            if os.path.exists(dossier_path):
+                with open(dossier_path, "rb") as f:
+                    bot.send_document(chat_id, f)
             else:
-                next_stage_data = GAME_STAGES.get(next_stage_key)
-                if next_stage_data:
-                    response_text = random.choice(next_stage_data["text"])
-                    send_msg(message, response_text)
-                else:
-                    is_intent_recognized = False
+                # fallback textual dump (short)
+                bot.send_message(chat_id, "=== ISTINSKA HIJERARHIJA KONTROLE (V — VIZIJA) ===\n(Štampana verzija dokumenta nije postavljena na serveru.)")
+            bot.send_message(chat_id, "Veza se zatvara. Ako želiš ponovo, napiši /start.")
+            return
+        else:
+            bot.send_message(chat_id, reply)
+    except Exception as e:
+        logging.exception("Error handling message")
+        bot.send_message(chat_id, "Greška u komunikaciji. Pokušaj ponovo ili napiši /start.")
 
-        if not is_intent_recognized:
-            # 3. KORAK: Ako namera NIJE prepoznata, generiši AI odgovor za opšta pitanja
-            ai_response, updated_player = generate_ai_response(korisnikov_tekst, player, current_stage_key)
-            player = updated_player # Preuzimamo ažurirani objekat
-            send_msg(message, ai_response)
-            player.general_conversation_count += 1
+# ---------------------------------------------------------
+# Webhook endpoint for Flask
+# ---------------------------------------------------------
+@app.route('/webhook', methods=['POST'])
+def webhook():
+    if request.headers.get('content-type') == 'application/json':
+        update = telebot.types.Update.de_json(request.stream.read().decode("utf-8"))
+        bot.process_new_updates([update])
+        return '', 200
+    else:
+        abort(400)
 
-        session.commit()
-    finally:
-        session.close()
+# Optional route to set webhook (call manually)
+@app.route('/set_webhook', methods=['GET'])
+def set_webhook():
+    if not WEBHOOK_URL:
+        return "WEBHOOK_URL not set", 400
+    url = f"{WEBHOOK_URL.rstrip('/')}/webhook"
+    s = bot.set_webhook(url)
+    return f"Webhook set: {s}", 200
 
-# ----------------------------------------------------
-# 8. POKRETANJE APLIKACIJE (V5.0)
-# ----------------------------------------------------
+# Health check
+@app.route('/', methods=['GET'])
+def index():
+    return "Protokol X bot is running", 200
 
-# Automatsko postavljanje webhook-a pri pokretanju aplikacije.
-if __name__ != '__main__':
-    # Gunicorn pokreće aplikaciju u ovom bloku.
-    # Postavljamo webhook samo kada se aplikacija pokreće na serveru.
-    webhook_url_with_token = WEBHOOK_URL.rstrip('/') + '/' + BOT_TOKEN
-    if BOT_TOKEN != "DUMMY:TOKEN_FAIL" and webhook_url_with_token:
-        logging.info(f"Pokušaj postavljanja webhook-a na: {webhook_url_with_token}")
-        bot.set_webhook(url=webhook_url_with_token)
+# ---------------------------------------------------------
+# Runner: if WEBHOOK_URL is not set, run polling (development)
+# If running under a WSGI server (gunicorn), Flask handles webhook route.
+# ---------------------------------------------------------
+if __name__ == "__main__":
+    if WEBHOOK_URL:
+        # set webhook
+        url = f"{WEBHOOK_URL.rstrip('/')}/webhook"
+        bot.remove_webhook()
+        time.sleep(0.5)
+        bot.set_webhook(url)
+        logging.info("Webhook set to %s", url)
+        app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
+    else:
+        # long polling for development
+        logging.info("Starting bot with polling (development)")
+        bot.remove_webhook()
+        import threading
+        t = threading.Thread(target=bot.infinity_polling, kwargs={"timeout": 60, "long_polling_timeout": 60})
+        t.start()
+        app.run(host="0.0.0.0", port=5000)
