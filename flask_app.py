@@ -201,7 +201,7 @@ def is_game_active():
 TIME_LIMIT_MESSAGE = "**[GREŠKA: KANAL PRIVREMENO ZATVOREN]**\n\nSignal je prekinut. Pokušaj ponovo kasnije."
 DISQUALIFIED_MESSAGE = "**[KRAJ SIGNALA]** Veza je trajno prekinuta."
 
-Pogledaj Logdef evaluate_intent_with_ai(question_text, user_answer, expected_intent_keywords, conversation_history=None):
+def evaluate_intent_with_ai(question_text, user_answer, expected_intent_keywords, conversation_history=None):
     """Koristi AI da proceni da li odgovor igrača odgovara očekivanoj nameri."""
     if not ai_client:
         # Fallback na staru logiku ako AI nije dostupan
@@ -220,7 +220,7 @@ Pogledaj Logdef evaluate_intent_with_ai(question_text, user_answer, expected_int
         "Tvoj zadatak je da proceniš da li korisnikov odgovor suštinski ispunjava očekivanu nameru (npr. prihvatanje, razumevanje, spremnost), čak i ako ne koristi tačne reči. "
         "Budi fleksibilan. Na primer, ako su ključne reči 'da, spreman sam', prihvati i 'ok', 'može', 'idemo dalje', 'uradimo to'. "
         "Odgovori samo sa jednom rečju: 'TAČNO' ako je odgovor prihvatljiv, ili 'NETAČNO' ako nije."
-    )    
+    )
     try:
         response = ai_client.models.generate_content(
             model='gemini-2.5-flash',
