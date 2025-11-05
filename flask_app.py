@@ -395,7 +395,9 @@ def set_webhook_route():
 @bot.message_handler(commands=['start', 'stop', 'pokreni'])
 def handle_commands(message):
 
-    if Session is None: return
+    if Session is None:
+        send_msg(message, "Sistem za praćenje stanja je nedostupan. Pokušajte kasnije. [DB ERROR]")
+        return
 
     if not is_game_active():
         send_msg(message, TIME_LIMIT_MESSAGE)
@@ -451,6 +453,11 @@ def handle_commands(message):
             # Ove komande više nisu primarni način interakcije
             send_msg(message, "Komande nisu potrebne. Odgovori direktno na poruke. Ako želiš novi početak, koristi /start.")
 
+    except Exception as e:
+        # HVATANJE GREŠKE U GLAVNOM BLOKU
+        logging.critical(f"NEPREDVIĐENA FATALNA GREŠKA U handle_commands: {e}")
+        send_msg(message, "Greška pri inicijalizaciji veze. Pokušajte ponovo sa /start. **[KOD GREŠKE: 501]**")
+        session.rollback() # Osigurati da transakcija nije ostala otvorena
     finally:
         session.close()
 
