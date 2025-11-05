@@ -496,7 +496,7 @@ def handle_general_message(message):
         if is_intent_recognized:
             # Pronađi koji je 'next_stage_key' na osnovu prepoznate namere
             for keyword, next_key in current_stage["responses"].items():
-                if keyword in korisnikov_tekst: # Jednostavna provera je dovoljna ovde
+                if keyword in korisnikov_tekst or keyword in message.text.lower(): # Jednostavna provera je dovoljna ovde
                     next_stage_key = next_key
                     break
             # Ako jednostavna provera ne uspe, uzmi prvi mogući sledeći korak
