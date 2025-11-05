@@ -29,7 +29,8 @@ DATABASE_URL = os.environ.get('DATABASE_URL')
 
 if not BOT_TOKEN or not GEMINI_API_KEY or not DATABASE_URL:
     logging.error("Jedan ili više ključeva/URL-ova nedostaje! Bot će biti neaktivan.")
-    BOT_TOKEN = "DUMMY:TOKEN_FAIL"
+    # Postavljanje dummy tokena za sigurnost, ali bot neće raditi
+    BOT_TOKEN = "DUMMY:TOKEN_FAIL" 
 
 WEBHOOK_URL = os.environ.get('RENDER_EXTERNAL_URL', 'https://placeholder.com/')
 
@@ -37,7 +38,7 @@ bot = telebot.TeleBot(BOT_TOKEN, threaded=False)
 app = flask.Flask(__name__)
 
 # ----------------------------------------------------
-# 3. SQL ALCHEMY INICIJALIZACIJA (TRAJNO STANJE) - V3.92 ŠEMA
+# 3. SQL ALCHEMY INICIJALIZACIJA (TRAJNO STANJE)
 # ----------------------------------------------------
 
 Session = None
@@ -68,7 +69,7 @@ except Exception as e:
     logging.error(f"FATALNA GREŠKA: Neuspešno kreiranje/povezivanje baze: {e}")
 
 # ----------------------------------------------------
-# 4. AI KLIJENT I DATA (V4.8 - Fiksiran Model na gemini-2.5-flash)
+# 4. AI KLIJENT I DATA (V4.9 - Fiksiran Model na gemini-2.5-flash)
 # ----------------------------------------------------
 
 # KRITIČNA ISPRAVKA: Korišćenje najnovijeg, stabilnog modela za v1beta API
@@ -82,7 +83,7 @@ try:
 except Exception as e:
     logging.error(f"Neuspešna inicijalizacija Gemini klijenta: {e}")
 
-# --- KONSPIRATOR (TESTER) KONSTANTE (Uklonjeno, nije relevantno za fix) ---
+# --- KONSPIRATOR (TESTER) KONSTANTE ---
 TESTER_CHAT_IDS: List[str] = [] 
 # --------------------------------------------------------------------------
 
@@ -166,7 +167,7 @@ GAME_STAGES = {
 }
 
 # ----------------------------------------------------
-# 5. POMOĆNE FUNKCIJE I KONSTANTE (V4.8 - Fiksiran Model na gemini-2.5-flash)
+# 5. POMOĆNE FUNKCIJE I KONSTANTE (V4.9)
 # ----------------------------------------------------
 INVALID_INPUT_MESSAGES = [
     "Signal slabi... Odgovor nije prepoznat. Pokušaj ponovo.",
@@ -240,7 +241,9 @@ def evaluate_intent_with_ai(question_text, user_answer, expected_intent_keywords
         f"**Kontekst razgovora:**\n"
     )
     if conversation_history:
-        prompt += "\n".join([f"{msg['role']}: {msg['content']}" for msg in conversation_history])
+        # Dodavanje poslednje 4 interakcije (user i model)
+        recent_history = conversation_history[-8:] 
+        prompt += "\n".join([f"{msg['role']}: {msg['content']}" for msg in recent_history])
     prompt += (
         f"\nTvoje pitanje je bilo: '{question_text}'\n"
         f"Korisnikov odgovor je: '{user_answer}'\n"
@@ -250,7 +253,7 @@ def evaluate_intent_with_ai(question_text, user_answer, expected_intent_keywords
         "Odgovori samo sa jednom rečju: 'TAČNO' ako je odgovor prihvatljiv, ili 'NETAČNO' ako nije."
     )
     try:
-        # KRITIČNA ISPRAVKA: HARD-KODIRANO ZA SIGURNOST PROTIV 404 GREŠKE
+        # KRITIČNA ISPRAVKA: HARD-KODIRANJE NA GEMINI-2.5-FLASH
         response = ai_client.models.generate_content(
             model='gemini-2.5-flash', 
             contents=[prompt],
@@ -286,7 +289,8 @@ def generate_ai_response(user_input, player, current_stage_key):
     # Formatiranje istorije za Gemini (uloga 'user' i 'model')
     gemini_history = []
     for entry in history:
-        role = 'user' if entry['role'] == 'user' else 'model'
+        # U API-ju, model odgovara kao 'model'
+        role = 'user' if entry['role'] == 'user' else 'model' 
         gemini_history.append({'role': role, 'parts': [{'text': entry['content']}]})
     
     # Ažuriranje istorije u bazi sa porukom korisnika (Pre poziva AI)
@@ -315,7 +319,7 @@ def generate_ai_response(user_input, player, current_stage_key):
 
         try:
             # 2. Direktni API poziv (one-shot)
-            # KRITIČNA ISPRAVKA: HARD-KODIRANO ZA SIGURNOST PROTIV 404 GREŠKE
+            # KRITIČNA ISPRAVKA: HARD-KODIRANJE NA GEMINI-2.5-FLASH
             response = ai_client.models.generate_content(
                 model='gemini-2.5-flash', 
                 contents=full_contents
@@ -529,8 +533,10 @@ def handle_general_message(message):
         
         # 2. KORAK: Ako ključne reči nisu nađene, koristi AI za proveru namere
         if not is_intent_recognized:
+            # Priprema teksta pitanja za AI (uzimamo nasumično jedan tekst iz liste)
             if current_stage_key == "START":
-                current_question_text = "Početno pitanje za uspostavljanje veze."
+                # Start faza ima listu listi, pa je potrebno malo složenije uzimanje teksta
+                current_question_text = random.choice(random.choice(GAME_STAGES["START"]["text"]))
             else:
                 current_question_text = random.choice(current_stage['text'])
             
@@ -576,10 +582,8 @@ def handle_general_message(message):
 # ----------------------------------------------------
 
 # Automatsko postavljanje webhook-a pri pokretanju aplikacije.
-# Ovo osigurava da je bot uvek povezan nakon deploy-a ili restarta.
 if __name__ != '__main__':
     # Gunicorn pokreće aplikaciju u ovom bloku.
-    # Postavljamo webhook samo kada se aplikacija pokreće na serveru.
     webhook_url_with_token = WEBHOOK_URL.rstrip('/') + '/' + BOT_TOKEN
     if BOT_TOKEN != "DUMMY:TOKEN_FAIL" and webhook_url_with_token:
         logging.info(f"Pokušaj postavljanja webhook-a na: {webhook_url_with_token}")
