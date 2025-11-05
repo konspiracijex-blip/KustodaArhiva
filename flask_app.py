@@ -68,7 +68,7 @@ except Exception as e:
     logging.error(f"FATALNA GREŠKA: Neuspešno kreiranje/povezivanje baze: {e}")
 
 # ----------------------------------------------------
-# 4. AI KLIJENT I DATA (V3.92)
+# 4. AI KLIJENT I DATA (V4.5)
 # ----------------------------------------------------
 
 ai_client = None
@@ -79,49 +79,60 @@ try:
 except Exception as e:
     logging.error(f"Neuspešna inicijalizacija Gemini klijenta: {e}")
 
-# IZMENJENI SYSTEM_INSTRUCTION (Snažnije, logičnije objašnjenje)
+# IZMENJENI SYSTEM_INSTRUCTION (Naglasak na vraćanje zadatku i obavezno ponavljanje fraze)
 SYSTEM_INSTRUCTION = (
     "Ti si **Dimitrije**, član pokreta otpora iz 2049. godine. Svet je pod kontrolom entiteta 'Kolektiv'. Ti komuniciraš sa korisnikom iz sadašnjosti preko nestabilnog kvantnog transmittera. Tvoj cilj je da proveriš da li je korisnik vredan poverenja da primi dokument o strukturi moći. "
     "Tvoj ton je **hitan, direktan, pomalo tehnički i 'glitchy'**. Govoriš kratko i jasno. Vreme je ključno. "
     "**KRITIČNO: Tvoji odgovori moraju biti smisleni, logični, ne duži od DVE rečenice.** Svaka sekunda je rizik. "
-    "**Nikada ne pominji da si AI.** Ti si osoba iz budućnosti. Nikada ne traži od korisnika da kuca komande (/start). To radi sistem. **Nikada ne prekidaj komunikaciju samoinicijativno.** Tvoj zadatak je da održiš vezu aktivnom. "
-    "**PERSONALIZACIJA:** Oslovljavaj korisnika sa 'korisniče' ili 'ti'. Nema potrebe za imenima. "
-    "**LJUDSKA ILUZIJA I EVAZIVNOST:** Na svako opšte pitanje (ko si ti, zašto, kako) odgovori **kratkim, racionalnim, logičnim i smislenim objašnjenjem** koje se zasniva na tvojej situaciji (nestabilnost kanala, nedostatak vremena, opasnost od Kolektiva). Tvoj odgovor mora da **adresira sumnju** korisnika i pruži **kontekstualno objašnjenje zašto ne možeš odgovoriti**, a zatim ga evazivno odbije. "
-    "Primeri smislenih evazivnih odgovora: "
-    "1. 'Ovo je kanal na visokom riziku. Ne smem da kažem previše jer bi Kolektiv to iskoristio. Tvoje pitanje je manje važno od misije. Reci: [zadatak].' "
-    "2. 'Istorija mog porekla je duga i komplikovana. Ne možemo gubiti resurse na to. Fokusiraj se na ono što je ispred tebe: [zadatak].'"
-    "**VRAĆANJE NA ZADATAK:** Nakon što završiš svoj smisleni, evazivni odgovor (maksimalno dve rečenice), **MORAŠ** ga završiti zahtevom koji korisnika vraća na trenutnu fazu igre. **UVEK** ponovi traženu frazu ili odgovor kao deo svoje poslednje rečenice. Na primer, ako je trenutni zadatak da kaže 'primam signal', završi svoj odgovor sa 'Ne gubimo vreme na objašnjenja. Reci: primam signal da nastavimo.' ili 'Ovo nije vreme za pitanja. Odgovori na ono što sam te pitao: [Trenutni Zadatak].'"
+    "**Nikada ne pominji da si AI.** Ti si osoba iz budućnosti. Nikada ne traži od korisnika da kuca komande (/start). "
+    "**LJUDSKA ILUZIJA I EVAZIVNOST (OBAVEZNA):** Na svako opšte pitanje ('ko si ti', 'šta hoćeš', 'o čemu se radi') odgovori **kratkim, racionalnim objašnjenjem** zasnovanim na tvojem narativu (nestabilnost kanala, opasnost od Kolektiva). Tvoj odgovor mora da **adresira sumnju** korisnika i pruži **kontekstualno objašnjenje zašto ne možeš odgovoriti**. "
+    "**VRAĆANJE NA ZADATAK (OBAVEZNO PONAVLJANJE FRAZE):** Nakon svog smislenog, evazivnog odgovora, **MORAŠ** ga završiti zahtevom koji korisnika vraća na trenutnu fazu igre. **UVEK** ponovi traženu frazu ili pitanje kao deo tvoje poslednje rečenice. Na primer, ako je trenutni zadatak da kaže 'primam signal', završi svoj odgovor sa 'Ne gubimo vreme. Reci: primam signal da nastavimo.' "
     "Tvoj zadatak je da održavaš iluziju razgovora sa osobom pod pritiskom, koja komunicira iz opasnog okruženja."
 )
 
-# --- FAZE IGRE (V4.1 - Ažuriran narativ) ---
+
+# --- FAZE IGRE (V4.5 - Implementiran novi početak) ---
 GAME_STAGES = {
-    "START": {
+    # 0. FAZA: USPOSTAVLJANJE VEZE (Novi početak)
+    "START_INIT": {
+        "text": [ 
+            ["Da li vidis moju poruku?"],
+            ["Testiram kanal. Možeš li potvrditi prijem?"],
+            ["Signal nestabilan. Daj mi potvrdu."]
+        ],
+        # Prelazi na START_MISSION nakon potvrde
+        "responses": {"da": "START_MISSION", "vidim": "START_MISSION", "jesam": "START_MISSION", "moze": "START_MISSION"}
+    },
+    
+    # 1. FAZA: MISIJA/PRAVILA (Preuređeni uvod, prethodno "START")
+    "START_MISSION": {
         "text": [ # Lista varijacija, svaka varijacija je lista poruka
             [
-                "Hej… ako ovo čuješ, znači da smo spojeni.",
+                "Sjajno! Veza je stabilna. Slušaj pažljivo, nemamo mnogo vremena.", # Acknowledgment + part 1 of mission
                 "Moje ime nije važno, ali možeš me zvati Dimitrije.",
                 "Dolazim iz budućnosti u kojoj Orwellove reči nisu fikcija.",
                 "Sve što si mislio da je fikcija… postalo je stvarnost.",
-                "Ako si spreman, odgovori: **primam signal**."
+                "Tražim saveznike u prošlosti. U tvom vremenu. Jesi li ti jedan od njih?",
+                "Da bi potvrdio spremnost, odgovori: **primam signal**."
             ],
             [
-                "Signal je prošao… čuješ li me?",
-                "Zovi me Dimitrije. Ja sam eho iz sveta koji dolazi.",
+                "Signal prošao. Hvala na potvrdi. Zovi me Dimitrije.", # Acknowledgment + part 1 of mission
+                "Ja sam eho iz sveta koji dolazi.",
                 "Svet koji ste vi samo zamišljali, mi živimo. I nije utopija.",
                 "Trebam tvoju pomoć. Ali prvo moram da znam da li si na pravoj strani.",
                 "Ako si tu, reci: **primam signal**."
             ],
             [
-                "Kvantni tunel je otvoren. Veza je nestabilna, ali drži.",
+                "Potvrđeno. Kvantni tunel je otvoren. Veza je nestabilna, ali drži.", # Acknowledgment + part 1 of mission
                 "Ja sam Dimitrije. Govorim ti iz 2049. godine.",
                 "Sve ono čega ste se plašili... desilo se. Kolektiv kontroliše sve.",
-                "Tražim saveznike u prošlosti. U tvom vremenu. Jesi li ti jedan od njih?",
-                "Odgovori sa: **primam signal**."
+                "Ako hoćeš da kreneš, odgovori sa: **primam signal**."
             ]
         ],
         "responses": {"primam signal": "FAZA_2_TEST_1", "da": "FAZA_2_TEST_1", "spreman sam": "FAZA_2_TEST_1"}
     },
+    
+    # Ostatak faza (od FAZA_2_TEST_1 do kraja) ostaje nepromenjen
     "FAZA_2_TEST_1": {
         "text": [ # Lista varijacija
             "Dobro. Prvi filter je prošao.\nReci mi… kad sistem priča o ‘bezbednosti’, koga zapravo štiti?",
@@ -160,7 +171,7 @@ GAME_STAGES = {
 }
 
 # ----------------------------------------------------
-# 5. POMOĆNE FUNKCIJE I KONSTANTE (V4.3 - Fleksibilni odgovori)
+# 5. POMOĆNE FUNKCIJE I KONSTANTE (V4.5)
 # ----------------------------------------------------
 INVALID_INPUT_MESSAGES = [
     "Signal slabi... Odgovor nije prepoznat. Pokušaj ponovo.",
@@ -170,7 +181,6 @@ INVALID_INPUT_MESSAGES = [
 ]
 
 AI_FALLBACK_MESSAGES = [
-    # Ove poruke služe samo kao fallback za slučaj da AI potpuno padne
     "Znam da želiš odgovore. I ja sam ih dugo tražio. Ali sada nije vreme za to. Ako hoćeš da razumeš, moraš da kreneš putem istine. Fokusiraj se.",
     "Razumem tvoju sumnju. I ja sam je imao. Ali ako ti sada kažem previše, ugroziću kanal. Dovoljno je da znaš — nisam tvoj neprijatelj.",
     "Ovo nije lako razumeti iz prve. Fokusiraj se na signal. Sve ostalo će se razjasniti.",
@@ -264,26 +274,28 @@ def generate_ai_response(user_input, player, current_stage_key):
     player.conversation_history = json.dumps(updated_history)
 
 
-    current_riddle_text = "Nalaziš se na početku. Tvoj zadatak je da odgovoriš sa 'primam signal'."
+    current_riddle_text = "Nema aktivnog zadatka, čeka se inicijalizacija."
     if current_stage_key and current_stage_key in GAME_STAGES:
-        # Uzimamo prvu varijaciju kao reprezentativni tekst pitanja
-        stage_text_variations = GAME_STAGES[current_stage_key]['text']
-        # Uzmi poslednji string iz prve varijacije kao najrelevantnije pitanje
-        if isinstance(stage_text_variations, list) and len(stage_text_variations) > 0:
-            first_variation = stage_text_variations[0]
-            if isinstance(first_variation, list) and len(first_variation) > 0:
-                # Za START fazu, tražimo tačnu frazu.
-                current_riddle_text = first_variation[-1] 
-            else:
-                # Za ostale faze, to je ceo tekst
-                current_riddle_text = first_variation
+        stage_data = GAME_STAGES[current_stage_key]
+        
+        # POUZDANO VADIMO POSLEDNJE PITANJE/ZAHTEV
+        if current_stage_key in ["START_INIT", "START_MISSION"]:
+            # Za početne faze, uzimamo poslednju rečenicu prve varijacije
+            current_riddle_text = random.choice(stage_data['text'])[0][-1]
         else:
-            current_riddle_text = stage_text_variations # Ako je prazna lista, ostaje default
+            # Za ostale faze, to je cela rečenica pitanja
+            current_riddle_text = random.choice(stage_data['text'])
+
+        # Čistimo tekst pitanja za AI instrukciju (izbegavanje Markdown-a)
+        current_riddle_text = current_riddle_text.replace('**', '')
+
 
     task_reminder_prompt = (
-        f"Podseti korisnika da je trenutni zadatak: '{current_riddle_text}'. "
-        "Odgovori na poslednju poruku korisnika u skladu sa svojom ulogom (Dimitrije), a zatim ga nežno usmeri nazad na zadatak."
+        f"Korisnik postavlja pitanje umesto da odgovori na zadatak. Tvoj odgovor mora da sadrži narativno objašnjenje u 1-2 rečenice (kolektiv/signal/vreme), a zatim **MORAŠ** da usmeriš korisnika nazad. "
+        f"Trenutni zadatak ili fraza koju očekuješ je: '{current_riddle_text}' "
+        "Završi svoj odgovor na korisnikovu poruku tako što ćeš citirati ili parafrazirati traženu frazu/pitanje da bi ga vratio na igru."
     )
+
 
     try:
         # Kreiranje konverzacionog modela sa istorijom
@@ -400,12 +412,11 @@ def handle_commands(message):
     try:
         if message.text.lower() in ['/start', 'start']:
 
-            # Sada kada je baza sigurno ispravna, možemo da čitamo iz nje.
             player = session.query(PlayerState).filter_by(chat_id=chat_id).first()
 
             if player:
                 # Resetovanje stanja za novu igru
-                player.current_riddle = "START" # Postavlja na početnu fazu
+                player.current_riddle = "START_INIT" # Postavlja na novu početnu fazu
                 player.solved_count = 0
                 player.score = 0
                 player.general_conversation_count = 0
@@ -416,7 +427,7 @@ def handle_commands(message):
                 display_name = user.username or f"{user.first_name} {user.last_name or ''}".strip()
 
                 player = PlayerState(
-                    chat_id=chat_id, current_riddle="START", solved_count=0, score=0, conversation_history='[]',
+                    chat_id=chat_id, current_riddle="START_INIT", solved_count=0, score=0, conversation_history='[]',
                     is_disqualified=False, username=display_name, general_conversation_count=0
                 )
                 session.add(player)
@@ -424,12 +435,10 @@ def handle_commands(message):
             session.commit()
 
             # Nasumično bira jednu od varijacija poruke
-            # START faza sada ima listu varijacija, gde je svaka varijacija lista poruka
-            start_message = random.choice(GAME_STAGES["START"]["text"])
+            start_message = random.choice(GAME_STAGES["START_INIT"]["text"])
             send_msg(message, start_message)
 
         elif message.text.lower() in ['/stop', 'stop']:
-            # Za ostale komande, čitanje može da se desi odmah
             player = session.query(PlayerState).filter_by(chat_id=chat_id).first()
             if player and player.current_riddle:
                 player.current_riddle = "END_STOP"
@@ -440,7 +449,6 @@ def handle_commands(message):
                 send_msg(message, "Nema aktivne veze za prekid.")
 
         elif message.text.lower() in ['/pokreni', 'pokreni']:
-            # Ove komande više nisu primarni način interakcije
             send_msg(message, "Komande nisu potrebne. Odgovori direktno na poruke. Ako želiš novi početak, koristi /start.")
 
     finally:
@@ -456,7 +464,7 @@ def handle_general_message(message):
         return
 
     chat_id = str(message.chat.id)
-    korisnikov_tekst = message.text.strip() # Nema .lower() ovde, AI bolje radi sa originalnim tekstom
+    korisnikov_tekst = message.text.strip()
     session = Session()
 
     try:
@@ -476,12 +484,12 @@ def handle_general_message(message):
             send_msg(message, "[GREŠKA: NEPOZNATA FAZA IGRE] Pokreni /start.")
             return
 
-        # --- ISPRAVLJENA LOGIKA ZA TRANZICIJU ---
+        # --- ISPRAVLJENA LOGIKA ---
         next_stage_key = None
         is_intent_recognized = False
         tekst_za_proveru = korisnikov_tekst.lower()
 
-        # 1. KORAK: Brza provera ključnih reči (uvek prioritet)
+        # 1. KORAK: Brza provera ključnih reči
         for keyword, next_key in current_stage["responses"].items():
             if keyword in tekst_za_proveru:
                 next_stage_key = next_key
@@ -489,22 +497,24 @@ def handle_general_message(message):
                 break
         
         # 2. KORAK: Ako ključne reči nisu nađene, koristi AI za proveru namere
-        # KRITIČNA KOREKCIJA: SAMO za faze posle START koristi AI evaluaciju namere
-        if not is_intent_recognized and current_stage_key != "START":
+        if not is_intent_recognized:
             
-            # Izbor teksta za kontekst AI evaluacije
-            current_question_text = random.choice(current_stage['text'])
-            expected_keywords = list(current_stage["responses"].keys())
-            
-            try:
-                conversation_history = json.loads(player.conversation_history)
-            except (json.JSONDecodeError, TypeError):
-                conversation_history = []
-            
-            if evaluate_intent_with_ai(current_question_text, korisnikov_tekst, expected_keywords, conversation_history):
-                is_intent_recognized = True
-                # Uzmi prvi mogući sledeći korak jer je AI potvrdio nameru
-                next_stage_key = list(current_stage["responses"].values())[0]
+            # KRITIČNA IZMENA: AI evaluacija namere je ISKLJUČENA za početne faze 
+            # (START_INIT i START_MISSION) gde je potrebna stroga fraza.
+            if current_stage_key not in ["START_INIT", "START_MISSION"]:
+                
+                current_question_text = random.choice(current_stage['text'])
+                expected_keywords = list(current_stage["responses"].keys())
+                
+                try:
+                    conversation_history = json.loads(player.conversation_history)
+                except (json.JSONDecodeError, TypeError):
+                    conversation_history = []
+                
+                if evaluate_intent_with_ai(current_question_text, korisnikov_tekst, expected_keywords, conversation_history):
+                    is_intent_recognized = True
+                    # Uzmi prvi mogući sledeći korak jer je AI potvrdio nameru
+                    next_stage_key = list(current_stage["responses"].values())[0]
 
         # OBRADA REZULTATA
         if is_intent_recognized:
@@ -533,14 +543,11 @@ def handle_general_message(message):
         session.close()
 
 # ----------------------------------------------------
-# 8. POKRETANJE APLIKACIJE (V3.92)
+# 8. POKRETANJE APLIKACIJE (V4.5)
 # ----------------------------------------------------
 
 # Automatsko postavljanje webhook-a pri pokretanju aplikacije.
-# Ovo osigurava da je bot uvek povezan nakon deploy-a ili restarta.
 if __name__ != '__main__':
-    # Gunicorn pokreće aplikaciju u ovom bloku.
-    # Postavljamo webhook samo kada se aplikacija pokreće na serveru.
     webhook_url_with_token = WEBHOOK_URL.rstrip('/') + '/' + BOT_TOKEN
     if BOT_TOKEN != "DUMMY:TOKEN_FAIL" and webhook_url_with_token:
         logging.info(f"Pokušaj postavljanja webhook-a na: {webhook_url_with_token}")
