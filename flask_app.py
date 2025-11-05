@@ -77,16 +77,22 @@ SYSTEM_INSTRUCTION = (
     "Na opšta pitanja (ko si, šta je ovo) odgovori narativno, **EVASIVNO**, i uvek vraćaj korisnika na TAČAN zadatak. "
 )
 
-# AŽURIRANA LISTA NARATIVNIH FRAZA (za AI poziv i fallback)
-NARRATIVE_INTRO_PHRASES = [
-    "Kolektiv nas prati! Ne pitaj. Skreni im pažnju. Samo mi reci...",
-    "Nema vremena za filozofiranje, linija je nestabilna. Moramo dalje. Brzo...",
-    "Previše si direktan. To nas ugrožava. Samo me to može zadržati u mreži. Reci...",
-    "Glitch na mreži. Prekini bespotrebnu komunikaciju. Moram da čujem kodiran odgovor...",
-    "Skeniraju prenos. Samo kodirana reč može proći filtere. Ponovi frazu...",
-    "Zaboravi ko sam. Važno je šta radiš. Ne možemo gubiti signal. Reci mi...",
-    "Pitanja te čine ranjivim. Nema filtera za znatiželju. Samo kod, brzo...",
-    "Vibracija mreže raste. Samo protokol može da nas zaštiti. Ne gubi vreme..."
+# NOVE FRAZE ZA DIVERSIFIKACIJU FALLBACK-A
+NARRATIVE_TENSION = [
+    "Kolektiv nas prati! Ne pitaj.",
+    "Linija je nestabilna, Dimitrije pada!",
+    "Signal je hakovan. Brzo, Kolektiv nas traži!",
+    "Sistem skenira naš prenos. Prekini ćaskanje.",
+    "Detektovan Glitch na mreži. Prekini bespotrebnu komunikaciju.",
+    "Previše si direktan. To nas ugrožava."
+]
+
+ACTION_DIRECTIVES = [
+    "Ne gubi vreme na pitanja, fokusiraj se na kod.",
+    "Samo kodirana reč može proći filtere. Ponovi frazu.",
+    "Zaboravi ko sam. Važno je šta radiš. Reci mi.",
+    "Pitanja te čine ranjivim. Nema filtera za znatiželju. Samo kod, brzo.",
+    "Vibracija mreže raste. Samo protokol može da nas zaštiti. Ne gubi vreme."
 ]
 
 # ----------------------------------------------------
@@ -179,13 +185,15 @@ def generate_ai_response(user_input, player, current_stage_key):
     # 1. Određivanje potrebne fraze za prelazak faze
     required_phrase_raw = list(GAME_STAGES.get(current_stage_key, {}).get("responses", {}).keys())[0]
     if current_stage_key == "FAZA_3_UPOZORENJE":
-        required_phrase = "Odgovori tačno sa: **SPREMAN SAM** ili **NE JOŠ**."
+        required_phrase = "Odgovori tačno sa: **SPREMAN SAM** ili **NE JOS**."
     else:
         required_phrase = f"Odgovori tačno sa: **{required_phrase_raw}**."
                 
     if not ai_client:
         # Fallback (bez AI) - Koristi diverzitet hardcoded fraza
-        narrative_starter = random.choice(NARRATIVE_INTRO_PHRASES)
+        tension_phrase = random.choice(NARRATIVE_TENSION)
+        action_phrase = random.choice(ACTION_DIRECTIVES)
+        narrative_starter = f"{tension_phrase} {action_phrase}"
         ai_text = f"{narrative_starter} {required_phrase}"
         
         # Ažuriranje istorije (važan korak)
@@ -234,8 +242,10 @@ def generate_ai_response(user_input, player, current_stage_key):
     except Exception as e:
         logging.error(f"FATALNA AI GREŠKA: {e}. Vraćam STRUKTURIRANI narativni odgovor.")
         
-        # Fallback sa diverzitetom
-        narrative_starter = random.choice(NARRATIVE_INTRO_PHRASES)
+        # Fallback sa DVA nezavisna dela (visok diverzitet)
+        tension_phrase = random.choice(NARRATIVE_TENSION)
+        action_phrase = random.choice(ACTION_DIRECTIVES)
+        narrative_starter = f"{tension_phrase} {action_phrase}"
         ai_text = f"{narrative_starter} {required_phrase}"
         
         # Ažuriranje istorije
