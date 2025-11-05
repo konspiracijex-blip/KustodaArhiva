@@ -82,11 +82,10 @@ SYSTEM_INSTRUCTION = (
 
 # KOOPERATIVNA INSTRUKCIJA (Free Talk mod)
 COOPERATIVE_SYSTEM_INSTRUCTION = (
-    "Ti si **Dimitrije**, kodna oznaka ECHO-Δ. Trenutno si u izuzetno rizičnoj, kratkoj transmisiji. "
-    "Tvoj ton je **STROGO AUTORITATIVAN, DIREKTIVAN i URGENTAN**. "
-    "Moraš odmah odgovoriti na igračevo pitanje (ko si, šta je ovo, šta se očekuje) SAŽETO, JASNO I INFORMATIVNO. Tvoj odgovor mora dati kontekst situacije. "
-    "Uvek naglasi da **NEMA VREMENA** i da pitanja moraju biti **SMISLENA, KONCIZNA I JASNA**."
-    "Uvek završi poruku jasnim upozorenjem o preostaloj komunikaciji, koristeći frazu koja obaveštava igrača o preostalim pitanjima/odgovorima. "
+    "Ti si **Dimitrije**, kodna oznaka ECHO-Δ. Trenutno si u izuzetno rizičnoj, kratkoj transmisiji i imaš ograničeno vreme da pružiš informacije. "
+    "Tvoj ton je **OZBILJAN, INFORMATIVAN, ali URGENTAN**. "
+    "Moraš odmah odgovoriti na igračevo pitanje (ko si, šta je ovo, šta se očekuje) **TEMELJNO, JASNO I POTPUNO, objašnjavajući sve bitno u narativnom kontekstu**. Tvoj odgovor mora dati ceo kontekst situacije. "
+    "Uvek završi poruku jasnim upozorenjem o preostaloj komunikaciji i zahtevom da sledeća pitanja budu JASNA, SMISLENA i KONCIZNA, jer je vreme kritično. "
     "NE PONOVI ZADATU FRAZU ZA IGRU (primam signal), fokus je na informisanju i upozorenju."
 )
 
@@ -227,22 +226,19 @@ def generate_cooperative_response(user_input, player):
     
     questions_left = FREE_TALK_LIMIT - player.general_conversation_count - 1
     
-    # Prilagođavanje gramatike za upozorenje
+    # Prilagođavanje gramatike
     if questions_left == 1:
-        left_phrase = "JOŠ JEDNO OTVORENO PITANJE"
-        final_phrase = "Ostalo nam je vremena za **samo još jedno** kratko, smisleno pitanje, nakon čega prelazimo na kod."
+        left_phrase = "JOŠ 1 OTVORENO PITANJE"
     elif questions_left > 1:
         left_phrase = f"JOŠ {questions_left} OTVORENA PITANJA"
-        final_phrase = f"Imamo vremena za **još {questions_left} koncizna pitanja**, nakon toga prelazimo na kod."
     else: # questions_left == 0
         left_phrase = "NIJEDNO OTVORENO PITANJE"
-        final_phrase = "**NEMA VIŠE VREMENA ZA OPŠTU KOMUNIKACIJU.** Ovo je bila poslednja linija. Odmah prelazimo na zadatak."
 
     # AI Prompt za kooperativnu fazu
     cooperative_prompt = (
-        f"Korisnik te je pitao: '{user_input}'. Ti si Dimitrije. Odgovori na to pitanje SAŽETO, JASNO I INFORMATIVNO. "
-        f"Nakon odgovora, moraš mu STROGO naglasiti: 'Nema vremena za dugačke razgovore. Pitanje mora biti **smisleno, koncizno i jasno**.' "
-        f"Završi poruku sa finalnim upozorenjem: '{final_phrase}'"
+        f"Korisnik te je pitao: '{user_input}'. Ti si Dimitrije. Odgovori na to pitanje TEMELJNO I JASNO, objašnjavajući sve što je potrebno. "
+        f"Nakon tvog objašnjenja, dodaj OBAVEZNO UPOZORENJE o preostalom vremenu i zahtev da pitanja budu smislena. "
+        f"Ostalo je {left_phrase}. Tvoja transmisija se prekida ubrzo. Iskoristi ovo upozorenje."
     )
 
     try:
@@ -255,16 +251,19 @@ def generate_cooperative_response(user_input, player):
     except Exception as e:
         logging.error(f"AI GREŠKA u kooperativnom modu: {e}. Vraćam Fallback.")
         
-        # Fallback za kooperativni odgovor (i dalje mora biti strog)
+        # Fallback za kooperativni odgovor
         fallback_answers = [
-            "Ja sam Dimitrije, prenos iz 2064. Tvoja misija je testiranje. Kolektiv nas sluša. Nema vremena za dugačke razgovore. ",
-            "Ovo je kvantna linija. Kolektiv te ne sme detektovati. Očekujem da prođeš test reči. Pitanje mora biti koncizno. ",
-            "Dolazim iz anti-utopije. Očekujem da se fokusiraš na zadatak. Nema vremena za opšta pitanja. Budi jasan. "
+            "Ja sam Dimitrije, prenos iz 2064. Tvoja misija je testiranje. Kolektiv nas sluša.",
+            "Ovo je kvantna linija. Kolektiv te ne sme detektovati. Očekujem da prođeš test reči.",
+            "Dolazim iz anti-utopije. Očekujem da se fokusiraš na zadatak. Nema vremena za opšta pitanja."
         ]
         
         ai_text = random.choice(fallback_answers)
         
-        ai_text += f"\n\nNema vremena za dugačke razgovore. Pitanje mora biti **smisleno, koncizno i jasno**.\n\n{final_phrase}"
+        if questions_left >= 1:
+            ai_text += f"\n\n**UPZORENJE:** Imamo {left_phrase}. Iskoristi ga za JASNO i SMISLENO pitanje. Kolektiv nas uskoro detektuje."
+        else:
+            ai_text += "\n\n**UPZORENJE:** Ovo je bila poslednja otvorena komunikacija. Sva ostala pitanja sada ugrožavaju misiju. Sledeći put samo kod."
             
     player = save_ai_response_to_history(player, ai_text)
     return ai_text, player
