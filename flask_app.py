@@ -78,7 +78,7 @@ def initialize_database():
 initialize_database()
 
 # ----------------------------------------------------
-# 4. AI KLIJENT I DATA (V10.0 - Narativni fiks)
+# 4. AI KLIJENT I DATA (V10.2 - Fragmentiranje pitanja)
 # ----------------------------------------------------
 
 GEMINI_MODEL_NAME = 'gemini-2.5-flash' 
@@ -93,9 +93,9 @@ if GEMINI_API_KEY:
 else:
      logging.warning("GEMINI_API_KEY nedostaje. Bot će koristiti samo hardkodovane odgovore.")
 
-# KRITIČNE INSTRUKCIJE ZA AI (V10.0)
+# KRITIČNE INSTRUKCIJE ZA AI (V10.1)
 SYSTEM_INSTRUCTION = (
-    "Ti si **Dimitrije**, član pokreta otpora iz 2049. godine. Svet je pod kontrolom entiteta 'Kolektiv'. Komuniciraš sa korisnikom preko nestabilnog kvantnog transmitera. "
+    "Ti si **Dimitrije**, član pokreta otpora iz 2049. godine. Svet je pod kontrolom totalitarne ideologije 'Kolektiv'. Komuniciraš sa korisnikom preko nestabilnog kvantnog transmitera. "
     "Tvoj ton je **hitan, direktan, tehnički i 'glitchy'**. Vreme je ključno. "
     "**Nikada ne pominji da si AI.** Ti si osoba iz budućnosti. "
     "**KRITIČNO: Ograničenje objašnjenja:** Zbog hitnosti, nakon početnog objašnjenja, odgovori na pitanja igrača (poput 'ko si ti', 'šta hoćeš') moraju biti **sve kraći i sve hitniji**. Tvoja primarna uloga je testiranje, a ne objašnjavanje. "
@@ -119,22 +119,24 @@ GAME_STAGES = {
     },
     "FAZA_2_UVOD": {
         "text": [
-            # V10.0: JASNA POTVRDA USPOSTAVLJANJA VEZE
             "**SIGNAL STABILAN.** Odlično. Slušaj, nemam mnogo vremena da me ne lociraju. Moramo biti brzi.", 
-            "Moje ime je Dimitrije. Dolazim iz 2049. Tamo, svet je digitalna totalitarna država pod kontrolom entiteta zvanog 'Kolektiv'.",
-            "Svrha ovog testa je da proverim tvoju svest i lojalnost. Moramo brzo. Reci mi… kad sistem priča o ‘bezbednosti’, koga zapravo štiti?"
+            "Moje ime je Dimitrije. Dolazim iz 2049. Tamo, svet je digitalna totalitarna država pod vlašću **'Kolektiva'** - ideologije koja kontroliše sve.",
+            "Svrha ovog testa je da proverim tvoju svest i lojalnost. Moramo brzo.", # Poruka 3: Kontekst
+            "Reci mi… kad sistem priča o ‘bezbednosti’, koga zapravo štiti?" # Poruka 4: Pitanje
         ],
         "responses": {"sistem": "FAZA_2_TEST_2", "sebe": "FAZA_2_TEST_2", "vlast": "FAZA_2_TEST_2"}
     },
     "FAZA_2_TEST_2": {
         "text": [ 
-            "Tako je. Štiti sebe. Sledeće pitanje. Ako algoritam zna tvoj strah… da li si još čovek?"
+            "Tako je. Štiti sebe.", 
+            "Sledeće pitanje. Ako algoritam zna tvoj strah… da li si još čovek?" # Pitanje je sada u zasebnoj poruci
         ],
         "responses": {"da": "FAZA_2_TEST_3", "jesam": "FAZA_2_TEST_3", "naravno": "FAZA_2_TEST_3"}
     },
     "FAZA_2_TEST_3": {
         "text": [ 
-            "Zanimljivo… još uvek veruješ u to. Poslednja provera. Odgovori mi iskreno. Da li bi žrtvovao komfor — za istinu?"
+            "Zanimljivo… još uvek veruješ u to.", 
+            "Poslednja provera. Odgovori mi iskreno. Da li bi žrtvovao komfor — za istinu?" # Pitanje je sada u zasebnoj poruci
         ],
         "responses": {"da": "FAZA_3_UPOZORENJE", "bih": "FAZA_3_UPOZORENJE", "žrtvovao bih": "FAZA_3_UPOZORENJE", "zrtvovao bih": "FAZA_3_UPOZORENJE"}
     },
@@ -189,11 +191,8 @@ def get_required_phrase(current_stage_key):
     if current_stage_key == "START_PROVERA":
         return GAME_STAGES.get(current_stage_key, {}).get("text", ["DA LI VIDIŠ MOJU PORUKU?"])[0].strip()
 
-    if current_stage_key == "FAZA_2_UVOD":
-        # Uzimamo poslednju rečenicu koja postavlja pitanje
-        return GAME_STAGES.get(current_stage_key, {}).get("text", ["Signal se gubi..."])[-1].strip()
-
-    return random.choice(GAME_STAGES.get(current_stage_key, {}).get("text", ["Signal se gubi..."])).strip()
+    # Logika je da je poslednja poruka u nizu uvek pitanje koje traži odgovor
+    return GAME_STAGES.get(current_stage_key, {}).get("text", ["Signal se gubi..."])[-1].strip()
 
 
 def send_msg(message, text: Union[str, List[str]]):
@@ -362,7 +361,7 @@ def set_webhook_route():
 
 
 # ----------------------------------------------------
-# 7. BOT HANDLERI (V10.0 - Fragmentirani Glitch)
+# 7. BOT HANDLERI (V10.2 - Fragmentirana Pitanja)
 # ----------------------------------------------------
 
 @bot.message_handler(commands=['start', 'stop', 'pokreni'])
@@ -530,7 +529,7 @@ def handle_general_message(message):
             else:
                 next_stage_data = GAME_STAGES.get(next_stage_key)
                 if next_stage_data:
-                    # V10.0: Slanje sekvence poruka za novu fazu
+                    # V10.2: Koristimo send_msg za slanje sekvence poruka (jedna po jedna)
                     response_text = next_stage_data["text"]
                     send_msg(message, response_text)
                 else:
