@@ -78,7 +78,7 @@ def initialize_database():
 initialize_database()
 
 # ----------------------------------------------------
-# 4. AI KLIJENT I DATA (V10.4 - Fiksirana logika namere)
+# 4. AI KLIJENT I DATA (V10.5 - Fiksiranje AI Uloga)
 # ----------------------------------------------------
 
 GEMINI_MODEL_NAME = 'gemini-2.5-flash' 
@@ -213,7 +213,7 @@ def send_msg(message, text: Union[str, List[str]]):
     except Exception as e:
         logging.error(f"Greška pri slanju poruke: {e}")
 
-# Funkcija evaluate_intent_with_ai je uklonjena/ignorisana u logici handlera
+# Funkcija evaluate_intent_with_ai je uklonjena/ignorisanja u V10.4
 
 def generate_ai_response(user_input, player, current_stage_key):
     required_phrase = get_required_phrase(current_stage_key) 
@@ -226,29 +226,37 @@ def generate_ai_response(user_input, player, current_stage_key):
     if len(history) > MAX_HISTORY_ITEMS:
         history = history[-MAX_HISTORY_ITEMS:]
 
-    gemini_history = []
-    for entry in history:
-        role = 'user' if entry['role'] == 'user' else 'model' 
-        gemini_history.append({'role': role, 'parts': [{'text': entry['content']}]})
+    # V10.5 FIKS: Formiranje full_contents ispravno, bez direktnog ubacivanja SYSTEM_INSTRUCTION kao 'system' uloge
+    full_contents = []
     
-    updated_history = history + [{'role': 'user', 'content': user_input}]
-    player.conversation_history = json.dumps(updated_history)
+    # Prvi deo: Sistemske instrukcije ugrađene u prvi 'user' blok za stabilnost
+    full_contents.append({
+        'role': 'user', 
+        'parts': [{'text': SYSTEM_INSTRUCTION + "\n\n--- KONTEKST FIKCIJE JE POSTAVLJEN ---"}]
+    })
+
+    # Dodavanje prethodne konverzacije (konvertovano iz JSON-a)
+    for entry in history:
+        # Konvertujemo role u format koji Gemini API očekuje: 'user' ili 'model'
+        role = 'user' if entry['role'] == 'user' else 'model' 
+        full_contents.append({'role': role, 'parts': [{'text': entry['content']}]})
+
+    
+    # Finalni prompt sa zadatkom za AI
+    final_prompt_text = (
+        f"Korisnik je postavio kontekstualno pitanje/komentar: '{user_input}'. "
+        f"Tvoj poslednji zadatak je bio: '{required_phrase}'. "
+        "Generiši kratak odgovor (maks. 4 rečenice), dajući traženo objašnjenje i/ili pojačavajući pritisak, a zatim OBAVEZNO ponovi poslednji zadatak/pitanje."
+    )
+    # Dodajemo finalni prompt
+    full_contents.append({'role': 'user', 'parts': [{'text': final_prompt_text}]})
+
 
     if not ai_client:
         AI_FALLBACK_MESSAGES = ["Veza je nestabilna. Ponavljaj poruku.", "Čujem samo šum… ponovi!"]
         narrative_starter = random.choice(AI_FALLBACK_MESSAGES)
         ai_text = f"{narrative_starter}\n\n{required_phrase}"
     else:
-        full_contents = [{'role': 'system', 'parts': [{'text': SYSTEM_INSTRUCTION}]}]
-        full_contents.extend(gemini_history)
-        
-        final_prompt_text = (
-            f"Korisnik je postavio kontekstualno pitanje/komentar: '{user_input}'. "
-            f"Tvoj poslednji zadatak je bio: '{required_phrase}'. "
-            "Generiši kratak odgovor (maks. 4 rečenice), dajući traženo objašnjenje i/ili pojačavajući pritisak, a zatim OBAVEZNO ponovi poslednji zadatak/pitanje."
-        )
-        full_contents.append({'role': 'user', 'parts': [{'text': final_prompt_text}]})
-
         try:
             response = ai_client.models.generate_content(
                 model=GEMINI_MODEL_NAME, 
@@ -268,7 +276,8 @@ def generate_ai_response(user_input, player, current_stage_key):
             ai_text = f"{narrative_starter}\n\n{required_phrase}" 
 
     if ai_text:
-        final_history = json.loads(player.conversation_history) + [{'role': 'model', 'content': narrative_starter or ai_text}]
+        # Ažuriranje istorije razgovora novim odgovorom bota
+        final_history = json.loads(player.conversation_history) + [{'role': 'model', 'content': ai_text}]
         player.conversation_history = json.dumps(final_history)
         player.general_conversation_count += 1 
 
@@ -476,10 +485,6 @@ def handle_general_message(message):
                     is_intent_recognized = True
                     break
 
-            # V10.4 FIKS: UKLONJENA AI evaluacija namere koja je izazvala grešku
-            # Ako AI nije aktivan, ne možemo ništa drugo da uradimo osim da čekamo ključnu reč.
-
-
         # OBRADA REZULTATA
         if is_intent_recognized:
             # 3. KORAK: AKO JE PREPOZNAT KLJUČNI ODGOVOR (Prelazak u novu fazu)
@@ -499,8 +504,8 @@ def handle_general_message(message):
                     send_msg(message, "[GREŠKA: NEPOZNATA SLEDEĆA FAZA] Signal se gubi.")
 
         if not is_intent_recognized:
-            # 4. KORAK: Ako NIJE PREPOZNATO (Hardkodovano ili ključna reč), generiši AI odgovor/objašnjenje
-            # Ovo će ostaviti player.current_riddle na staroj vrednosti, ali će odgovoriti
+            # 4. KORAK: Ako NIJE PREPOZNATO, generiši AI odgovor/objašnjenje
+            # Koristi se generate_ai_response sa fiksiranom istorijom u V10.5
             ai_response, updated_player = generate_ai_response(korisnikov_tekst, player, current_stage_key)
             player = updated_player 
             send_msg(message, ai_response)
