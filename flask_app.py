@@ -39,7 +39,7 @@ except Exception as e:
 app = flask.Flask(__name__)
 
 # ----------------------------------------------------
-# 3. SQL ALCHEMY INICIJALIZACIJA (V9.4 - Stabilizovani DB poziv)
+# 3. SQL ALCHEMY INICIJALIZACIJA (V9.4)
 # ----------------------------------------------------
 
 Session = None
@@ -67,7 +67,6 @@ def initialize_database():
         Engine = create_engine(DATABASE_URL)
         Session = sessionmaker(bind=Engine)
         
-        # OVA LINIJA JE SADA IZOLOVANA: Kreiranje tabela
         Base.metadata.create_all(Engine) 
         
         logging.info("Baza podataka i modeli uspešno inicijalizovani i tabele kreirane.")
@@ -79,7 +78,7 @@ def initialize_database():
 initialize_database()
 
 # ----------------------------------------------------
-# 4. AI KLIJENT I DATA (V9.6 - ČIST UVODNI TEKST)
+# 4. AI KLIJENT I DATA (V9.7)
 # ----------------------------------------------------
 
 GEMINI_MODEL_NAME = 'gemini-2.5-flash' 
@@ -94,7 +93,7 @@ if GEMINI_API_KEY:
 else:
      logging.warning("GEMINI_API_KEY nedostaje. Bot će koristiti samo hardkodovane odgovore.")
 
-# KRITIČNE INSTRUKCIJE ZA AI (V9.6)
+# KRITIČNE INSTRUKCIJE ZA AI (V9.7)
 SYSTEM_INSTRUCTION = (
     "Ti si **Dimitrije**, član pokreta otpora iz 2049. godine. Svet je pod kontrolom entiteta 'Kolektiv'. Komuniciraš sa korisnikom preko nestabilnog kvantnog transmitera. "
     "Tvoj ton je **hitan, direktan, tehnički i 'glitchy'**. Vreme je ključno. "
@@ -108,8 +107,7 @@ GAME_STAGES = {
     "START": {
         "text": [ 
             [
-                "##DA**L#$VIDI#$##S",
-                "DA LI VIDIŠ MOJU PORUKU?"
+                "DA LI VIDIŠ MOJU PORUKU?" # Čista poruka, glitch dodajemo dinamički
             ]
         ]
     },
@@ -158,17 +156,34 @@ END_MESSAGES = {
 }
 
 # ----------------------------------------------------
-# 5. POMOĆNE FUNKCIJE I KONSTANTE (Isto kao V9.4)
+# 5. POMOĆNE FUNKCIJE I KONSTANTE (V9.7)
 # ----------------------------------------------------
 
 TIME_LIMIT_MESSAGE = "Vreme za igru je isteklo. Pokušaj ponovo kasnije."
 GAME_ACTIVE = True 
+GLITCH_CHARS = "$#%&!@*^"
 
 def is_game_active(): return GAME_ACTIVE 
 
+def generate_glitch_text(length=20, max_lines=3):
+    """Generiše nasumičan tekst koji simulira grešku/glitch."""
+    num_lines = random.randint(1, max_lines)
+    glitch_parts = []
+    
+    for _ in range(num_lines):
+        line_length = random.randint(5, length)
+        line = "".join(random.choice(GLITCH_CHARS) for _ in range(line_length))
+        if random.random() < 0.5:
+             line = f"##{line}##"
+        elif random.random() < 0.2:
+             line = f"[{line}]"
+        
+        glitch_parts.append(line)
+        
+    return "\n".join(glitch_parts) + "\n"
+
 def get_required_phrase(current_stage_key):
     if current_stage_key == "START_PROVERA":
-        # V9.6 - Uzima novu čistu poruku
         return GAME_STAGES.get(current_stage_key, {}).get("text", ["DA LI VIDIŠ MOJU PORUKU?"])[0].strip()
 
     if current_stage_key == "FAZA_2_UVOD":
@@ -192,7 +207,9 @@ def send_msg(message, text: Union[str, List[str]]):
     except Exception as e:
         logging.error(f"Greška pri slanju poruke: {e}")
 
-# Funkcije evaluate_intent_with_ai, generate_ai_response i get_epilogue_message ostaju iste
+# ... (Ostatak pomoćnih funkcija generate_ai_response, evaluate_intent_with_ai, get_epilogue_message ostaje isti)
+# ...
+
 def evaluate_intent_with_ai(question_text, user_answer, expected_intent_keywords, conversation_history=None):
     if not ai_client: return False
     # Logika ista kao V9.4
@@ -226,7 +243,6 @@ def evaluate_intent_with_ai(question_text, user_answer, expected_intent_keywords
         return False
 
 def generate_ai_response(user_input, player, current_stage_key):
-    # Logika ista kao V9.4
     required_phrase = get_required_phrase(current_stage_key) 
     ai_text = None
     
@@ -342,7 +358,7 @@ def set_webhook_route():
 
 
 # ----------------------------------------------------
-# 7. BOT HANDLERI (Isto kao V9.4)
+# 7. BOT HANDLERI (V9.7 - Dinamički uvod)
 # ----------------------------------------------------
 
 @bot.message_handler(commands=['start', 'stop', 'pokreni'])
@@ -354,11 +370,15 @@ def handle_commands(message):
             send_msg(message, TIME_LIMIT_MESSAGE)
             return
 
-        if session is None: 
+        is_db_active = session is not None and Session is not None
+
+        if not is_db_active: 
             send_msg(message, "⚠️ UPOZORENJE: Trajno stanje (DB) nije dostupno. Igrate u test modu bez pamćenja napretka.")
             if message.text.lower() in ['/start', 'start']:
-                start_message = GAME_STAGES["START"]["text"][0]
-                send_msg(message, start_message)
+                # V9.7 Glitch Logic za test mod
+                glitch_prefix = generate_glitch_text()
+                start_message_raw = GAME_STAGES["START"]["text"][0][-1]
+                send_msg(message, glitch_prefix + start_message_raw)
             return
 
         chat_id = str(message.chat.id)
@@ -382,8 +402,10 @@ def handle_commands(message):
 
             session.commit()
             
-            start_message = GAME_STAGES["START"]["text"][0]
-            send_msg(message, start_message)
+            # V9.7: Generisanje dinamičke uvodne poruke
+            glitch_prefix = generate_glitch_text()
+            start_message_raw = GAME_STAGES["START"]["text"][0][-1]
+            send_msg(message, glitch_prefix + start_message_raw)
 
         elif message.text.lower() in ['/stop', 'stop']:
             player = session.query(PlayerState).filter_by(chat_id=chat_id).first()
