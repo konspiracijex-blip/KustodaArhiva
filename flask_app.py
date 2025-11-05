@@ -222,6 +222,7 @@ def evaluate_intent_with_ai(question_text, user_answer, expected_intent_keywords
         f"Korisnikov odgovor je: '{user_answer}'\n"
         f"Očekivana namera iza odgovora se može opisati ključnim rečima: {expected_intent_keywords}\n"
         "Tvoj zadatak je da proceniš da li korisnikov odgovor suštinski ispunjava očekivanu nameru (npr. prihvatanje, razumevanje, spremnost), čak i ako ne koristi tačne reči. "
+        "**KRITIČNO PRAVILO:** Ako je korisnikov odgovor u formi *otvorenog pitanja* ('ko', 'šta', 'gde', 'zašto', 'kako'), a nije direktan odgovor ili sadrži esenciju traženih ključnih reči, *moraš ga odbiti* (NETAČNO). Očekujemo afirmaciju ili traženi odgovor, ne upit. "
         "Budi fleksibilan. Na primer, ako su ključne reči 'da, spreman sam', prihvati i 'ok', 'može', 'idemo dalje', 'uradimo to'. "
         "Odgovori samo sa jednom rečju: 'TAČNO' ako je odgovor prihvatljiv, ili 'NETAČNO' ako nije."
     )
@@ -239,7 +240,7 @@ def evaluate_intent_with_ai(question_text, user_answer, expected_intent_keywords
         return any(kw in user_answer.lower() for kw in expected_intent_keywords)
     except Exception as e:
         logging.error(f"Nepredviđena greška u generisanju AI (Evaluacija): {e}")
-        # Fallback u slučaju greške (npr. 'Client' object has no attribute 'generate_content')
+        # Fallback u slučaju greške
         return any(kw in user_answer.lower() for kw in expected_intent_keywords)
 
 def generate_ai_response(user_input, player, current_stage_key):
@@ -297,7 +298,7 @@ def generate_ai_response(user_input, player, current_stage_key):
         # Šaljemo kombinaciju podsetnika i korisnikovog unosa
         response = chat.send_message(
             f"{task_reminder_prompt}\n\nKorisnik kaže: {user_input}",
-            config={"temperature": 0.7} # Korigovano na 'config'
+            config={"temperature": 0.7} # Dodajemo config
         )
 
         ai_text = response.text
@@ -397,7 +398,7 @@ def set_webhook_route():
 @bot.message_handler(commands=['start', 'stop', 'pokreni'])
 def handle_commands(message):
 
-    if Session is None:
+    if Session is None: 
         send_msg(message, "Sistem za praćenje stanja je nedostupan. Pokušajte kasnije. [DB ERROR]")
         return
 
@@ -454,7 +455,6 @@ def handle_commands(message):
         elif message.text.lower() in ['/pokreni', 'pokreni']:
             # Ove komande više nisu primarni način interakcije
             send_msg(message, "Komande nisu potrebne. Odgovori direktno na poruke. Ako želiš novi početak, koristi /start.")
-
     except Exception as e:
         # HVATANJE GREŠKE U GLAVNOM BLOKU
         logging.critical(f"NEPREDVIĐENA FATALNA GREŠKA U handle_commands: {e}")
@@ -485,16 +485,13 @@ def handle_general_message(message):
             return
 
         # KRITIČNA PROVERA: Da li je veza već prekinuta?
-        # Ako je igrač diskvalifikovan ili je faza završna, izlazi se sa porukom o prekidu.
         if player.is_disqualified or not player.current_riddle or player.current_riddle.startswith("END_"):
-            # OVO SE DEŠAVA KADA JE STANJE U BAZI KORUMPIRANO NAKON PRETHODNE GREŠKE
             send_msg(message, "Veza je prekinuta. Pošalji /start za uspostavljanje nove veze.")
             return
 
         current_stage_key = player.current_riddle
         current_stage = GAME_STAGES.get(current_stage_key)
         if not current_stage:
-            # Ako je trenutna faza nepoznata (što ne bi trebalo da se desi), omogućavamo nastavak
             send_msg(message, "[GREŠKA: NEPOZNATA FAZA IGRE] Pokreni /start.")
             return
 
@@ -512,8 +509,14 @@ def handle_general_message(message):
         
         # 2. KORAK: Ako ključne reči nisu nađene, koristi AI za proveru namere
         if not is_intent_recognized:
+            
             # Izbor teksta za kontekst AI evaluacije
-            current_question_text = random.choice(current_stage['text'])
+            if current_stage_key == "START":
+                # Koristi se tekst sa poslednjim pitanjem kao kontekst za START
+                 current_question_text = random.choice(GAME_STAGES["START"]["text"])[-1]
+            else:
+                current_question_text = random.choice(current_stage['text'])
+            
             expected_keywords = list(current_stage["responses"].keys())
             
             try:
@@ -541,7 +544,6 @@ def handle_general_message(message):
                 if next_stage_data:
                     response_text = random.choice(next_stage_data["text"])
                     send_msg(message, response_text)
-                # else: Ako faza nije pronađena, ostaje game_stage_transitioned = True, ali ne šalje poruku
             
             game_stage_transitioned = True
         
@@ -549,7 +551,6 @@ def handle_general_message(message):
         # --- FALLBACK TOK (SAMO AKO NIJE BILO NAPREDOVANJA) ---
         if not game_stage_transitioned:
             try:
-                # KRITIČNA TAČKA ZA NEUSPEH:
                 ai_response, updated_player = generate_ai_response(korisnikov_tekst, player, current_stage_key)
                 player = updated_player # Preuzimamo ažurirani objekat sa novom istorijom
                 send_msg(message, ai_response)
@@ -566,6 +567,7 @@ def handle_general_message(message):
         # HVATANJE GREŠKE U GLAVNOM BLOKU
         logging.critical(f"NEPREDVIĐENA FATALNA GREŠKA U handle_general_message: {e}")
         send_msg(message, "Fatalna greška, sistem je van funkcije. Pošalji /start da probaš ponovo. **[KOD GREŠKE: 500]**")
+        session.rollback()
     finally:
         session.close()
 
