@@ -162,7 +162,7 @@ GAME_STAGES = {
     }
 }
 # ----------------------------------------------------
-# 5. POMOĆNE FUNKCIJE I KONSTANTE (V5.2.1 - KRITIČNO FIKSIRANJE)
+# 5. POMOĆNE FUNKCIJE I KONSTANTE (V5.2.2 - KRITIČNO FIKSIRANJE LOGIKE)
 # ----------------------------------------------------
 
 TIME_LIMIT_MESSAGE = "Vreme za igru je isteklo. Pokušaj ponovo kasnije."
@@ -170,7 +170,6 @@ GAME_ACTIVE = True
 
 def is_game_active():
     """Provera da li je igra trenutno aktivna. Trenutno uvek TAČNO."""
-    # OVO REŠAVA NameError: name 'is_game_active' is not defined
     return GAME_ACTIVE 
 
 def get_required_phrase(current_stage_key):
@@ -200,6 +199,7 @@ def send_msg(message, text: Union[str, List[str]]):
         logging.error(f"Greška pri slanju poruke: {e}")
 
 def evaluate_intent_with_ai(question_text, user_answer, expected_intent_keywords, conversation_history=None):
+    """Koristi AI da proceni da li odgovor igrača odgovara očekivanoj nameri (Ekstremno Stroga provera)."""
     if not ai_client: return False
 
     prompt = (
@@ -209,14 +209,17 @@ def evaluate_intent_with_ai(question_text, user_answer, expected_intent_keywords
         recent_history = conversation_history[-8:] 
         prompt += "\n".join([f"{msg['role']}: {msg['content']}" for msg in recent_history])
     
+    # KRITIČNO POOŠTRAVANJE INSTRUKCIJE ZA TAČNU EVALUACIJU
     prompt += (
         f"\nTvoje pitanje je bilo: '{question_text}'\n"
         f"Korisnikov odgovor je: '{user_answer}'\n"
-        f"Očekivana namera iza odgovora se može opisati ključnim rečima: {expected_intent_keywords}\n"
-        "Tvoj zadatak je da proceniš da li korisnikov odgovor **jasno i nedvosmisleno** ispunjava očekivanu nameru (prihvatanje/spremnost/razumevanje). "
-        "**KRITIČNO**: Ako odgovor sadrži pitanja ('ko si ti?', 'šta hoćeš?', 'zašto?'), ili je izbegavajući, namera NIJE ispunjena, i moraš odgovoriti 'NETAČNO'. Samo afirmativno prihvatanje se računa. "
+        f"Očekivana namera iza odgovora je prihvatanje ili potvrda spremnosti. "
+        "**KRITIČNO**: Odgovori koji sadrže upitne reči (ko, šta, gde, zašto, kako) ili su izbegavajući, **NISU** ispunjenje namere. "
+        "Takođe, odgovor ne sme sadržati kritične reči koje su bile definisane u tekstu pitanja, kao što su: 'primam signal' "
+        "ako odgovor NIJE doslovno 'primam signal'. Samo jasan afirmativan odgovor se računa. "
         "Odgovori samo sa jednom rečju: 'TAČNO' ako je namera ispunjena, ili 'NETAČNO' ako nije."
     )
+    
     try:
         response = ai_client.models.generate_content(
             model=GEMINI_MODEL_NAME, 
@@ -224,12 +227,13 @@ def evaluate_intent_with_ai(question_text, user_answer, expected_intent_keywords
             config={"temperature": 0.0}
         )
         return "TAČNO" in response.text.upper()
-    except APIError as e:
+    except APIError as e: 
         logging.error(f"Greška AI/Gemini API (Evaluacija namere): {e}")
         return False
     except Exception as e:
         logging.error(f"Nepredviđena greška u generisanju AI (Evaluacija): {e}")
         return False
+
 
 def generate_ai_response(user_input, player, current_stage_key):
     required_phrase = get_required_phrase(current_stage_key) 
@@ -291,14 +295,21 @@ def generate_ai_response(user_input, player, current_stage_key):
 
     return ai_text or "Signal se raspao. Pokušaj /start.", player
 
-# Funkcije epiloga ostaju neizmenjene
 def get_epilogue_message(end_key):
-    # ... (kod epiloga je ovde)
-    return f"[{end_key}] VEZA PREKINUTA. Dimitrije je {end_key.replace('END_', '')}."
+    if end_key == "END_SHARE":
+        return "Saznanja su prenesena. Linija mora biti prekinuta. Čuvaj tajnu. [KRAJ SIGNALA]"
+    elif end_key == "END_WAIT":
+        return "Nemamo vremena za čekanje, ali poštujem tvoju odluku. Moram se isključiti. Pokušaj ponovo sutra. [KRAJ SIGNALA]"
+    elif end_key == "END_STOP":
+        return "[KRAJ SIGNALA] Veza prekinuta na tvoj zahtev."
+    return f"[{end_key}] VEZA PREKINUTA."
 
 def generate_final_secret(chat_id):
-    # ... (kod generisanja tajne je ovde)
-    return "TAJNA PORUKA GENERISANA"
+    # Logika za generisanje tajne - može se kasnije proširiti
+    import hashlib
+    # Koristimo heširanje da bismo dobili unikatnu, ali predvidivu tajnu za svakog korisnika
+    hash_object = hashlib.sha256(f"SECRET_OF_KOLEKTIV_{chat_id}_{time.time()}".encode())
+    return hash_object.hexdigest()[:12].upper()
 
 
 # ----------------------------------------------------
@@ -347,7 +358,7 @@ def set_webhook_route():
         return f"CRITICAL PYTHON ERROR: {e}"
 
 # ----------------------------------------------------
-# 7. BOT HANDLERI (Sa rešenom NameError greškom)
+# 7. BOT HANDLERI 
 # ----------------------------------------------------
 
 @bot.message_handler(commands=['start', 'stop', 'pokreni'])
@@ -436,13 +447,13 @@ def handle_general_message(message):
         next_stage_key = None
         is_intent_recognized = False
 
-        # KRITIČNA ISPRAVKA: Provera cele reči
+        # 1. KORAK: Brza provera ključnih reči (celi podniz mora biti pronađen)
         korisnikove_reci = set(korisnikov_tekst.lower().replace(',', ' ').replace('?', ' ').split())
 
-        # 1. KORAK: Brza provera ključnih reči 
         for keyword, next_key in current_stage["responses"].items():
             keyword_reci = set(keyword.split())
             
+            # Provera da li su sve reči ključne reči prisutne u korisnikovom tekstu
             if keyword_reci.issubset(korisnikove_reci): 
                 next_stage_key = next_key
                 is_intent_recognized = True
