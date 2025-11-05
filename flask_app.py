@@ -79,7 +79,7 @@ def initialize_database():
 initialize_database()
 
 # ----------------------------------------------------
-# 4. AI KLIJENT I DATA (V9.5 - NOVI UVODNI TEKST)
+# 4. AI KLIJENT I DATA (V9.6 - ČIST UVODNI TEKST)
 # ----------------------------------------------------
 
 GEMINI_MODEL_NAME = 'gemini-2.5-flash' 
@@ -94,7 +94,7 @@ if GEMINI_API_KEY:
 else:
      logging.warning("GEMINI_API_KEY nedostaje. Bot će koristiti samo hardkodovane odgovore.")
 
-# KRITIČNE INSTRUKCIJE ZA AI (V9.5)
+# KRITIČNE INSTRUKCIJE ZA AI (V9.6)
 SYSTEM_INSTRUCTION = (
     "Ti si **Dimitrije**, član pokreta otpora iz 2049. godine. Svet je pod kontrolom entiteta 'Kolektiv'. Komuniciraš sa korisnikom preko nestabilnog kvantnog transmitera. "
     "Tvoj ton je **hitan, direktan, tehnički i 'glitchy'**. Vreme je ključno. "
@@ -109,13 +109,13 @@ GAME_STAGES = {
         "text": [ 
             [
                 "##DA**L#$VIDI#$##S",
-                "DA LI VIDIŠ MOJU PORUKU? (Odgovori sa 'Da' ili 'Ne')."
+                "DA LI VIDIŠ MOJU PORUKU?"
             ]
         ]
     },
     "START_PROVERA": {
         "text": [
-            "DA LI VIDIŠ MOJU PORUKU? (Odgovori sa 'Da' ili 'Ne')."
+            "DA LI VIDIŠ MOJU PORUKU?"
         ],
         "responses": {"da": "FAZA_2_UVOD", "ne": "END_NO_SIGNAL"}
     },
@@ -168,8 +168,8 @@ def is_game_active(): return GAME_ACTIVE
 
 def get_required_phrase(current_stage_key):
     if current_stage_key == "START_PROVERA":
-        # V9.5 - Uzima novu poruku
-        return GAME_STAGES.get(current_stage_key, {}).get("text", ["DA LI VIDIŠ MOJU PORUKU?"]).strip()
+        # V9.6 - Uzima novu čistu poruku
+        return GAME_STAGES.get(current_stage_key, {}).get("text", ["DA LI VIDIŠ MOJU PORUKU?"])[0].strip()
 
     if current_stage_key == "FAZA_2_UVOD":
         return GAME_STAGES.get(current_stage_key, {}).get("text", ["Signal se gubi..."])[-1].strip()
@@ -196,13 +196,94 @@ def send_msg(message, text: Union[str, List[str]]):
 def evaluate_intent_with_ai(question_text, user_answer, expected_intent_keywords, conversation_history=None):
     if not ai_client: return False
     # Logika ista kao V9.4
-    # ...
-    return False
+    prompt = (
+        f"Ti si sistem za evaluaciju namere. "
+    )
+    if conversation_history:
+        recent_history = conversation_history[-8:] 
+        prompt += "\n".join([f"{msg['role']}: {msg['content']}" for msg in recent_history])
+    
+    prompt += (
+        f"\nTvoje pitanje je bilo: '{question_text}'\n"
+        f"Korisnikov odgovor je: '{user_answer}'\n"
+        f"Očekivana namera je JASNO AFIRMATIVAN odgovor ili odgovor koji sadrži ključnu reč: {expected_intent_keywords}. "
+        "**KRITIČNO**: Odgovori koji sadrže upitne reči (ko, šta, gde, zašto, kako) ili su izbegavajući, **NISU** ispunjenje namere. "
+        "Odgovori samo sa jednom rečju: 'TAČNO' ako je namera ispunjena, ili 'NETAČNO' ako nije."
+    )
+    
+    try:
+        response = ai_client.models.generate_content(
+            model=GEMINI_MODEL_NAME, 
+            contents=[prompt],
+            config={"temperature": 0.0}
+        )
+        return "TAČNO" in response.text.upper()
+    except APIError as e: 
+        logging.error(f"Greška AI/Gemini API (Evaluacija namere): {e}")
+        return False
+    except Exception as e:
+        logging.error(f"Nepredviđena greška u generisanju AI (Evaluacija): {e}")
+        return False
 
 def generate_ai_response(user_input, player, current_stage_key):
     # Logika ista kao V9.4
-    # ...
-    return "Signal se raspao. Pokušaj /start.", player
+    required_phrase = get_required_phrase(current_stage_key) 
+    ai_text = None
+    
+    try: history = json.loads(player.conversation_history)
+    except: history = []
+
+    MAX_HISTORY_ITEMS = 10
+    if len(history) > MAX_HISTORY_ITEMS:
+        history = history[-MAX_HISTORY_ITEMS:]
+
+    gemini_history = []
+    for entry in history:
+        role = 'user' if entry['role'] == 'user' else 'model' 
+        gemini_history.append({'role': role, 'parts': [{'text': entry['content']}]})
+    
+    updated_history = history + [{'role': 'user', 'content': user_input}]
+    player.conversation_history = json.dumps(updated_history)
+
+    if not ai_client:
+        AI_FALLBACK_MESSAGES = ["Veza je nestabilna. Ponavljaj poruku.", "Čujem samo šum… ponovi!"]
+        narrative_starter = random.choice(AI_FALLBACK_MESSAGES)
+        ai_text = f"{narrative_starter}\n\n{required_phrase}"
+    else:
+        full_contents = [{'role': 'system', 'parts': [{'text': SYSTEM_INSTRUCTION}]}]
+        full_contents.extend(gemini_history)
+        
+        final_prompt_text = (
+            f"Korisnik je postavio kontekstualno pitanje/komentar: '{user_input}'. "
+            f"Tvoj poslednji zadatak je bio: '{required_phrase}'. "
+            "Generiši kratak odgovor (maks. 4 rečenice), dajući traženo objašnjenje i/ili pojačavajući pritisak, a zatim OBAVEZNO ponovi poslednji zadatak/pitanje."
+        )
+        full_contents.append({'role': 'user', 'parts': [{'text': final_prompt_text}]})
+
+        try:
+            response = ai_client.models.generate_content(
+                model=GEMINI_MODEL_NAME, 
+                contents=full_contents
+            )
+            narrative_starter = response.text.strip()
+            
+            if not narrative_starter or len(narrative_starter) < 5: 
+                 raise ValueError("AI vratio prazan odgovor.")
+                
+            ai_text = narrative_starter
+            
+        except Exception as e:
+            logging.error(f"AI Call failed. Falling back. Error: {e}")
+            AI_FALLBACK_MESSAGES = ["Veza je nestabilna. Ponavljaj poruku.", "Čujem samo šum… ponovi!"]
+            narrative_starter = random.choice(AI_FALLBACK_MESSAGES)
+            ai_text = f"{narrative_starter}\n\n{required_phrase}" 
+
+    if ai_text:
+        final_history = json.loads(player.conversation_history) + [{'role': 'model', 'content': narrative_starter or ai_text}]
+        player.conversation_history = json.dumps(final_history)
+        player.general_conversation_count += 1 
+
+    return ai_text or "Signal se raspao. Pokušaj /start.", player
 
 def get_epilogue_message(end_key):
     return END_MESSAGES.get(end_key, f"[{end_key}] VEZA PREKINUTA.")
