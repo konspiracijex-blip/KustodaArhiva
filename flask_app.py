@@ -78,7 +78,7 @@ def initialize_database():
 initialize_database()
 
 # ----------------------------------------------------
-# 4. AI KLIJENT I DATA (V9.7)
+# 4. AI KLIJENT I DATA (V10.0 - Narativni fiks)
 # ----------------------------------------------------
 
 GEMINI_MODEL_NAME = 'gemini-2.5-flash' 
@@ -93,7 +93,7 @@ if GEMINI_API_KEY:
 else:
      logging.warning("GEMINI_API_KEY nedostaje. Bot će koristiti samo hardkodovane odgovore.")
 
-# KRITIČNE INSTRUKCIJE ZA AI (V9.7)
+# KRITIČNE INSTRUKCIJE ZA AI (V10.0)
 SYSTEM_INSTRUCTION = (
     "Ti si **Dimitrije**, član pokreta otpora iz 2049. godine. Svet je pod kontrolom entiteta 'Kolektiv'. Komuniciraš sa korisnikom preko nestabilnog kvantnog transmitera. "
     "Tvoj ton je **hitan, direktan, tehnički i 'glitchy'**. Vreme je ključno. "
@@ -119,7 +119,8 @@ GAME_STAGES = {
     },
     "FAZA_2_UVOD": {
         "text": [
-            "Dobro. Da je veza prekinuta, Kolektiv bi me već locirao.",
+            # V10.0: JASNA POTVRDA USPOSTAVLJANJA VEZE
+            "**SIGNAL STABILAN.** Odlično. Slušaj, nemam mnogo vremena da me ne lociraju. Moramo biti brzi.", 
             "Moje ime je Dimitrije. Dolazim iz 2049. Tamo, svet je digitalna totalitarna država pod kontrolom entiteta zvanog 'Kolektiv'.",
             "Svrha ovog testa je da proverim tvoju svest i lojalnost. Moramo brzo. Reci mi… kad sistem priča o ‘bezbednosti’, koga zapravo štiti?"
         ],
@@ -167,7 +168,7 @@ def is_game_active(): return GAME_ACTIVE
 
 def generate_glitch_text(length=30, max_lines=4):
     """Generiše nasumičan tekst koji simulira grešku/glitch. V9.9"""
-    num_lines = random.randint(2, max_lines) # Bar 2 linije
+    num_lines = random.randint(2, max_lines) 
     glitch_parts = []
     
     for _ in range(num_lines):
@@ -189,6 +190,7 @@ def get_required_phrase(current_stage_key):
         return GAME_STAGES.get(current_stage_key, {}).get("text", ["DA LI VIDIŠ MOJU PORUKU?"])[0].strip()
 
     if current_stage_key == "FAZA_2_UVOD":
+        # Uzimamo poslednju rečenicu koja postavlja pitanje
         return GAME_STAGES.get(current_stage_key, {}).get("text", ["Signal se gubi..."])[-1].strip()
 
     return random.choice(GAME_STAGES.get(current_stage_key, {}).get("text", ["Signal se gubi..."])).strip()
@@ -201,7 +203,7 @@ def send_msg(message, text: Union[str, List[str]]):
             # Šalje jednu poruku za drugom sa pauzom
             for part in text:
                 bot.send_chat_action(message.chat.id, 'typing')
-                time.sleep(random.uniform(1.0, 2.5)) # Kraće pauze za dinamičniji uvod
+                time.sleep(random.uniform(1.0, 2.5)) 
                 bot.send_message(message.chat.id, part, parse_mode='Markdown')
         else:
             bot.send_chat_action(message.chat.id, 'typing')
@@ -360,7 +362,7 @@ def set_webhook_route():
 
 
 # ----------------------------------------------------
-# 7. BOT HANDLERI (V9.9 - Fragmentirani Glitch)
+# 7. BOT HANDLERI (V10.0 - Fragmentirani Glitch)
 # ----------------------------------------------------
 
 @bot.message_handler(commands=['start', 'stop', 'pokreni'])
@@ -405,7 +407,7 @@ def handle_commands(message):
 
             session.commit()
             
-            # V9.9: Generisanje i slanje fragmentirane uvodne poruke
+            # V9.9/V10.0: Generisanje i slanje fragmentirane uvodne poruke
             raw_message = GAME_STAGES["START"]["text"][0][-1]
             glitch_lines = generate_glitch_text(length=30, max_lines=4).strip().split('\n')
             
@@ -420,6 +422,10 @@ def handle_commands(message):
                  messages_to_send.append(glitch_lines[1] + "\n" + glitch_lines[2])
             elif len(glitch_lines) == 2:
                  messages_to_send.append(glitch_lines[1])
+                 
+            # Uvek dodajemo prazan string za bolji tajming ako je malo glitch linija
+            if len(glitch_lines) < 2:
+                 messages_to_send.append("") 
 
             # 3. Poruka: Čisto Pitanje
             messages_to_send.append(raw_message)
@@ -524,13 +530,9 @@ def handle_general_message(message):
             else:
                 next_stage_data = GAME_STAGES.get(next_stage_key)
                 if next_stage_data:
-                    if next_stage_key == "FAZA_2_UVOD":
-                        response_text = next_stage_data["text"]
-                        send_msg(message, response_text)
-                    else:
-                        confirmation_text = "Signal je primljen. Veza je stabilna." if current_stage_key == "START_PROVERA" else "Tako je. Idemo dalje." 
-                        response_text = confirmation_text + "\n" + random.choice(next_stage_data["text"])
-                        send_msg(message, response_text)
+                    # V10.0: Slanje sekvence poruka za novu fazu
+                    response_text = next_stage_data["text"]
+                    send_msg(message, response_text)
                 else:
                     send_msg(message, "[GREŠKA: NEPOZNATA SLEDEĆA FAZA] Signal se gubi.")
 
@@ -543,7 +545,7 @@ def handle_general_message(message):
         session.commit()
     except Exception as e:
         logging.error(f"GREŠKA U BAZI (handle_general_message): {e}")
-        if session: session.rollback() # V9.8: Vraćanje transakcije
+        if session: session.rollback() 
         send_msg(message, "Žao mi je, došlo je do kritične greške u prijemu poruke. Veza je nestabilna. (DB FAILED)")
     finally:
         if session: session.close()
