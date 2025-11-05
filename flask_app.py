@@ -477,10 +477,11 @@ def handle_general_message(message):
         if current_stage_key == "START":
             # Za START fazu, kontekst je uvek isti, bez obzira na varijaciju.
             current_question_text = "Početno pitanje za uspostavljanje veze."
+            expected_keywords = list(current_stage["responses"].keys())
         else:
             # Za sve ostale faze, uzmi nasumičnu (ali reprezentativnu) varijaciju pitanja.
             current_question_text = random.choice(current_stage['text'])
-            
+            expected_keywords = list(current_stage["responses"].keys())
         for response_keyword, next_key in current_stage["responses"].items():
             # Koristimo AI za prepoznavanje namere.
             # Proveravamo samo pozitivne ključne reči. Ako se ne poklopi, idemo na AI odgovor.
@@ -488,6 +489,7 @@ def handle_general_message(message):
                 next_stage_key = next_key
                 print(f"Odgovor prepoznat! Sledeća faza: {next_stage_key}")
                 break
+
         if next_stage_key:
             # Ako je odgovor prepoznat, pređi na sledeću fazu
             player.current_riddle = next_stage_key
@@ -509,6 +511,7 @@ def handle_general_message(message):
             # koji ne pokreću prelazak u sledeću fazu. Igrač ostaje u istoj fazi.
             user_text = message.text.strip()
             ai_response = generate_ai_response(user_text, player, current_stage_key)
+
             print(f"Slanje AI odgovora: {ai_response}")
             send_msg(message, ai_response)
             player.general_conversation_count += 1 # Povećava brojač opštih razgovora
