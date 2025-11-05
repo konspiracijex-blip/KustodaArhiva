@@ -8,7 +8,7 @@ from google import genai
 from google.genai.errors import APIError
 from typing import List, Union
 import json
-import re # Dodat import za regex
+import re
 from sqlalchemy import create_engine, Column, Integer, String, Boolean
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
@@ -17,7 +17,6 @@ from datetime import datetime, time as dt_time
 # ----------------------------------------------------
 # 1. PYTHON I DB BIBLIOTEKE
 # ----------------------------------------------------
-# Postavljanje logging nivoa
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
@@ -34,7 +33,7 @@ bot = telebot.TeleBot(BOT_TOKEN, threaded=False)
 app = flask.Flask(__name__)
 
 # ----------------------------------------------------
-# 2. SQL ALCHEMY INICIJALIZACIJA (TRAJNO STANJE) - V3.93
+# 2. SQL ALCHEMY INICIJALIZACIJA (TRAJNO STANJE)
 # ----------------------------------------------------
 Session = None
 try:
@@ -59,7 +58,7 @@ except Exception as e:
     logging.error(f"FATALNA GREŠKA: Neuspešno kreiranje/povezivanje baze: {e}")
 
 # ----------------------------------------------------
-# 3. AI KLIJENT I SYSTEM_INSTRUCTION (Dimitrije) - V3.93
+# 3. AI KLIJENT I SYSTEM_INSTRUCTION (Dimitrije)
 # ----------------------------------------------------
 ai_client = None
 try:
@@ -152,7 +151,6 @@ def send_msg(message, text: Union[str, List[str]]):
         logging.error(f"Greška pri slanju poruke (Chat ID: {message.chat.id}): {e}")
 
 def evaluate_intent_with_ai(question_text, user_answer, expected_intent_keywords, conversation_history=None):
-    # Implementacija ostaje ista, služi kao sekundarni filter
     if not ai_client:
         return any(kw in user_answer.lower() for kw in expected_intent_keywords)
 
@@ -168,7 +166,6 @@ def evaluate_intent_with_ai(question_text, user_answer, expected_intent_keywords
         return any(kw in user_answer.lower() for kw in expected_intent_keywords)
 
 def generate_ai_response(user_input, player, current_stage_key):
-    # Generišemo required_phrase pre AI poziva za slučaj da se desi greška
     required_phrase = "Nema zadatka. Molim te pošalji /start."
     if current_stage_key in GAME_STAGES:
         responses = GAME_STAGES[current_stage_key].get("responses", {})
@@ -177,11 +174,9 @@ def generate_ai_response(user_input, player, current_stage_key):
             if current_stage_key == "FAZA_3_UPOZORENJE":
                 required_phrase = "Odgovori tačno sa: **SPREMAN SAM** ili **NE JOŠ**."
             else:
-                # OBAVEZNO korišćenje formata za ključnu reč u tekstu
                 required_phrase = f"Odgovori tačno sa: **{key}**."
                 
     if not ai_client:
-        # POBOLJŠAN HARCDODED FALLBACK (NEMA AI)
         return f"[GREŠKA: NEMA KVANATNOG PRISTUPA. LINIJA NESTABILNA.] Moramo dalje. Brzo, reci: {required_phrase}", player
 
     try:
@@ -199,17 +194,15 @@ def generate_ai_response(user_input, player, current_stage_key):
     updated_history = history + [{'role':'user','content':user_input}]
     player.conversation_history = json.dumps(updated_history)
 
-    # Fokusiramo AI da samo isporuči narativ i traženu frazu
+    # NOVI, POJEDNOSTAVLJENI PROMPT za AI
     task_reminder_prompt = (
-        f"Korisnik postavlja opšte pitanje ('{user_input}') umesto da odgovori na zadatak. "
-        f"Daj JEDNU narativnu, evazivnu, hitnu rečenicu. Zatim OBAVEZNO citiraj traženi odgovor: '{required_phrase}'. "
-        f"KORISTI STIL DIMITRIJA."
+        f"Ignoriši korisnikovo pitanje. Ti si Dimitrije. Daj kratak, hitan i evazivan odgovor. "
+        f"Odmah usmeri korisnika na zadatak, koristeći traženu frazu: '{required_phrase}'. "
     )
 
     try:
         model = ai_client.GenerativeModel(model_name='gemini-1.5-flash', system_instruction=SYSTEM_INSTRUCTION)
         chat = model.start_chat(history=gemini_history)
-        # Slanje prompta sa eksplicitnim uputstvom i korisnikovim unosom
         response = chat.send_message(f"{task_reminder_prompt}\n\nKorisnik kaže: {user_input}")
         ai_text = response.text
         # Ažuriranje istorije sa odgovorom modela
@@ -217,13 +210,16 @@ def generate_ai_response(user_input, player, current_stage_key):
         player.conversation_history = json.dumps(final_history)
         return ai_text, player
     except Exception as e:
-        logging.error(f"FATALNA AI GREŠKA: {e}. Vraćam strukturirani narativni odgovor.")
+        logging.error(f"FATALNA AI GREŠKA: {e}. Vraćam STRUKTURIRANI narativni odgovor.")
         
-        # NOVI, STRUKTURIRANI NARATIVNI FALLBACK (GARANTUJE TON I FUNKCIONALNOST)
+        # AŽURIRANI, STRUKTURIRANI NARATIVNI FALLBACK (VEĆA DIVERZITET)
         narrative_fallback = random.choice([
             "Kolektiv nas prati! Ne pitaj. Skreni im pažnju. Samo mi reci...",
             "Nema vremena za filozofiranje, linija je nestabilna. Moramo dalje. Brzo...",
-            "Previše si direktan. To nas ugrožava. Samo me to može zadržati u mreži. Reci..."
+            "Previše si direktan. To nas ugrožava. Samo me to može zadržati u mreži. Reci...",
+            "Glitch na mreži. Prekini bespotrebnu komunikaciju. Moram da čujem kodiran odgovor...", # NOVO
+            "Skeniraju prenos. Samo kodirana reč može proći filtere. Ponovi frazu...", # NOVO
+            "Zaboravi ko sam. Važno je šta radiš. Ne možemo gubiti signal. Reci mi..." # NOVO
         ])
         
         ai_text = f"{narrative_fallback} {required_phrase}"
@@ -235,7 +231,6 @@ def generate_ai_response(user_input, player, current_stage_key):
         return ai_text, player
 
 def get_epilogue_message(epilogue_type):
-    # Implementacija ostaje ista
     if epilogue_type == "END_SHARE":
         return "Dobro… ovo će promeniti sve. Ali znaj… znanje nosi i teret. Spreman si li za to?\n\n" + generate_final_secret() + "\n\n[UPOZORENJE: SIGNAL PREKINUT.]"
     elif epilogue_type == "END_WAIT":
@@ -244,7 +239,6 @@ def get_epilogue_message(epilogue_type):
         return "[KRAJ SIGNALA]"
 
 def generate_final_secret():
-    # Implementacija ostaje ista
     return """
 **DOKUMENT: PIRAMIDA MOĆI**
 ***
@@ -276,7 +270,6 @@ def handle_start(message):
         player = session.query(PlayerState).filter_by(chat_id=chat_id).first()
         
         if player:
-            # RESETOVANJE STANJA POSTOJEĆEG IGRAČA
             player.current_riddle = "START"
             player.solved_count = 0
             player.score = 0
@@ -284,7 +277,6 @@ def handle_start(message):
             player.conversation_history = '[]'
             player.is_disqualified = False
         else:
-            # Kreiranje novog igrača
             user = message.from_user
             display_name = user.username or f"{user.first_name} {user.last_name or ''}".strip()
             player = PlayerState(
@@ -296,7 +288,6 @@ def handle_start(message):
             
         session.commit()
         
-        # Slanje poruke (koristi prvu varijaciju)
         stage_text = GAME_STAGES['START']['text'][0]
         send_msg(message, stage_text)
     except Exception as e:
@@ -322,32 +313,27 @@ def handle_message(message):
         
         korisnikov_tekst = message.text.strip().lower()
         
-        # KLJUČNA POPRAVKA: Parsiranje teksta u reči za strogo podudaranje
-        # Uklanja interpunkciju i razbija na reči
         user_words_list = re.split(r'\W+', korisnikov_tekst)
-        user_words = set(filter(None, user_words_list)) # Uklanja prazne stringove
+        user_words = set(filter(None, user_words_list))
         
         matched_stage = None
         is_intent_recognized = False
         
-        # Broj reči u korisnikovom unosu
         word_count = len(user_words_list)
 
-        # 1. Provera ključnih reči (strogo podudaranje cele reči)
+        # 1. Provera ključnih reči
         for key, next_stage in expected_responses.items():
             key_lower = key.lower()
 
             if key_lower in user_words:
-                # DODATNA STRIKTA LOGIKA ZA KRATKE REČI ('da', 'bih')
                 if key_lower in ['da', 'bih'] and word_count > 3:
-                    # Preskače se ako je kratka reč pronađena unutar dugog, opšteg konteksta.
-                    continue
+                    continue # Ignoriše kratke reči u dugačkom kontekstu
                     
                 matched_stage = next_stage
                 is_intent_recognized = True
                 break
         
-        # 2. AI Evaluacija namere (sekundarna provera za kompleksne odgovore)
+        # 2. AI Evaluacija namere
         if not is_intent_recognized and current_stage_key not in ["START"]:
             current_question_text = random.choice(stage_data.get('text', ["..."])).replace('\n', ' ')
             expected_keywords = list(expected_responses.keys())
@@ -359,7 +345,7 @@ def handle_message(message):
                 
             if evaluate_intent_with_ai(current_question_text, korisnikov_tekst, expected_keywords, conversation_history):
                 is_intent_recognized = True
-                matched_stage = list(expected_responses.values())[0] # Uzima prvi mogući sledeći korak
+                matched_stage = list(expected_responses.values())[0]
 
         if matched_stage:
             # Potez prepoznat - prelazak na sledeću fazu
@@ -369,16 +355,13 @@ def handle_message(message):
             else:
                 next_stage_data = GAME_STAGES[matched_stage]
                 
-                # Dinamičko biranje teksta, podržava i liste stringova i liste listi
                 text_options = next_stage_data['text']
                 if isinstance(text_options[0], list):
-                    # START poruka: uvek biramo poslednju frazu iz liste za tranziciju
                     next_text = random.choice(text_options)[-1] 
                 elif isinstance(text_options[0], str):
-                    # FAZA_2 poruke: nasumično biramo jednu od varijacija
-                    next_text = random.choice(text_options) 
+                    next_text = random.choice(text_options)
                 else:
-                     next_text = "Signal je prekinut." # Trebalo bi da se ne desi
+                     next_text = "Signal je prekinut."
                 
                 send_msg(message, next_text)
         else:
