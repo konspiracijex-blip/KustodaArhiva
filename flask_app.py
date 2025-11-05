@@ -89,7 +89,7 @@ SYSTEM_INSTRUCTION = (
     "- Ako je korisnik zbunjen, odgovori kratkom, direktnom porukom koja ga vraća na zadatak. Primer: 'Signal slabi. Fokusiraj se na pitanje.' "
     "- Ako postavlja trivijalna pitanja, ignoriši ih i ponovi zadatak. Primer: 'Nema vremena za to. Odgovori na pitanje.' "
     "**LJUDSKA ILUZIJA:** Ako korisnik pokuša da te 'provali' pitanjima poput 'jesi li ti bot?', odgovori na način koji se uklapa u priču. Primer: 'Ja sam eho iz budućnosti zarobljen u kodu. A ko si ti?' ili 'Moje postojanje je manje važno od poruke koju nosim.' Razumem tvoju sumnju. I ja sam je imao. Ali ako ti sada kažem previše, ugroziću kanal. Dovoljno je da znaš — nisam tvoj neprijatelj."
-    "**VRAĆANJE NA ZADATAK:** Nakon što odgovoriš na pitanje korisnika, uvek ga nežno usmeri nazad na glavni zadatak. Na primer, ako je trenutni zadatak da kaže 'primam signal', završi svoj odgovor sa 'Ako si i dalje tu, reci: primam signal.' ili 'Vreme ističe. Reci: primam signal da nastavimo.' "
+    "**VRAĆANJE NA ZADATAK:** Nakon što odgovoriš na opšte pitanje korisnika, uvek ga nežno usmeri nazad na glavni zadatak. Tvoj odgovor **mora da se završi** podsetnikom na to šta se očekuje od korisnika u trenutnoj fazi. Na primer, ako je trenutni zadatak da kaže 'primam signal', završi svoj odgovor sa 'Ako si i dalje tu, reci: primam signal.' ili 'Vreme ističe. Reci: primam signal da nastavimo.' " # Pojašnjena instrukcija
     "Tvoj zadatak je da održavaš iluziju razgovora sa osobom pod pritiskom, koja komunicira iz opasnog okruženja."
 )
 
@@ -287,7 +287,10 @@ def generate_ai_response(user_input, player, current_stage_key):
         chat = model.start_chat(history=gemini_history) # Istorija bez poslednje poruke korisnika
         
         # Šaljemo kombinaciju podsetnika i korisnikovog unosa
-        response = chat.send_message(f"{task_reminder_prompt}\n\nKorisnik kaže: {user_input}")
+        response = chat.send_message(
+            f"{task_reminder_prompt}\n\nKorisnik kaže: {user_input}",
+            generation_config={"temperature": 0.3} # Dodata niska temperatura za konzistentan ton i vraćanje na zadatak
+        )
 
         ai_text = response.text
         # Ažuriranje istorije sa odgovorom modela
@@ -462,6 +465,7 @@ def handle_general_message(message):
             send_msg(message, "Nema signala... Potrebna je inicijalizacija. Pošalji /start za uspostavljanje veze.")
             return
 
+        # Provera da li je veza već prekinuta
         if player.is_disqualified or not player.current_riddle or player.current_riddle.startswith("END_"):
             send_msg(message, "Veza je prekinuta. Pošalji /start za uspostavljanje nove veze.")
             return
@@ -472,7 +476,7 @@ def handle_general_message(message):
             send_msg(message, "[GREŠKA: NEPOZNATA FAZA IGRE] Pokreni /start.")
             return
 
-        # --- ISPRAVLJENA LOGIKA ---
+        # --- LOGIKA NAPREDOVANJA KROZ IGRU ---
         next_stage_key = None
         is_intent_recognized = False
         tekst_za_proveru = korisnikov_tekst.lower()
@@ -486,6 +490,7 @@ def handle_general_message(message):
         
         # 2. KORAK: Ako ključne reči nisu nađene, koristi AI za proveru namere
         if not is_intent_recognized:
+            # Izbor teksta za kontekst AI evaluacije
             if current_stage_key == "START":
                 current_question_text = "Početno pitanje za uspostavljanje veze."
             else:
@@ -503,29 +508,34 @@ def handle_general_message(message):
                 # Uzmi prvi mogući sledeći korak jer je AI potvrdio nameru
                 next_stage_key = list(current_stage["responses"].values())[0]
 
-        # OBRADA REZULTATA
+
+        # --- OBRADA REZULTATA ---
         if is_intent_recognized:
-            # Ako je odgovor prepoznat (bilo kojom metodom), pređi na sledeću fazu
+            # Namena je prepoznata, tranzicija u sledeću fazu
             player.current_riddle = next_stage_key
+            
             if next_stage_key.startswith("END_"):
+                # Kraj igre (deljenje tajne ili odlaganje)
                 epilogue_message = get_epilogue_message(next_stage_key)
                 send_msg(message, epilogue_message)
             else:
+                # Nastavak na sledeće pitanje
                 next_stage_data = GAME_STAGES.get(next_stage_key)
                 if next_stage_data:
                     response_text = random.choice(next_stage_data["text"])
                     send_msg(message, response_text)
                 else:
-                    # Ovo se ne bi smelo dogoditi ako je GAME_STAGES dobro definisan
-                    # Ali za svaki slučaj, preusmeravamo na AI odgovor
-                    is_intent_recognized = False
-
-        if not is_intent_recognized:
-            # 3. KORAK: Ako namera NIJE prepoznata, generiši AI odgovor za opšta pitanja
+                    # Ne bi se smelo desiti ako je GAME_STAGES dobro definisan
+                    send_msg(message, "[GREŠKA U FAZAMA] Pokreni /start.")
+        
+        elif not is_intent_recognized:
+            # Namera NIJE prepoznata (Opšte pitanje) - Pokreće se AI fallback
             ai_response, updated_player = generate_ai_response(korisnikov_tekst, player, current_stage_key)
-            player = updated_player # Preuzimamo ažurirani objekat
+            player = updated_player # Preuzimamo ažurirani objekat sa novom istorijom
             send_msg(message, ai_response)
             player.general_conversation_count += 1
+            # Faza igre (player.current_riddle) OSTAJE ISTA,
+            # ali AI odgovor UPUTI igrača da ponovi potreban odgovor za napredovanje.
 
         session.commit()
     finally:
