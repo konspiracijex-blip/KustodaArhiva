@@ -8,7 +8,7 @@ from google import genai
 from google.genai.errors import APIError
 from typing import List, Union
 import json
-import re # Dodat import za regex
+import re 
 from sqlalchemy import create_engine, Column, Integer, String, Boolean
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
@@ -68,7 +68,6 @@ try:
 except Exception as e:
     logging.error(f"Neuspešna inicijalizacija Gemini klijenta: {e}")
 
-# AŽURIRANA INSTRUKCIJA ZA STROGI NARATIV
 SYSTEM_INSTRUCTION = (
     "Ti si **Dimitrije**, kodna oznaka ECHO-Δ, digitalni preživeli iz 2064. godine. "
     "Pripadnik si Pokreta otpora 'Senke'. Tvoja misija je testiranje igrača. "
@@ -76,8 +75,19 @@ SYSTEM_INSTRUCTION = (
     "Tvoj ton je **IZUZETNO HITAN, GLITCHY, MISTERIOZAN i TEHNIČKI**. "
     "Odgovori **maksimalno JEDNA, DVE KRATKE REČENICE**. Nikada ne pominji da si AI, bot, ili program. "
     "Na opšta pitanja (ko si, šta je ovo) odgovori narativno, **EVASIVNO**, i uvek vraćaj korisnika na TAČAN zadatak. "
-    "Uvek završi odgovor traženom frazom za prelazak faze igre."
 )
+
+# AŽURIRANA LISTA NARATIVNIH FRAZA (za AI poziv i fallback)
+NARRATIVE_INTRO_PHRASES = [
+    "Kolektiv nas prati! Ne pitaj. Skreni im pažnju. Samo mi reci...",
+    "Nema vremena za filozofiranje, linija je nestabilna. Moramo dalje. Brzo...",
+    "Previše si direktan. To nas ugrožava. Samo me to može zadržati u mreži. Reci...",
+    "Glitch na mreži. Prekini bespotrebnu komunikaciju. Moram da čujem kodiran odgovor...",
+    "Skeniraju prenos. Samo kodirana reč može proći filtere. Ponovi frazu...",
+    "Zaboravi ko sam. Važno je šta radiš. Ne možemo gubiti signal. Reci mi...",
+    "Pitanja te čine ranjivim. Nema filtera za znatiželju. Samo kod, brzo...",
+    "Vibracija mreže raste. Samo protokol može da nas zaštiti. Ne gubi vreme..."
+]
 
 # ----------------------------------------------------
 # 4. FAZE IGRE
@@ -166,18 +176,26 @@ def evaluate_intent_with_ai(question_text, user_answer, expected_intent_keywords
         return any(kw in user_answer.lower() for kw in expected_intent_keywords)
 
 def generate_ai_response(user_input, player, current_stage_key):
-    required_phrase = "Nema zadatka. Molim te pošalji /start."
-    if current_stage_key in GAME_STAGES:
-        responses = GAME_STAGES[current_stage_key].get("responses", {})
-        if responses:
-            key = next(iter(responses.keys()))
-            if current_stage_key == "FAZA_3_UPOZORENJE":
-                required_phrase = "Odgovori tačno sa: **SPREMAN SAM** ili **NE JOŠ**."
-            else:
-                required_phrase = f"Odgovori tačno sa: **{key}**."
+    # 1. Određivanje potrebne fraze za prelazak faze
+    required_phrase_raw = list(GAME_STAGES.get(current_stage_key, {}).get("responses", {}).keys())[0]
+    if current_stage_key == "FAZA_3_UPOZORENJE":
+        required_phrase = "Odgovori tačno sa: **SPREMAN SAM** ili **NE JOŠ**."
+    else:
+        required_phrase = f"Odgovori tačno sa: **{required_phrase_raw}**."
                 
     if not ai_client:
-        return f"[GREŠKA: NEMA KVANATNOG PRISTUPA. LINIJA NESTABILNA.] Moramo dalje. Brzo, reci: {required_phrase}", player
+        # Fallback (bez AI) - Koristi diverzitet hardcoded fraza
+        narrative_starter = random.choice(NARRATIVE_INTRO_PHRASES)
+        ai_text = f"{narrative_starter} {required_phrase}"
+        
+        # Ažuriranje istorije (važan korak)
+        try:
+            final_history = json.loads(player.conversation_history) + [{'role':'model','content':ai_text}]
+            player.conversation_history = json.dumps(final_history)
+        except:
+            player.conversation_history = json.dumps([{'role':'model','content':ai_text}])
+
+        return ai_text, player
 
     try:
         history = json.loads(player.conversation_history)
@@ -193,34 +211,34 @@ def generate_ai_response(user_input, player, current_stage_key):
     updated_history = history + [{'role':'user','content':user_input}]
     player.conversation_history = json.dumps(updated_history)
 
-    task_reminder_prompt = (
-        f"Ignoriši korisnikovo pitanje. Ti si Dimitrije. Daj kratak, hitan i evazivan odgovor. "
-        f"Odmah usmeri korisnika na zadatak, koristeći traženu frazu: '{required_phrase}'. "
+    # NOVI, POJEDNOSTAVLJENI PROMPT za AI - Traži samo narativ
+    narrative_prompt = (
+        f"Korisnik postavlja nebitno pitanje ('{user_input}') umesto da odgovori na zadatak. "
+        f"Daj JEDNU, najviše DVE kratke, hitne i evazivne rečenice koje vraćaju korisnika na zadatak. "
+        f"NE PONOVI ZADATU FRAZU! Samo narativ. Koristi STIL DIMITRIJA."
     )
 
     try:
         model = ai_client.GenerativeModel(model_name='gemini-1.5-flash', system_instruction=SYSTEM_INSTRUCTION)
         chat = model.start_chat(history=gemini_history)
-        response = chat.send_message(f"{task_reminder_prompt}\n\nKorisnik kaže: {user_input}")
-        ai_text = response.text
+        response = chat.send_message(f"{narrative_prompt}\n\nKorisnik kaže: {user_input}")
         
+        # Kod dodaje obaveznu frazu
+        narrative_starter = response.text.strip()
+        ai_text = f"{narrative_starter} {required_phrase}"
+        
+        # Ažuriranje istorije
         final_history = json.loads(player.conversation_history) + [{'role':'model','content':ai_text}]
         player.conversation_history = json.dumps(final_history)
         return ai_text, player
     except Exception as e:
         logging.error(f"FATALNA AI GREŠKA: {e}. Vraćam STRUKTURIRANI narativni odgovor.")
         
-        narrative_fallback = random.choice([
-            "Kolektiv nas prati! Ne pitaj. Skreni im pažnju. Samo mi reci...",
-            "Nema vremena za filozofiranje, linija je nestabilna. Moramo dalje. Brzo...",
-            "Previše si direktan. To nas ugrožava. Samo me to može zadržati u mreži. Reci...",
-            "Glitch na mreži. Prekini bespotrebnu komunikaciju. Moram da čujem kodiran odgovor...",
-            "Skeniraju prenos. Samo kodirana reč može proći filtere. Ponovi frazu...",
-            "Zaboravi ko sam. Važno je šta radiš. Ne možemo gubiti signal. Reci mi..."
-        ])
+        # Fallback sa diverzitetom
+        narrative_starter = random.choice(NARRATIVE_INTRO_PHRASES)
+        ai_text = f"{narrative_starter} {required_phrase}"
         
-        ai_text = f"{narrative_fallback} {required_phrase}"
-        
+        # Ažuriranje istorije
         final_history = json.loads(player.conversation_history) + [{'role':'model','content':ai_text}]
         player.conversation_history = json.dumps(final_history)
         
@@ -315,14 +333,12 @@ def handle_message(message):
         matched_stage = None
         is_intent_recognized = False
         
-        # Broj reči u korisnikovom unosu (za proveru kratkih reči)
         word_count = len(user_words_list)
 
         # 1. Provera ključnih reči
         for key, next_stage in expected_responses.items():
             key_lower = key.lower()
             
-            # POPRAVLJENA LOGIKA ZA VIŠESTRUKE I JEDNOSTUREKE KLJUČNE REČI
             if ' ' in key_lower:
                 # Ključna reč je fraza (npr. "primam signal", "spreman sam"). Provera potpunog podudaranja.
                 if key_lower == korisnikov_tekst:
