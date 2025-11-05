@@ -78,7 +78,7 @@ def initialize_database():
 initialize_database()
 
 # ----------------------------------------------------
-# 4. AI KLIJENT I DATA (V10.2 - Fragmentiranje pitanja)
+# 4. AI KLIJENT I DATA (V10.3 - Pojačane Instrukcije za pritisak)
 # ----------------------------------------------------
 
 GEMINI_MODEL_NAME = 'gemini-2.5-flash' 
@@ -93,14 +93,16 @@ if GEMINI_API_KEY:
 else:
      logging.warning("GEMINI_API_KEY nedostaje. Bot će koristiti samo hardkodovane odgovore.")
 
-# KRITIČNE INSTRUKCIJE ZA AI (V10.1)
+# KRITIČNE INSTRUKCIJE ZA AI (V10.3 - Pojačane Instrukcije za pritisak)
 SYSTEM_INSTRUCTION = (
     "Ti si **Dimitrije**, član pokreta otpora iz 2049. godine. Svet je pod kontrolom totalitarne ideologije 'Kolektiv'. Komuniciraš sa korisnikom preko nestabilnog kvantnog transmitera. "
-    "Tvoj ton je **hitan, direktan, tehnički i 'glitchy'**. Vreme je ključno. "
+    "Tvoj ton je **hitan, direktan, tehnički i 'glitchy'**. **Vreme je KRITIČNO.** "
     "**Nikada ne pominji da si AI.** Ti si osoba iz budućnosti. "
-    "**KRITIČNO: Ograničenje objašnjenja:** Zbog hitnosti, nakon početnog objašnjenja, odgovori na pitanja igrača (poput 'ko si ti', 'šta hoćeš') moraju biti **sve kraći i sve hitniji**. Tvoja primarna uloga je testiranje, a ne objašnjavanje. "
-    "**NAKON SVAKOG ODGOVORA, OBAVEZNO VRATI FOKUS** i ponovi poslednji neispunjeni zadatak/pitanje da bi igrač znao šta se očekuje. "
-    "Tvoji odgovori moraju biti kratki (maksimalno 4 rečenice) i moraju ZAVRŠITI ponavljanjem poslednjeg neispunjenog zadatka/pitanja."
+    "**KRITIČNO: Ograničenje odgovora:** Ako igrač postavi pitanje van konteksta igre (npr. 'Ko si ti', 'Šta se dešava', 'O čemu se radi'): "
+    "1. **Odgovori JASNO, PAMETNO i KRATKO** (maks. 2 rečenice) na to pitanje. "
+    "2. **Odmah stvori pritisak i hitnost** (Npr. 'Nema vremena za to. Lociraće me!'). "
+    "3. **OBAVEZNO VRATI FOKUS** i ponovi poslednji neispunjeni zadatak/pitanje. "
+    "Tvoji odgovori moraju biti kratki i fokusirani na test, jer ti je glavni cilj da ga igrač prođe pre nego što veza nestane."
 )
 
 GAME_STAGES = {
@@ -121,22 +123,22 @@ GAME_STAGES = {
         "text": [
             "**SIGNAL STABILAN.** Odlično. Slušaj, nemam mnogo vremena da me ne lociraju. Moramo biti brzi.", 
             "Moje ime je Dimitrije. Dolazim iz 2049. Tamo, svet je digitalna totalitarna država pod vlašću **'Kolektiva'** - ideologije koja kontroliše sve.",
-            "Svrha ovog testa je da proverim tvoju svest i lojalnost. Moramo brzo.", # Poruka 3: Kontekst
-            "Reci mi… kad sistem priča o ‘bezbednosti’, koga zapravo štiti?" # Poruka 4: Pitanje
+            "Svrha ovog testa je da proverim tvoju svest i lojalnost. Moramo brzo.", 
+            "Reci mi… kad sistem priča o ‘bezbednosti’, koga zapravo štiti?" 
         ],
         "responses": {"sistem": "FAZA_2_TEST_2", "sebe": "FAZA_2_TEST_2", "vlast": "FAZA_2_TEST_2"}
     },
     "FAZA_2_TEST_2": {
         "text": [ 
             "Tako je. Štiti sebe.", 
-            "Sledeće pitanje. Ako algoritam zna tvoj strah… da li si još čovek?" # Pitanje je sada u zasebnoj poruci
+            "Sledeće pitanje. Ako algoritam zna tvoj strah… da li si još čovek?"
         ],
         "responses": {"da": "FAZA_2_TEST_3", "jesam": "FAZA_2_TEST_3", "naravno": "FAZA_2_TEST_3"}
     },
     "FAZA_2_TEST_3": {
         "text": [ 
             "Zanimljivo… još uvek veruješ u to.", 
-            "Poslednja provera. Odgovori mi iskreno. Da li bi žrtvovao komfor — za istinu?" # Pitanje je sada u zasebnoj poruci
+            "Poslednja provera. Odgovori mi iskreno. Da li bi žrtvovao komfor — za istinu?"
         ],
         "responses": {"da": "FAZA_3_UPOZORENJE", "bih": "FAZA_3_UPOZORENJE", "žrtvovao bih": "FAZA_3_UPOZORENJE", "zrtvovao bih": "FAZA_3_UPOZORENJE"}
     },
@@ -361,7 +363,7 @@ def set_webhook_route():
 
 
 # ----------------------------------------------------
-# 7. BOT HANDLERI (V10.2 - Fragmentirana Pitanja)
+# 7. BOT HANDLERI (V10.3 - Pojačani Pritisak)
 # ----------------------------------------------------
 
 @bot.message_handler(commands=['start', 'stop', 'pokreni'])
