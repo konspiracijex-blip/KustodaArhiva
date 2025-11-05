@@ -185,12 +185,12 @@ def generate_ai_response(user_input, player, current_stage_key):
             if current_stage_key == "FAZA_3_UPOZORENJE":
                 required_phrase = "Odgovori tačno sa: **SPREMAN SAM** ili **NE JOŠ**."
             else:
+                # OBAVEZNO korišćenje formata za ključnu reč u tekstu
                 required_phrase = f"Odgovori tačno sa: **{key}**."
                 
     if not ai_client:
         # POBOLJŠAN HARCDODED FALLBACK
-        error_msg = random.choice(INVALID_INPUT_MESSAGES)
-        return f"{error_msg} Kanal je nestabilan. Moraš mi reći: {required_phrase}", player
+        return f"[GREŠKA: NEMA KVANATNOG PRISTUPA. LINIJA NESTABILNA.] Moramo dalje. Brzo, reci: {required_phrase}", player
 
     try:
         history = json.loads(player.conversation_history)
@@ -209,7 +209,8 @@ def generate_ai_response(user_input, player, current_stage_key):
 
     task_reminder_prompt = (
         f"Korisnik postavlja pitanje ('{user_input}') umesto da odgovori na zadatak. "
-        f"Daj JEDNU narativnu, evazivnu rečenicu, zatim OBAVEZNO citiraj traženi odgovor: '{required_phrase}'."
+        f"Daj JEDNU narativnu, evazivnu rečenicu, zatim OBAVEZNO citiraj traženi odgovor: '{required_phrase}'. "
+        f"KORISTI STIL DIMITRIJA: kratko, hitno, bez previše objašnjavanja ko si, fokusiraj se na Kolektiv i hitnost."
     )
 
     try:
@@ -222,10 +223,22 @@ def generate_ai_response(user_input, player, current_stage_key):
         player.conversation_history = json.dumps(final_history)
         return ai_text, player
     except Exception as e:
-        logging.error(f"Greška u generisanju AI: {e}")
-        # DINAMIČKI FALLBACK (KLJUČNA POPRAVKA)
-        error_msg = random.choice(INVALID_INPUT_MESSAGES)
-        return f"{error_msg} Signal je preslab. Zato mi moraš potvrditi prijem: {required_phrase}", player
+        logging.error(f"FATALNA AI GREŠKA: {e}. Vraćam strukturirani narativni odgovor.")
+        
+        # NOVI, STRUKTURIRANI NARATIVNI FALLBACK (POPRAVKA PROBLEMA)
+        narrative_fallback = random.choice([
+            "Kolektiv nas prati! Ne pitaj. Skreni im pažnju. Samo mi reci...",
+            "Nema vremena za filozofiranje, linija je nestabilna. Moramo dalje. Brzo...",
+            "Previše si direktan. To nas ugrožava. Samo me to može zadržati u mreži. Reci..."
+        ])
+        
+        ai_text = f"{narrative_fallback} {required_phrase}"
+        
+        # Still update history with the narrative fallback response
+        final_history = json.loads(player.conversation_history) + [{'role':'model','content':ai_text}]
+        player.conversation_history = json.dumps(final_history)
+        
+        return ai_text, player
 
 def get_epilogue_message(epilogue_type):
     if epilogue_type == "END_SHARE":
@@ -324,7 +337,6 @@ def handle_message(message):
         
         # 2. AI Evaluacija namere ako ključne reči nisu nađene
         if not is_intent_recognized and current_stage_key not in ["START"]:
-            # Ekstrakcija pitanja za AI (uzimamo nasumičnu varijaciju teksta)
             current_question_text = random.choice(stage_data.get('text', ["..."])).replace('\n', ' ')
             expected_keywords = list(expected_responses.keys())
             
@@ -346,12 +358,14 @@ def handle_message(message):
             else:
                 next_stage_data = GAME_STAGES[matched_stage]
                 
-                # Dodatna provera za faze koje imaju listu stringova (FAZA_2)
-                if isinstance(next_stage_data['text'][0], str):
-                    next_text = random.choice(next_stage_data['text'])
-                # Ovo bi trebalo da uhvati START fazu, ali START se ne pogađa ovde
-                else: 
-                    next_text = random.choice(random.choice(next_stage_data['text']))
+                # Dinamičko biranje teksta, podržava i liste stringova i liste listi
+                text_options = next_stage_data['text']
+                if isinstance(text_options[0], list):
+                    next_text = random.choice(text_options)[-1] # START poruka
+                elif isinstance(text_options[0], str):
+                    next_text = random.choice(text_options) # FAZA_2 poruke
+                else:
+                     next_text = "Signal je prekinut."
                 
                 send_msg(message, next_text)
         else:
@@ -368,7 +382,7 @@ def handle_message(message):
         session.close()
 
 # ----------------------------------------------------
-# 7. FLASK WEBHOOK I RUTIRANJE (Korigovano na standardnu praksu)
+# 7. FLASK WEBHOOK I RUTIRANJE
 # ----------------------------------------------------
 @app.route('/' + BOT_TOKEN, methods=['POST'])
 def webhook():
