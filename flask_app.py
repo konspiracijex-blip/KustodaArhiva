@@ -500,6 +500,7 @@ def handle_general_message(message):
                 next_stage_key = list(current_stage["responses"].values())[0]
 
         # OBRADA REZULTATA
+
         if is_intent_recognized:
             # Ako je odgovor prepoznat (bilo kojom metodom), pređi na sledeću fazu
             player.current_riddle = next_stage_key
@@ -513,6 +514,7 @@ def handle_general_message(message):
                     send_msg(message, response_text)
         else:
             # 3. KORAK: Ako namera NIJE prepoznata, generiši AI odgovor za opšta pitanja
+
             user_text = message.text.strip()
             ai_response = generate_ai_response(user_text, player, current_stage_key)
             send_msg(message, ai_response)
