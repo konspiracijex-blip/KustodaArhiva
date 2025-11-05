@@ -294,7 +294,7 @@ def generate_ai_response(user_input, player, current_stage_key):
         # Ažuriranje istorije sa odgovorom modela
         final_history = json.loads(player.conversation_history) + [{'role': 'model', 'content': ai_text}]
         player.conversation_history = json.dumps(final_history)
-        return ai_text
+        return ai_text, player
     except APIError as e:
         logging.error(f"Greška AI/Gemini API: {e}")
         return random.choice(AI_FALLBACK_MESSAGES)
@@ -516,11 +516,11 @@ def handle_general_message(message):
             # 3. KORAK: Ako namera NIJE prepoznata, generiši AI odgovor za opšta pitanja
 
             user_text = message.text.strip()
-            ai_response = generate_ai_response(user_text, player, current_stage_key)
+            ai_response, player = generate_ai_response(user_text, player, current_stage_key)
             send_msg(message, ai_response)
             player.general_conversation_count += 1
             session.commit() # Sačuvaj promenu brojača i istorije
-            return # Ključna izmena: Prekini dalje izvršavanje nakon slanja AI odgovora
+            return
 
         session.commit()
     finally:
