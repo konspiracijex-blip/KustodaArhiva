@@ -375,7 +375,7 @@ def handle_commands(message):
         
         if message.text.lower() == '/start' or message.text.lower() == 'start':
             
-            # --- PRIVREMENI KOD ZA MIGRACIJU ŠEME ---
+            # --- PRIVREMENI KOD ZA MIGRACIJU ŠEME (PONOVO DODAT) ---
             # Proverava da li tabela ima novu kolonu, ako ne, briše je i pravi ponovo.
             from sqlalchemy import inspect
             inspector = inspect(Engine)
@@ -384,6 +384,7 @@ def handle_commands(message):
                 Base.metadata.create_all(Engine)
                 logging.warning("!!! Stara tabela 'player_states' je obrisana i kreirana je nova zbog promene šeme. !!!")
             # --- KRAJ PRIVREMENOG KODA ---
+            
 
             is_existing_player = (player is not None)
             
@@ -462,9 +463,13 @@ def handle_general_message(message):
 
         # Provera odgovora
         next_stage_key = None
-        current_question_text = random.choice(current_stage['text'])
-        if isinstance(current_question_text, list):
-            current_question_text = " ".join(current_question_text)
+        
+        # Ispravka: Uvek koristi poslednju poruku iz niza kao pitanje za kontekst.
+        stage_text_or_list = current_stage['text']
+        if isinstance(stage_text_or_list, list):
+            current_question_text = stage_text_or_list[-1] # Uzmi poslednji element kao pitanje
+        else:
+            current_question_text = stage_text_or_list
 
         for response_keyword, next_key in current_stage["responses"].items():
             # Koristimo AI za prepoznavanje namere umesto prostog 'in'
