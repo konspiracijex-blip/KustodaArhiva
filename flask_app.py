@@ -371,8 +371,6 @@ def handle_commands(message):
     session = Session() 
 
     try:
-        player = session.query(PlayerState).filter_by(chat_id=chat_id).first()
-        
         if message.text.lower() == '/start' or message.text.lower() == 'start':
             
             # --- PRIVREMENI KOD ZA MIGRACIJU ŠEME (PONOVO DODAT) ---
@@ -385,7 +383,8 @@ def handle_commands(message):
                 logging.warning("!!! Stara tabela 'player_states' je obrisana i kreirana je nova zbog promene šeme. !!!")
             # --- KRAJ PRIVREMENOG KODA ---
             
-
+            # Sada kada je baza sigurno ispravna, možemo da čitamo iz nje.
+            player = session.query(PlayerState).filter_by(chat_id=chat_id).first()
             is_existing_player = (player is not None)
             
             if player:
@@ -414,6 +413,8 @@ def handle_commands(message):
             send_msg(message, start_message)
 
         elif message.text.lower() == '/stop' or message.text.lower() == 'stop':
+            # Za ostale komande, čitanje može da se desi odmah
+            player = session.query(PlayerState).filter_by(chat_id=chat_id).first()
             if player and player.current_riddle:
                 player.current_riddle = "END_STOP" 
                 player.is_disqualified = True # Trajno prekida vezu
