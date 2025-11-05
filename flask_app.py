@@ -482,12 +482,12 @@ def handle_general_message(message):
             current_question_text = random.choice(current_stage['text'])
             
         for response_keyword, next_key in current_stage["responses"].items():
-            # Koristimo AI za prepoznavanje namere umesto prostog 'in'
-            if evaluate_intent_with_ai(current_question_text, korisnikov_tekst, [response_keyword]):
+            # Koristimo AI za prepoznavanje namere.
+            # Proveravamo samo pozitivne ključne reči. Ako se ne poklopi, idemo na AI odgovor.
+            if evaluate_intent_with_ai(current_question_text, korisnikov_tekst, list(current_stage["responses"].keys())):
                 next_stage_key = next_key
                 print(f"Odgovor prepoznat! Sledeća faza: {next_stage_key}")
                 break
-
         if next_stage_key:
             # Ako je odgovor prepoznat, pređi na sledeću fazu
             player.current_riddle = next_stage_key
