@@ -262,15 +262,19 @@ def generate_ai_response(user_input, player, current_stage_key):
     player.conversation_history = json.dumps(updated_history)
 
 
-    current_riddle_text = "Nalazi se na početku."
+    current_riddle_text = "Nalaziš se na početku. Tvoj zadatak je da odgovoriš sa 'primam signal'."
     if current_stage_key and current_stage_key in GAME_STAGES:
         # Uzimamo prvu varijaciju kao reprezentativni tekst pitanja
         stage_text_variations = GAME_STAGES[current_stage_key]['text']
-        # Ako je prva varijacija lista (kao u START), uzmi poslednji element kao pitanje
-        if isinstance(stage_text_variations[0], list):
-            current_riddle_text = stage_text_variations[0][-1]
+        # Uzmi poslednji string iz prve varijacije kao najrelevantnije pitanje
+        if isinstance(stage_text_variations, list) and len(stage_text_variations) > 0:
+            first_variation = stage_text_variations[0]
+            if isinstance(first_variation, list) and len(first_variation) > 0:
+                current_riddle_text = first_variation[-1]
+            else:
+                current_riddle_text = first_variation
         else: # Inače, uzmi celu prvu varijaciju
-            current_riddle_text = stage_text_variations[0]
+            current_riddle_text = stage_text_variations
 
     task_reminder_prompt = (
         f"Podseti korisnika da je trenutni zadatak: '{current_riddle_text}'. "
