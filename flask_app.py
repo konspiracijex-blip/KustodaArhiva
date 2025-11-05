@@ -469,7 +469,7 @@ def handle_general_message(message):
         if not current_stage:
             send_msg(message, "[GREŠKA: NEPOZNATA FAZA IGRE] Pokreni /start.")
             return
-
+        
         # Provera odgovora
         next_stage_key = None
         
@@ -479,13 +479,13 @@ def handle_general_message(message):
             current_question_text = "Početno pitanje za uspostavljanje veze."
         else:
             # Za sve ostale faze, uzmi nasumičnu (ali reprezentativnu) varijaciju pitanja.
-            stage_text_or_list = current_stage['text']
-            current_question_text = random.choice(stage_text_or_list) if isinstance(stage_text_or_list, list) else stage_text_or_list
+            current_question_text = random.choice(current_stage['text'])
             
         for response_keyword, next_key in current_stage["responses"].items():
             # Koristimo AI za prepoznavanje namere umesto prostog 'in'
             if evaluate_intent_with_ai(current_question_text, korisnikov_tekst, [response_keyword]):
                 next_stage_key = next_key
+                print(f"Odgovor prepoznat! Sledeća faza: {next_stage_key}")
                 break
 
         if next_stage_key:
@@ -501,6 +501,7 @@ def handle_general_message(message):
                 if next_stage_data:
                     # Nasumično bira jednu od varijacija poruke za sledeću fazu
                     response_text = random.choice(next_stage_data["text"])
+                    print(f"Slanje standardnog odgovora: {response_text}")
                     send_msg(message, response_text)
         else:
             # Ako namera NIJE prepoznata, generiši AI odgovor.
@@ -508,6 +509,7 @@ def handle_general_message(message):
             # koji ne pokreću prelazak u sledeću fazu. Igrač ostaje u istoj fazi.
             user_text = message.text.strip()
             ai_response = generate_ai_response(user_text, player, current_stage_key)
+            print(f"Slanje AI odgovora: {ai_response}")
             send_msg(message, ai_response)
             player.general_conversation_count += 1 # Povećava brojač opštih razgovora
 
