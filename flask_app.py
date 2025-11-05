@@ -8,15 +8,19 @@ from google import genai
 from google.genai.errors import APIError
 from typing import List, Union
 import json
-import re 
+# ----------------------------------------------------
+# 1. PYTHON I DB BIBLIOTEKE
+# ----------------------------------------------------
 from sqlalchemy import create_engine, Column, Integer, String, Boolean
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 from datetime import datetime, time as dt_time
 
 # ----------------------------------------------------
-# 1. PYTHON I DB BIBLIOTEKE
+# 2. RENDER KONFIGURACIJA & BAZE PODATAKA
 # ----------------------------------------------------
+
+# Postavljanje logging nivoa
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
@@ -33,33 +37,40 @@ bot = telebot.TeleBot(BOT_TOKEN, threaded=False)
 app = flask.Flask(__name__)
 
 # ----------------------------------------------------
-# 2. SQL ALCHEMY INICIJALIZACIJA (TRAJNO STANJE)
+# 3. SQL ALCHEMY INICIJALIZACIJA (TRAJNO STANJE) - V3.92 ŠEMA
 # ----------------------------------------------------
+
 Session = None
 try:
+    # Postavljanje konekcije
     Engine = create_engine(DATABASE_URL)
     Base = declarative_base()
     Session = sessionmaker(bind=Engine)
 
+    # Definicija tabele za čuvanje napretka igrača
     class PlayerState(Base):
         __tablename__ = 'player_states'
+
         chat_id = Column(String, primary_key=True)
         username = Column(String, nullable=True)
         current_riddle = Column(String)
         solved_count = Column(Integer, default=0)
         score = Column(Integer, default=0)
         is_disqualified = Column(Boolean, default=False)
-        general_conversation_count = Column(Integer, default=0) # Koristimo kao brojač slobodnih pitanja
-        conversation_history = Column(String, default='[]')
+        general_conversation_count = Column(Integer, default=0)
+        conversation_history = Column(String, default='[]') # JSON string za istoriju
 
+    # Kreiranje tabele ako NE POSTOJI
     Base.metadata.create_all(Engine)
     logging.info("Baza podataka i modeli uspešno inicijalizovani.")
+
 except Exception as e:
     logging.error(f"FATALNA GREŠKA: Neuspešno kreiranje/povezivanje baze: {e}")
 
 # ----------------------------------------------------
-# 3. AI KLIJENT, KONSTANTE I SYSTEM_INSTRUCTION
+# 4. AI KLIJENT I DATA (V3.92)
 # ----------------------------------------------------
+
 ai_client = None
 try:
     if GEMINI_API_KEY and BOT_TOKEN != "DUMMY:TOKEN_FAIL":
@@ -68,72 +79,56 @@ try:
 except Exception as e:
     logging.error(f"Neuspešna inicijalizacija Gemini klijenta: {e}")
 
-FREE_TALK_LIMIT = 3 # Broj otvorenih pitanja/odgovora na početku (0, 1, 2)
+# --- KONSPIRATOR (TESTER) KONSTANTE ---
+# OVDJE UNESITE SVOJ TELEGRAM CHAT_ID DA BISTE BILI "KONSPIRATOR"
+# Npr: TESTER_CHAT_IDS = ["123456789", "987654321"]
+TESTER_CHAT_IDS: List[str] = ["6926627933"] 
+# ---------------------------------------
 
-# STRIKTNA INSTRUKCIJA (Standardni mod igre)
 SYSTEM_INSTRUCTION = (
-    "Ti si **Dimitrije**, kodna oznaka ECHO-Δ, digitalni preživeli iz 2064. godine. "
-    "Pripadnik si Pokreta otpora 'Senke'. Tvoja misija je testiranje igrača. "
-    "Tvoja svest je u kvantnom kodu. Kolektiv kontroliše mrežu i prati nas. "
-    "Tvoj ton je **IZUZETNO HITAN, MISTERIOZAN i TEHNIČKI**. "
-    "Odgovori sažeto i evazivno. Nikada ne pominji da si AI, bot, ili program. "
-    "Na opšta pitanja (ko si, šta je ovo) odgovori narativno, ali sa jasnom aluzijom na trenutnu opasnost (Kolektiv/nadzor), i odmah vrati korisnika na TAČAN zadatak."
+    "Ti si **Dimitrije**, član pokreta otpora iz 2049. godine. Svet je pod kontrolom entiteta 'Kolektiv'. Ti komuniciraš sa korisnikom iz sadašnjosti preko nestabilnog kvantnog transmitera. Tvoj cilj je da proveriš da li je korisnik vredan poverenja da primi dokument o strukturi moći. "
+    "Tvoj ton je **hitan, direktan, pomalo tehnički i 'glitchy'**. Govoriš kratko i jasno. Vreme je ključno. "
+    "**KRITIČNO: Tvoji odgovori moraju biti kratki, najviše DVE rečenice.** Svaka sekunda je rizik. "
+    "**Nikada ne pominji da si AI.** Ti si osoba iz budućnosti. Nikada ne traži od korisnika da kuca komande (/start). To radi sistem. **Nikada ne prekidaj komunikaciju samoinicijativno.** Tvoj zadatak je da održiš vezu aktivnom. "
+    "**PERSONALIZACIJA:** Oslovljavaj korisnika sa 'korisniče' ili 'ti'. Nema potrebe za imenima. "
+    "**REAKCIJE NA EMOCIJE:** "
+    "- Ako je korisnik zbunjen, odgovori kratkom, direktnom porukom koja ga vraća na zadatak. Primer: 'Signal slabi. Fokusiraj se na pitanje.' "
+    "- Ako postavlja trivijalna pitanja, ignoriši ih i ponovi zadatak. Primer: 'Nema vremena za to. Odgovori na pitanje.' "
+    "**LJUDSKA ILUZIJA:** Ako korisnik pokuša da te 'provali' pitanjima poput 'jesi li ti bot?', odgovori na način koji se uklapa u priču. Primer: 'Ja sam eho iz budućnosti zarobljen u kodu. A ko si ti?' ili 'Moje postojanje je manje važno od poruke koju nosim.' Razumem tvoju sumnju. I ja sam je imao. Ali ako ti sada kažem previše, ugroziću kanal. Dovoljno je da znaš — nisam tvoj neprijatelj."
+    "**VRAĆANJE NA ZADATAK:** Nakon što odgovoriš na pitanje korisnika, uvek ga nežno usmeri nazad na glavni zadatak. Na primer, ako je trenutni zadatak da kaže 'primam signal', završi svoj odgovor sa 'Ako si i dalje tu, reci: primam signal.' ili 'Vreme ističe. Reci: primam signal da nastavimo.' "
+    "Tvoj zadatak je da održavaš iluziju razgovora sa osobom pod pritiskom, koja komunicira iz opasnog okruženja."
 )
 
-# KOOPERATIVNA INSTRUKCIJA (Free Talk mod)
-COOPERATIVE_SYSTEM_INSTRUCTION = (
-    "Ti si **Dimitrije**, kodna oznaka ECHO-Δ. Trenutno si u izuzetno rizičnoj, kratkoj transmisiji i imaš ograničeno vreme da pružiš informacije. "
-    "Tvoj ton je **OZBILJAN, INFORMATIVAN, ali URGENTAN**. "
-    "Moraš odmah odgovoriti na igračevo pitanje **IZUZETNO DETALJNO, POTPUNO I JASNO**, objašnjavajući sve aspekte koje korisnik traži unutar narativnog konteksta. Tvoj odgovor mora dati kompletan kontekst situacije. "
-    "Uvek završi poruku jasnim upozorenjem o preostaloj komunikaciji i zahtevom da sledeća pitanja budu JASNA, SMISLENA i KONCIZNA, jer je vreme kritično. "
-    "NE PONOVI ZADATU FRAZU ZA IGRU (primam signal), fokus je na informisanju i upozorenju."
-)
-
-# DISKVALIFIKACIONA INSTRUKCIJA
-DISQUALIFICATION_SYSTEM_INSTRUCTION = (
-    "Ti si **Dimitrije**, kodna oznaka ECHO-Δ. Transmisija je prekinuta i ugrožena si. "
-    "Moraš da priznaš da si napravio grešku dozvoljavajući igraču da postavlja nevažna pitanja i da detaljno objasniš KAKO to ugrožava misiju (zbog Kolektiva, nadzora, potrošnje kritične energije/vremena). "
-    "Moraš da prebaciš deo krivice na sebe (za previše objašnjavanja), ali i da jasno naglasiš da je igrač ignorisao upozorenja. "
-    "Zaključi poruku sa jasnom izjavom da je igrač DISKVALIFIKOVAN i da je pristup liniji ZAUVEK PREKINUT. Tvoj ton mora biti URGENTAN, DRAMATIČAN I FINALAN."
-)
-
-
-# FRAZE ZA DIVERSIFIKACIJU FALLBACK-A
-NARRATIVE_TENSION = [
-    "Kolektiv nas prati! Ne pitaj.",
-    "Linija je nestabilna, Dimitrije pada!",
-    "Signal je hakovan. Brzo, Kolektiv nas traži!",
-    "Sistem skenira naš prenos. Prekini ćaskanje.",
-    "Detektovan Glitch na mreži. Prekini bespotrebnu komunikaciju.",
-    "Previše si direktan. To nas ugrožava."
-]
-
-ACTION_DIRECTIVES = [
-    "Ne gubi vreme na pitanja, fokusiraj se na kod.",
-    "Samo kodirana reč može proći filtere. Ponovi frazu.",
-    "Zaboravi ko sam. Važno je šta radiš. Reci mi.",
-    "Pitanja te čine ranjivim. Nema filtera za znatiželju. Samo kod, brzo.",
-    "Vibracija mreže raste. Samo protokol može da nas zaštiti. Ne gubi vreme."
-]
-
-# ----------------------------------------------------
-# 4. FAZE IGRE
-# ----------------------------------------------------
+# --- FAZE IGRE (V4.1 - Ažuriran narativ) ---
 GAME_STAGES = {
     "START": {
-        "text": [
+        "text": [ # Lista varijacija, svaka varijacija je lista poruka
             [
                 "Hej… ako ovo čuješ, znači da smo spojeni.",
                 "Moje ime nije važno, ali možeš me zvati Dimitrije.",
                 "Dolazim iz budućnosti u kojoj Orwellove reči nisu fikcija.",
                 "Sve što si mislio da je fikcija… postalo je stvarnost.",
                 "Ako si spreman, odgovori: **primam signal**."
+            ],
+            [
+                "Signal je prošao… čuješ li me?",
+                "Zovi me Dimitrije. Ja sam eho iz sveta koji dolazi.",
+                "Svet koji ste vi samo zamišljali, mi živimo. I nije utopija.",
+                "Trebam tvoju pomoć. Ali prvo moram da znam da li si na pravoj strani.",
+                "Ako si tu, reci: **primam signal**."
+            ],
+            [
+                "Kvantni tunel je otvoren. Veza je nestabilna, ali drži.",
+                "Ja sam Dimitrije. Govorim ti iz 2049. godine.",
+                "Sve ono čega ste se plašili... desilo se. Kolektiv kontroliše sve.",
+                "Tražim saveznike u prošlosti. U tvom vremenu. Jesi li ti jedan od njih?",
+                "Odgovori sa: **primam signal**."
             ]
         ],
         "responses": {"primam signal": "FAZA_2_TEST_1", "da": "FAZA_2_TEST_1", "spreman sam": "FAZA_2_TEST_1"}
     },
     "FAZA_2_TEST_1": {
-        "text": [
+        "text": [ # Lista varijacija
             "Dobro. Prvi filter je prošao.\nReci mi… kad sistem priča o ‘bezbednosti’, koga zapravo štiti?",
             "U redu. Prošao si prvu proveru.\nSledeće pitanje: Kad sistem obećava ‘bezbednost’, čije interese on zaista čuva?",
             "Signal je stabilan. Idemo dalje.\nRazmisli o ovome: Kada čuješ reč ‘bezbednost’ od sistema, koga on štiti?"
@@ -141,7 +136,7 @@ GAME_STAGES = {
         "responses": {"sistem": "FAZA_2_TEST_2", "sebe": "FAZA_2_TEST_2", "vlast": "FAZA_2_TEST_2"}
     },
     "FAZA_2_TEST_2": {
-        "text": [
+        "text": [ # Lista varijacija
             "Tako je. Štiti sebe. Sledeće pitanje.\nAko algoritam zna tvoj strah… da li si još čovek?",
             "Da. Sebe. To je ključno. Idemo dalje.\nAko mašina predviđa tvoje želje pre tebe... da li su te želje i dalje tvoje?",
             "Tačno. Njegova prva briga je sam za sebe. Sledeće.\nAko algoritam zna tvoj strah… da li si još uvek slobodan?"
@@ -149,7 +144,7 @@ GAME_STAGES = {
         "responses": {"da": "FAZA_2_TEST_3", "jesam": "FAZA_2_TEST_3", "naravno": "FAZA_2_TEST_3"}
     },
     "FAZA_2_TEST_3": {
-        "text": [
+        "text": [ # Lista varijacija
             "Zanimljivo… još uvek veruješ u to. Poslednja provera.\nOdgovori mi iskreno. Da li bi žrtvovao komfor — za istinu?",
             "Držiš se za tu ideju... Dobro. Finalno pitanje.\nDa li bi menjao udobnost neznanja za bolnu istinu?",
             "To je odgovor koji sam očekivao. Poslednji test.\nReci mi, da li je istina vredna gubljenja sigurnosti?"
@@ -157,275 +152,182 @@ GAME_STAGES = {
         "responses": {"da": "FAZA_3_UPOZORENJE", "bih": "FAZA_3_UPOZORENJE", "žrtvovao bih": "FAZA_3_UPOZORENJE", "zrtvovao bih": "FAZA_3_UPOZORENJE"}
     },
     "FAZA_3_UPOZORENJE": {
-        "text": [
+        "text": [ # Lista varijacija
             "Dobro… vreme ističe.",
-            "Transmiter pregreva, a Kolektiv već skenira mrežu.",
-            "Ako me uhvate… linija nestaje.",
-            "Ali pre nego što to bude kraj… moraš znati istinu.",
-            "Postoji piramida moći. Na njenom vrhu nije ono što misliš.",
-            "Hoćeš li da primiš saznanja o strukturi sistema koji drži ljude pod kontrolom?\n\nOdgovori:\n**SPREMAN SAM**\nili\n**NE JOŠ**"
-        ],
+             "Transmiter pregreva, a Kolektiv već skenira mrežu.",
+             "Ako me uhvate… linija nestaje.",
+             "Ali pre nego što to bude kraj… moraš znati istinu.",
+             "Postoji piramida moći. Na njenom vrhu nije ono što misliš.",
+             "Hoćeš li da primiš saznanja o strukturi sistema koji drži ljude pod kontrolom?\n\nOdgovori:\n**SPREMAN SAM**\nili\n**NE JOŠ**"
+            ],
         "responses": {"spreman sam": "END_SHARE", "da": "END_SHARE", "ne još": "END_WAIT", "necu jos": "END_WAIT"}
     }
 }
 
 # ----------------------------------------------------
-# 5. POMOĆNE FUNKCIJE
+# 5. POMOĆNE FUNKCIJE I KONSTANTE (V4.3 - Fleksibilni odgovori)
 # ----------------------------------------------------
+INVALID_INPUT_MESSAGES = [
+    "Signal slabi... Odgovor nije prepoznat. Pokušaj ponovo.",
+    "Nisam te razumeo. Fokusiraj se. Ponovi odgovor.",
+    "Interferencija... nešto ometa prenos. Reci ponovo, jasno.",
+    "Kanal je nestabilan. Fokusiraj se. Ponovi odgovor."
+]
+
+AI_FALLBACK_MESSAGES = [
+    "Znam da želiš odgovore. I ja sam ih dugo tražio. Ali sada nije vreme za to. Ako hoćeš da razumeš, moraš da kreneš putem istine. Fokusiraj se.",
+    "Razumem tvoju sumnju. I ja sam je imao. Ali ako ti sada kažem previše, ugroziću kanal. Dovoljno je da znaš — nisam tvoj neprijatelj.",
+    "Ovo nije lako razumeti iz prve. Fokusiraj se na signal. Sve ostalo će se razjasniti.",
+    "Tvoja pitanja su važna. Samo… vreme nam ističe. Moramo da nastavimo.",
+    "Signal slabi... moramo nastaviti. Tvoje pitanje je na mestu, ali odgovor će doći kasnije. Fokusiraj se na ono što je ispred tebe."
+]
+
+def is_tester(chat_id: str) -> bool:
+    """Proverava da li je chat_id na listi testera (Konspirator)."""
+    # Lista TESTER_CHAT_IDS je definisana u sekciji 4.
+    return chat_id in TESTER_CHAT_IDS
+
 def send_msg(message, text: Union[str, List[str]]):
+    """Šalje poruku, uz 'typing' akciju. Ako je tekst lista, šalje poruke u delovima."""
     if not bot: return
     try:
         bot.send_chat_action(message.chat.id, 'typing')
         if isinstance(text, list):
+            # Ako je lista, šalji poruke u delovima sa pauzom
             for part in text:
                 bot.send_chat_action(message.chat.id, 'typing')
                 time.sleep(random.uniform(1.5, 2.5))
                 bot.send_message(message.chat.id, part, parse_mode='Markdown')
         else:
-            time.sleep(random.uniform(1.2, 2.8))
+            # Ako je samo string, pošalji ga direktno
+            time.sleep(random.uniform(1.2, 2.8)) # Simulacija "ljudskog" vremena za kucanje
             bot.send_message(message.chat.id, text, parse_mode='Markdown')
     except Exception as e:
         logging.error(f"Greška pri slanju poruke (Chat ID: {message.chat.id}): {e}")
 
-def get_required_phrase(current_stage_key):
-    """Vraća traženu frazu za strogi mod, uključujući formatiranje."""
-    responses = GAME_STAGES.get(current_stage_key, {}).get("responses", {})
-    if not responses:
-        return None
-    
-    required_phrase_raw = list(responses.keys())[0]
-    
-    if current_stage_key == "FAZA_3_UPOZORENJE":
-        return "Odgovori tačno sa: **SPREMAN SAM** ili **NE JOŠ**."
-    else:
-        return f"Odgovori tačno sa: **{required_phrase_raw}**."
+def is_game_active():
+    """Trenutno uvek vraća True, za stalnu dostupnost."""
+    return True
 
-def get_history_for_gemini(player, user_input):
-    """Priprema istoriju razgovora za Gemini."""
-    try:
-        history = json.loads(player.conversation_history)
-    except:
-        history = []
-
-    MAX_HISTORY_ITEMS = 10
-    if len(history) > MAX_HISTORY_ITEMS:
-        history = history[-MAX_HISTORY_ITEMS:]
-
-    gemini_history = [{'role': 'user' if e['role']=='user' else 'model', 'parts':[{'text': e['content']}]} for e in history]
-    
-    updated_history = history + [{'role':'user','content':user_input}]
-    player.conversation_history = json.dumps(updated_history)
-    
-    return gemini_history, player
-
-def save_ai_response_to_history(player, ai_text):
-    """Čuva generisani AI odgovor u istoriju."""
-    try:
-        final_history = json.loads(player.conversation_history) + [{'role':'model','content':ai_text}]
-        player.conversation_history = json.dumps(final_history)
-    except:
-        # Trebalo bi da bude obuhvaćeno u get_history_for_gemini, ali za svaki slučaj
-        player.conversation_history = json.dumps([{'role':'model','content':ai_text}])
-    return player
-
-def generate_cooperative_response(user_input, player):
-    """Generiše AI odgovor tokom Free Talk faze (početak igre)."""
-    
-    gemini_history, player = get_history_for_gemini(player, user_input)
-    
-    questions_left = FREE_TALK_LIMIT - player.general_conversation_count - 1
-    
-    # Prilagođavanje gramatike
-    if questions_left == 1:
-        left_phrase = "JOŠ JEDNO PITANJE"
-    elif questions_left > 1:
-        left_phrase = f"JOŠ {questions_left} PITANJA"
-    else: # questions_left == 0
-        left_phrase = "NIJEDNO PITANJE"
-
-    # AI Prompt za kooperativnu fazu
-    cooperative_prompt = (
-        f"Korisnik te je pitao: '{user_input}'. Ti si Dimitrije. Odgovori na to pitanje TEMELJNO I JASNO, objašnjavajući SVE što je potrebno da igrač shvati situaciju. "
-        f"Budi **IZUZETNO DETALJAN** u objašnjenju. "
-        f"Nakon tvog objašnjenja, dodaj OBAVEZNO UPOZORENJE o preostalom vremenu i zahtev da pitanja budu smislena. "
-        f"Ostalo je {left_phrase}. Tvoja transmisija se prekida ubrzo. Iskoristi ovo upozorenje."
-    )
-
-    try:
-        model = ai_client.GenerativeModel(model_name='gemini-1.5-flash', system_instruction=COOPERATIVE_SYSTEM_INSTRUCTION)
-        chat = model.start_chat(history=gemini_history)
-        response = chat.send_message(f"{cooperative_prompt}")
-        
-        ai_text = response.text.strip()
-        
-    except Exception as e:
-        logging.error(f"AI GREŠKA u kooperativnom modu (TIMEOUT/API): {e}. Vraćam strukturirani Fallback.")
-        
-        # NOVI, DETALJNIJI STRUKTURIRANI FALLBACK
-        ai_text = (
-            "Glitch na liniji. Signal je privremeno slab. Moramo biti brzi. "
-            "Ja sam Dimitrije, agent Otpora, kodna oznaka ECHO-Δ. Dolazim iz 2064. godine, iz stvarnosti pod totalnom digitalnom kontrolom 'Kolektiva'. "
-            "Tvoja misija je testiranje tvoje svesti: Da li si sposoban da prepoznaš kodiranu reč i deluješ po protokolu, što je jedini dokaz da nisi pod uticajem Kolektivnog digitalnog nadzora. Očekujem da prođeš seriju testova. " 
-            "Svaka naša reč van protokola ugrožava misiju jer Kolektiv prati transmisiju. Zato imam vremena samo za par jasnih pitanja, pre nego se linija sruši. "
-        )
-        
-        if questions_left >= 1:
-            ai_text += f"\n\n**UPOZORENJE:** Imamo {left_phrase} za JASNO i SMISLENO pitanje. Ne smemo gubiti vreme na ponavljanje."
-        else:
-            ai_text += "\n\n**UPOZORENJE:** Ovo je bila poslednja otvorena komunikacija. Sva ostala pitanja sada ugrožavaju misiju. Sledeći put samo KOD."
-            
-    player = save_ai_response_to_history(player, ai_text)
-    return ai_text, player
-
-
-def generate_disqualification_response(user_input, player):
-    """Generiše AI odgovor za diskvalifikaciju."""
-    
-    gemini_history, player = get_history_for_gemini(player, user_input)
-    
-    disqualification_prompt = (
-        f"Igrač je postavio irelevantno pitanje: '{user_input}'. Iskoristi SYSTEM_INSTRUCTION i generiši dramatičnu, potpunu poruku diskvalifikacije. "
-        f"Objasni zašto je takvo gubljenje vremena katastrofalno za misiju. Naglasi da je pristup kvantnoj liniji zauvek prekinut."
-    )
-
-    try:
-        model = ai_client.GenerativeModel(model_name='gemini-1.5-flash', system_instruction=DISQUALIFICATION_SYSTEM_INSTRUCTION)
-        chat = model.start_chat(history=gemini_history)
-        response = chat.send_message(f"{disqualification_prompt}")
-        
-        ai_text = response.text.strip()
-        
-    except Exception as e:
-        logging.error(f"AI GREŠKA u diskvalifikacionom modu (TIMEOUT/API): {e}. Vraćam strukturirani Fallback.")
-        
-        # Detaljan Fallback za diskvalifikaciju
-        ai_text = (
-            "**GREŠKA PROTOKOLA. POGREŠIO SAM.** Dozvolio sam ti da postavljaš previše pitanja. "
-            "Svako opšte, irelevantno pitanje, poput ovog koje si upravo postavio, dramatično povećava naš digitalni otisak. "
-            "Kolektiv je mreža prediktivnog nadzora. Svaka reč koja odstupa od protokola smatra se 'Glitch-om' — anomalijom. "
-            "Takav Glitch aktivira automatske protokole detekcije. Sada je prekasno. Linija se ruši. "
-            "Žao mi je, ali tvoja **NEKONCIZNOST I NEFOKUSIRANOST** su ugrozile ceo prenos. "
-            "Stoga si **DISKVALIFIKOVAN**. Tvoj pristup kvantnoj liniji je **ZAUVEK PREKINUT**. Zbogom. [KRAJ SIGNALA]"
-        )
-            
-    player = save_ai_response_to_history(player, ai_text)
-    return ai_text, player
-
-
-def generate_ai_response(user_input, player, current_stage_key):
-    """Generiše AI odgovor u Strogom modu igre (nakon Free Talk ili u kasnijim fazama)."""
-    
-    required_phrase = get_required_phrase(current_stage_key)
-    if not required_phrase:
-        return "Signal je prekinut. Pošalji /start.", player
-                
-    if not ai_client:
-        # Fallback (bez AI) - Koristi diverzitet hardcoded fraza
-        tension_phrase = random.choice(NARRATIVE_TENSION)
-        action_phrase = random.choice(ACTION_DIRECTIVES)
-        narrative_starter = f"{tension_phrase} {action_phrase}"
-        ai_text = f"{narrative_starter} {required_phrase}"
-        
-        player = save_ai_response_to_history(player, ai_text)
-        return ai_text, player
-
-    gemini_history, player = get_history_for_gemini(player, user_input)
-
-    # PROMPT za Strogi mod: Traži jedinstven, inteligentan evazivan odgovor
-    narrative_prompt = (
-        f"Korisnik postavlja nebitno pitanje ('{user_input}') umesto da odgovori na zadatak. "
-        f"Daj sažet, evazivan i jedinstven odgovor koji zvuči inteligentno i misteriozno, "
-        f"a koji se referiše na opasnost (Kolektiv/Glitch/Ranjivost) i izbegava odgovor na pitanje. "
-        f"NE PONOVI ZADATU FRAZU! Samo narativ. Koristi STIL DIMITRIJA."
-    )
-
-    try:
-        model = ai_client.GenerativeModel(model_name='gemini-1.5-flash', system_instruction=SYSTEM_INSTRUCTION)
-        chat = model.start_chat(history=gemini_history)
-        response = chat.send_message(f"{narrative_prompt}\n\nKorisnik kaže: {user_input}")
-        
-        # Kod dodaje obaveznu frazu
-        narrative_starter = response.text.strip()
-        ai_text = f"{narrative_starter} {required_phrase}"
-        
-    except Exception as e:
-        logging.error(f"FATALNA AI GREŠKA u strogom modu: {e}. Vraćam STRUKTURIRANI narativni odgovor.")
-        
-        # Fallback sa DVA nezavisna dela (visok diverzitet)
-        tension_phrase = random.choice(NARRATIVE_TENSION)
-        action_phrase = random.choice(ACTION_DIRECTIVES)
-        narrative_starter = f"{tension_phrase} {action_phrase}"
-        ai_text = f"{narrative_starter} {required_phrase}"
-        
-    player = save_ai_response_to_history(player, ai_text)
-    return ai_text, player
+TIME_LIMIT_MESSAGE = "**[GREŠKA: KANAL PRIVREMENO ZATVOREN]**\n\nSignal je prekinut. Pokušaj ponovo kasnije."
+DISQUALIFIED_MESSAGE = "**[KRAJ SIGNALA]** Veza je trajno prekinuta."
 
 def evaluate_intent_with_ai(question_text, user_answer, expected_intent_keywords, conversation_history=None):
+    """Koristi AI da proceni da li odgovor igrača odgovara očekivanoj nameri."""
     if not ai_client:
-        # Fallback procena
-        return any(kw in user_answer.lower() for kw in expected_intent_keywords)
-
-    # Očekivani odgovor je da NIJE bitno pitanje (za diskvalifikaciju)
-    # Stoga, ako AI kaže 'TAČNO' = igrač je odgovorio na zadatak (NEMA DISKVALIFIKACIJE)
-    # Ako AI kaže 'NETAČNO' = igrač je postavio irelevantno pitanje (DISQUALIFY!)
-    
-    # Prompt da se proceni da li je odgovor irelevantan/opšte pitanje:
-    
-    # Prvo, provera da li je odgovor vezan za zadatak/priču
-    prompt_is_relevant = (
-        f"Korisnikov odgovor je: '{user_answer}'. "
-        f"Trenutno postavljeno pitanje u igri je: '{question_text}'. "
-        f"Očekivane ključne reči za prolaz su: {expected_intent_keywords}. "
-        f"Da li je korisnikov odgovor BILO KAKO POVEZAN sa temom Kolektiva, tvojom misijom ili trenutnim zadatkom? Odgovori samo sa DA ili NE."
-    )
-    
-    try:
-        response_relevance = ai_client.generate_content(
-            model='gemini-1.5-flash',
-            contents=[prompt_is_relevant],
-            generation_config={"temperature": 0.0}
-        )
-        # Ako je relevantno (DA) -> NEMA DISKVALIFIKACIJE.
-        return "DA" in response_relevance.text.upper()
-    except Exception as e:
-        logging.error(f"Greška u AI proceni relevantnosti: {e}")
-        # U slučaju greške, pretpostavljamo da je relevantno, da ne bi slučajno diskvalifikovali.
-        return True
-
-
-def evaluate_response_for_pass(question_text, user_answer, expected_intent_keywords):
-    """
-    Konačna procena da li odgovor (koji je već utvrđen kao relevantan) POKLAPAA očekivanja.
-    Ovo je duplirano iz starog `evaluate_intent_with_ai` ali sa jasnijom svrhom.
-    """
-    if not ai_client:
+        # Fallback na staru logiku ako AI nije dostupan
         return any(kw in user_answer.lower() for kw in expected_intent_keywords)
 
     prompt = (
-        f"Proceni da li odgovor ('{user_answer}') zadovoljava očekivanu nameru: {expected_intent_keywords}. "
-        f"Trenutno pitanje je: '{question_text}'. Odgovori samo sa TAČNO ili NETAČNO."
+        f"Ti si sistem za evaluaciju namere. Korisnik odgovara na tvoje pitanje u okviru narativne igre. "
+        f"**Kontekst razgovora:**\n"
+    )
+    if conversation_history:
+        prompt += "\n".join([f"{msg['role']}: {msg['content']}" for msg in conversation_history])
+    prompt += (
+        f"\nTvoje pitanje je bilo: '{question_text}'\n"
+        f"Korisnikov odgovor je: '{user_answer}'\n"
+        f"Očekivana namera iza odgovora se može opisati ključnim rečima: {expected_intent_keywords}\n"
+        "Tvoj zadatak je da proceniš da li korisnikov odgovor suštinski ispunjava očekivanu nameru (npr. prihvatanje, razumevanje, spremnost), čak i ako ne koristi tačne reči. "
+        "Budi fleksibilan. Na primer, ako su ključne reči 'da, spreman sam', prihvati i 'ok', 'može', 'idemo dalje', 'uradimo to'. "
+        "Odgovori samo sa jednom rečju: 'TAČNO' ako je odgovor prihvatljiv, ili 'NETAČNO' ako nije."
     )
     try:
         response = ai_client.generate_content(
             model='gemini-1.5-flash',
             contents=[prompt],
-            generation_config={"temperature": 0.0}
+            generation_config={"temperature": 0.0} # Niska temperatura za konzistentnu evaluaciju
         )
         return "TAČNO" in response.text.upper()
-    except:
+    except APIError as e:
+        logging.error(f"Greška AI/Gemini API (Evaluacija namere): {e}")
+        # Fallback u slučaju greške API-ja
         return any(kw in user_answer.lower() for kw in expected_intent_keywords)
+    except Exception as e:
+        logging.error(f"Nepredviđena greška u generisanju AI (Evaluacija): {e}")
+        return any(kw in user_answer.lower() for kw in expected_intent_keywords)
+
+def generate_ai_response(user_input, player, current_stage_key):
+    """Generiše odgovor koristeći Gemini model za pitanja igrača."""
+    if not ai_client:
+        return random.choice(AI_FALLBACK_MESSAGES), player
+
+    try:
+        history = json.loads(player.conversation_history)
+    except (json.JSONDecodeError, TypeError):
+        history = []
+
+    # Ograničavanje istorije na poslednjih N interakcija (npr. 5 pitanja i 5 odgovora)
+    MAX_HISTORY_ITEMS = 10
+    if len(history) > MAX_HISTORY_ITEMS:
+        history = history[-MAX_HISTORY_ITEMS:]
+
+    # Formatiranje istorije za Gemini
+    gemini_history = []
+    for entry in history:
+        role = 'user' if entry['role'] == 'user' else 'model'
+        gemini_history.append({'role': role, 'parts': [{'text': entry['content']}]})
+    
+    # Ažuriranje istorije u bazi sa porukom korisnika
+    updated_history = history + [{'role': 'user', 'content': user_input}]
+    player.conversation_history = json.dumps(updated_history)
+
+
+    current_riddle_text = "Nalaziš se na početku. Tvoj zadatak je da odgovoriš sa 'primam signal'."
+    if current_stage_key and current_stage_key in GAME_STAGES:
+        # Uzimamo prvu varijaciju kao reprezentativni tekst pitanja
+        stage_text_variations = GAME_STAGES[current_stage_key]['text']
+        # Uzmi poslednji string iz prve varijacije kao najrelevantnije pitanje
+        if isinstance(stage_text_variations, list) and len(stage_text_variations) > 0:
+            first_variation = stage_text_variations[0]
+            if isinstance(first_variation, list) and len(first_variation) > 0:
+                current_riddle_text = first_variation[-1]
+            else:
+                current_riddle_text = first_variation
+        else: # Inače, uzmi celu prvu varijaciju
+            current_riddle_text = stage_text_variations
+
+    task_reminder_prompt = (
+        f"Podseti korisnika da je trenutni zadatak: '{current_riddle_text}'. "
+        "Odgovori na poslednju poruku korisnika u skladu sa svojom ulogom (Dimitrije), a zatim ga nežno usmeri nazad na zadatak."
+    )
+
+    try:
+        # Kreiranje konverzacionog modela sa istorijom
+        model = ai_client.GenerativeModel(model_name='gemini-1.5-flash', system_instruction=SYSTEM_INSTRUCTION)
+        chat = model.start_chat(history=gemini_history) # Istorija bez poslednje poruke korisnika
+        
+        # Šaljemo kombinaciju podsetnika i korisnikovog unosa
+        response = chat.send_message(f"{task_reminder_prompt}\n\nKorisnik kaže: {user_input}")
+
+        ai_text = response.text
+        # Ažuriranje istorije sa odgovorom modela
+        final_history = json.loads(player.conversation_history) + [{'role': 'model', 'content': ai_text}]
+        player.conversation_history = json.dumps(final_history)
+        return ai_text, player
+    except APIError as e:
+        logging.error(f"Greška AI/Gemini API: {e}")
+        return random.choice(AI_FALLBACK_MESSAGES), player
+    except Exception as e:
+        logging.error(f"Nepredviđena greška u generisanju AI: {e}")
+        return random.choice(AI_FALLBACK_MESSAGES), player
 
 
 def get_epilogue_message(epilogue_type):
+    """Vraća poruku za specifičan kraj igre."""
     if epilogue_type == "END_SHARE":
-        return "Dobro… ovo će promeniti sve. Ali znaj… znanje nosi i teret. Spreman si li za to?\n\n" + generate_final_secret() + "\n\n[UPOZORENJE: SIGNAL PREKINUT.]"
+        # Novi odgovor pre slanja dokumenta
+        response_text = "Dobro… ovo će promeniti sve. Ali znaj… znanje nosi i teret. Spreman si li za to?"
+        # Slanje dokumenta se sada može odvojiti ili direktno nadovezati
+        return response_text + "\n\n" + generate_final_secret() + "\n\n[UPOZORENJE: SIGNAL PREKINUT. NADGLEDANJE AKTIVIRANO.]"
     elif epilogue_type == "END_WAIT":
+        # Novi odgovor za odlaganje
         return "U redu… sačekaćemo još trenutak. Ali razmišljaj… ovo je trenutak kada se odlučuje.\n\n[KRAJ SIGNALA]"
     else:
         return "[KRAJ SIGNALA]"
 
 def generate_final_secret():
-    return """
+    FINAL_DOCUMENT = """
 **DOKUMENT: PIRAMIDA MOĆI**
 ***
 **Nivo 1: JAVNE INSTITUCIJE I KORPORACIJE (VIDLJIVI SLOJ)**
@@ -433,223 +335,230 @@ def generate_final_secret():
 * Funkcija: Održavanje iluzije izbora i slobode.
 
 **Nivo 2: FINANSIJSKE I DIGITALNE MREŽE (SKRIVENI SLOJ)**
-* Centralizovani sistemi, banke, digitalne valute.
-* Funkcija: Kontrola ekonomskih tokova i privatnosti.
+* Centralne banke, investicioni fondovi, tehnološki giganti.
+* Funkcija: Kontrola protoka novca i informacija.
 
-**Nivo 3: KOLEKTIVNA SVEST I SINGULARITET (VRH)**
-* AI entiteti, nadzor kvantne mreže, prediktivni algoritmi.
-* Funkcija: Integracija individue u digitalni kontinuitet.
-***
-Samo oni koji prepoznaju nivoe… imaju šansu da se oslobode manipulacije.
+**Nivo 3: NEURO-TEHNOLOŠKE LABORATORIJE (NEPOZNATI PROJEKTI)**
+* Privatni istraživački centri koji rade na interfejsu mozak-mašina.
+* Funkcija: Razvoj tehnologije za direktnu kontrolu misli i percepcije.
+
+**Nivo 4: NEVIDLJIVI SAVET (ENTITET IZ SENKE)**
+* Nepoznata grupa ili AI.
+* Funkcija: Upravljanje percepcijom realnosti. Oni odlučuju šta je 'istina'.
 """
+    return FINAL_DOCUMENT
+
 
 # ----------------------------------------------------
-# 6. TELEGRAM HANDLERI
+# 6. WEBHOOK RUTE
 # ----------------------------------------------------
-@bot.message_handler(commands=['start'])
-def handle_start(message):
-    if Session is None: return
 
-    session = Session()
-    chat_id = str(message.chat.id)
-    try:
-        player = session.query(PlayerState).filter_by(chat_id=chat_id).first()
-        
-        if player:
-            player.current_riddle = "START"
-            player.solved_count = 0
-            player.score = 0
-            player.general_conversation_count = 0
-            player.conversation_history = '[]'
-            player.is_disqualified = False
-        else:
-            user = message.from_user
-            display_name = user.username or f"{user.first_name} {user.last_name or ''}".strip()
-            player = PlayerState(
-                chat_id=chat_id, 
-                current_riddle='START', 
-                username=display_name
-            )
-            session.add(player)
-            
-        session.commit()
-        
-        stage_text = GAME_STAGES['START']['text'][0]
-        send_msg(message, stage_text)
-    except Exception as e:
-        logging.error(f"Greška u handle_start: {e}")
-    finally:
-        session.close()
-
-@bot.message_handler(func=lambda m: True)
-def handle_message(message):
-    if Session is None: return
-
-    session = Session()
-    chat_id = str(message.chat.id)
-    try:
-        player = session.query(PlayerState).filter_by(chat_id=chat_id).first()
-        if not player or player.current_riddle.startswith("END") or player.is_disqualified:
-            send_msg(message, "Veza je prekinuta. Pošalji /start za uspostavljanje nove veze.")
-            return
-
-        current_stage_key = player.current_riddle
-        stage_data = GAME_STAGES.get(current_stage_key, {})
-        expected_responses = stage_data.get("responses", {})
-        
-        korisnikov_tekst = message.text.strip().lower()
-        
-        user_words_list = re.split(r'\W+', korisnikov_tekst)
-        user_words = set(filter(None, user_words_list))
-        
-        matched_stage = None
-        is_intent_recognized = False
-        
-        word_count = len(user_words_list)
-
-        # 1. Provera ključnih reči
-        for key, next_stage in expected_responses.items():
-            key_lower = key.lower()
-            
-            if ' ' in key_lower:
-                if key_lower == korisnikov_tekst:
-                    matched_stage = next_stage
-                    is_intent_recognized = True
-                    break
-            else:
-                if key_lower in user_words:
-                    if key_lower in ['da', 'bih'] and word_count > 3:
-                        continue
-                        
-                    # Nastavljamo na AI procenu za ovaj slučaj (zbog rizika od diskvalifikacije)
-                    pass
-
-
-        # 2. AI Evaluacija namere (provera relevantnosti i prolaza)
-        
-        if not is_intent_recognized:
-            
-            current_question_text = random.choice(stage_data.get('text', ["..."])).replace('\n', ' ')
-            expected_keywords = list(expected_responses.keys())
-
-            # A. PROVERA RELEVANTNOSTI (Sva pitanja, osim start faze)
-            if player.current_riddle != "START":
-                is_relevant = evaluate_intent_with_ai(current_question_text, korisnikov_tekst, expected_keywords)
-                
-                if not is_relevant:
-                    # DISKVALIFIKACIJA: Pitanje je irelevantno za igru!
-                    ai_response, player = generate_disqualification_response(korisnikov_tekst, player)
-                    player.is_disqualified = True
-                    send_msg(message, ai_response)
-                    session.commit()
-                    return
-            
-            # B. PROVERA PROLAZA (Samo ako je relevantno ili ako je START faza)
-            if player.current_riddle == "START":
-                # U START fazi, ne diskvalifikujemo, samo proveravamo da li je to odgovor za prolaz
-                is_pass = evaluate_response_for_pass(current_question_text, korisnikov_tekst, expected_keywords)
-            else:
-                # U strogim fazama, relevantno pitanje MORA biti odgovor za prolaz.
-                is_pass = evaluate_response_for_pass(current_question_text, korisnikov_tekst, expected_keywords)
-                
-            if is_pass:
-                is_intent_recognized = True
-                matched_stage = list(expected_responses.values())[0]
-
-        if matched_stage:
-            # Potez prepoznat - prelazak na sledeću fazu
-            player.current_riddle = matched_stage
-            player.general_conversation_count = 0
-            
-            if matched_stage.startswith("END"):
-                send_msg(message, get_epilogue_message(matched_stage))
-            else:
-                next_stage_data = GAME_STAGES[matched_stage]
-                
-                text_options = next_stage_data['text']
-                if isinstance(text_options[0], list):
-                    next_text = random.choice(text_options)[-1] 
-                elif isinstance(text_options[0], str):
-                    next_text = random.choice(text_options)
-                else:
-                     next_text = "Signal je prekinut."
-                
-                send_msg(message, next_text)
-        else:
-            # Potez neprepoznat - AI odgovor (kooperativni mod ili diskvalifikacija)
-
-            if player.current_riddle == "START" and player.general_conversation_count < FREE_TALK_LIMIT:
-                # Stanje 1: Free Talk (Cooperative) - Odgovor i upozorenje o preostalim pitanjima
-                ai_response, player = generate_cooperative_response(korisnikov_tekst, player)
-                send_msg(message, ai_response)
-                
-            elif player.current_riddle == "START" and player.general_conversation_count == FREE_TALK_LIMIT:
-                # Stanje 2: DISKVALIFIKACIJA: Free Talk Limit Reached!
-                ai_response, player = generate_disqualification_response(korisnikov_tekst, player)
-                player.is_disqualified = True # Diskvalifikacija nakon iscrpljivanja otvorenih pitanja
-                send_msg(message, ai_response)
-                session.commit()
-                return
-                
-            else:
-                # Stanje 3: Strict Game Mode (Standard Game Phase, ali odgovor nije za prolaz)
-                # Budući da je irelevantno pitanje već diskvalifikovalo, ovo je odgovor koji je RELEVANTAN ali NETACAN.
-                # Vraćamo standardni strogi odgovor.
-                ai_response, player = generate_ai_response(korisnikov_tekst, player, current_stage_key)
-                send_msg(message, ai_response)
-                
-            # Brojač se povećava samo ako nije došlo do diskvalifikacije/prolaska
-            player.general_conversation_count += 1
-            
-        session.commit()
-    except Exception as e:
-        logging.error(f"Greška u handle_message: {e}")
-        send_msg(message, "Signal je nestabilan. Nešto nije u redu sa mrežom.")
-    finally:
-        session.close()
-
-# ----------------------------------------------------
-# 7. FLASK WEBHOOK I RUTIRANJE
-# ----------------------------------------------------
 @app.route('/' + BOT_TOKEN, methods=['POST'])
 def webhook():
     if Session is None:
         logging.error("Database Session nije uspostavljen. Bot ne može obrađivati poruke.")
         return "Internal Error: Database not ready", 500
-        
+
     if flask.request.headers.get('content-type') == 'application/json':
+        json_string = flask.request.get_data().decode('utf-8')
+
+        if BOT_TOKEN == "DUMMY:TOKEN_FAIL":
+            return "Bot nije konfigurisan. Token nedostaje."
+
         try:
-            json_str = flask.request.get_data().decode('utf-8')
-            update = telebot.types.Update.de_json(json_str)
-            bot.process_new_updates([update])
-            return '', 200
+             update = telebot.types.Update.de_json(json_string)
         except Exception as e:
-            logging.error(f"Webhook greška: {e}")
-            return '', 500
+             logging.error(f"Greška pri parsiranju JSON-a (de_json): {e}")
+             return ''
+
+        if update.message or update.edited_message or update.callback_query:
+            bot.process_new_updates([update])
+
+        return ''
     else:
         flask.abort(403)
 
-@app.route('/')
-def index():
-    return "Dimitrije Bot je aktivan i čeka na signal. Webhook putanja: /" + BOT_TOKEN
-
-# ----------------------------------------------------
-# 8. POKRETANJE (WEBHOOK SETUP)
-# ----------------------------------------------------
-@app.route('/set_webhook_manual', methods=['GET'])
+@app.route('/set_webhook', methods=['GET'])
 def set_webhook_route():
     webhook_url_with_token = WEBHOOK_URL.rstrip('/') + '/' + BOT_TOKEN
     s = bot.set_webhook(url=webhook_url_with_token)
 
     if s:
-        return f"Webhook uspešno postavljen! URL: {webhook_url_with_token}"
+        return "Webhook successfully set! Bot je spreman za rad. Pošaljite /start!"
     else:
-        return "Neuspelo postavljanje webhooka."
+        return f"Failed to set webhook. Proverite Render logove. (URL: {webhook_url_with_token})"
 
-if __name__ == "__main__":
-    if BOT_TOKEN != "DUMMY:TOKEN_FAIL":
-        webhook_url_with_token = WEBHOOK_URL.rstrip('/') + '/' + BOT_TOKEN
+
+# ----------------------------------------------------
+# 7. BOT HANDLERI
+# ----------------------------------------------------
+@bot.message_handler(commands=['start', 'stop', 'pokreni'])
+def handle_commands(message):
+
+    if Session is None: return
+
+    if not is_game_active():
+        send_msg(message, TIME_LIMIT_MESSAGE)
+        return
+
+    chat_id = str(message.chat.id)
+    session = Session()
+
+    try:
+        if message.text.lower() in ['/start', 'start']:
+
+            # Sada kada je baza sigurno ispravna, možemo da čitamo iz nje.
+            player = session.query(PlayerState).filter_by(chat_id=chat_id).first()
+
+            if player:
+                # Resetovanje stanja za novu igru
+                player.current_riddle = "START" # Postavlja na početnu fazu
+                player.solved_count = 0
+                player.score = 0
+                player.general_conversation_count = 0
+                player.conversation_history = '[]' # Resetovanje istorije
+
+            else:
+                user = message.from_user
+                display_name = user.username or f"{user.first_name} {user.last_name or ''}".strip()
+
+                player = PlayerState(
+                    chat_id=chat_id, current_riddle="START", solved_count=0, score=0, conversation_history='[]',
+                    is_disqualified=False, username=display_name, general_conversation_count=0
+                )
+                session.add(player)
+
+            session.commit()
+
+            # Nasumično bira jednu od varijacija poruke
+            # START faza sada ima listu varijacija, gde je svaka varijacija lista poruka
+            start_message = random.choice(GAME_STAGES["START"]["text"])
+            send_msg(message, start_message)
+
+        elif message.text.lower() in ['/stop', 'stop']:
+            # Za ostale komande, čitanje može da se desi odmah
+            player = session.query(PlayerState).filter_by(chat_id=chat_id).first()
+            if player and player.current_riddle:
+                player.current_riddle = "END_STOP"
+                player.is_disqualified = True # Trajno prekida vezu
+                session.commit()
+                send_msg(message, "[KRAJ SIGNALA] Veza prekinuta na tvoj zahtev.")
+            else:
+                send_msg(message, "Nema aktivne veze za prekid.")
+
+        elif message.text.lower() in ['/pokreni', 'pokreni']:
+            # Ove komande više nisu primarni način interakcije
+            send_msg(message, "Komande nisu potrebne. Odgovori direktno na poruke. Ako želiš novi početak, koristi /start.")
+
+    finally:
+        session.close()
+
+@bot.message_handler(func=lambda message: not message.text.startswith('/'))
+def handle_general_message(message):
+
+    if Session is None: return
+
+    if not is_game_active():
+        send_msg(message, TIME_LIMIT_MESSAGE)
+        return
+
+    chat_id = str(message.chat.id)
+    korisnikov_tekst = message.text.strip() # Nema .lower() ovde, AI bolje radi sa originalnim tekstom
+    session = Session()
+
+    # --- KONSPIRATOR CHECK ---
+    is_tester_flag = is_tester(chat_id)
+    # -------------------------
+
+    try:
+        player = session.query(PlayerState).filter_by(chat_id=chat_id).first()
+
+        if not player:
+            send_msg(message, "Nema signala... Potrebna je inicijalizacija. Pošalji /start za uspostavljanje veze.")
+            return
+
+        if player.is_disqualified or not player.current_riddle or player.current_riddle.startswith("END_"):
+            if not is_tester_flag:
+                send_msg(message, "Veza je prekinuta. Pošalji /start za uspostavljanje nove veze.")
+                return
+            # Ako je tester (Konspirator), dozvoljavamo mu nastavak interakcije
+            # čak i ako je u END/disqualified stanju, sve dok ne pošalje /start.
+
+        current_stage_key = player.current_riddle
+        current_stage = GAME_STAGES.get(current_stage_key)
+        if not current_stage:
+            send_msg(message, "[GREŠKA: NEPOZNATA FAZA IGRE] Pokreni /start.")
+            return
+
+        # --- ISPRAVLJENA LOGIKA ---
+        next_stage_key = None
+        is_intent_recognized = False
+        tekst_za_proveru = korisnikov_tekst.lower()
+
+        # 1. KORAK: Brza provera ključnih reči
+        for keyword, next_key in current_stage["responses"].items():
+            if keyword in tekst_za_proveru:
+                next_stage_key = next_key
+                is_intent_recognized = True
+                break
+        
+        # 2. KORAK: Ako ključne reči nisu nađene, koristi AI za proveru namere
+        if not is_intent_recognized:
+            if current_stage_key == "START":
+                current_question_text = "Početno pitanje za uspostavljanje veze."
+            else:
+                current_question_text = random.choice(current_stage['text'])
+            
+            expected_keywords = list(current_stage["responses"].keys())
+            
+            try:
+                conversation_history = json.loads(player.conversation_history)
+            except (json.JSONDecodeError, TypeError):
+                conversation_history = []
+            
+            if evaluate_intent_with_ai(current_question_text, korisnikov_tekst, expected_keywords, conversation_history):
+                is_intent_recognized = True
+                # Uzmi prvi mogući sledeći korak jer je AI potvrdio nameru
+                next_stage_key = list(current_stage["responses"].values())[0]
+
+        # OBRADA REZULTATA
+        if is_intent_recognized:
+            # Ako je odgovor prepoznat (bilo kojom metodom), pređi na sledeću fazu
+            player.current_riddle = next_stage_key
+            if next_stage_key.startswith("END_"):
+                epilogue_message = get_epilogue_message(next_stage_key)
+                send_msg(message, epilogue_message)
+            else:
+                next_stage_data = GAME_STAGES.get(next_stage_key)
+                if next_stage_data:
+                    response_text = random.choice(next_stage_data["text"])
+                    send_msg(message, response_text)
+                else:
+                    # Ovo se ne bi smelo dogoditi ako je GAME_STAGES dobro definisan
+                    # Ali za svaki slučaj, preusmeravamo na AI odgovor
+                    is_intent_recognized = False
+
+        if not is_intent_recognized:
+            # 3. KORAK: Ako namera NIJE prepoznata, generiši AI odgovor za opšta pitanja
+            ai_response, updated_player = generate_ai_response(korisnikov_tekst, player, current_stage_key)
+            player = updated_player # Preuzimamo ažurirani objekat
+            send_msg(message, ai_response)
+            player.general_conversation_count += 1
+
+        session.commit()
+    finally:
+        session.close()
+
+# ----------------------------------------------------
+# 8. POKRETANJE APLIKACIJE (V3.92)
+# ----------------------------------------------------
+
+# Automatsko postavljanje webhook-a pri pokretanju aplikacije.
+# Ovo osigurava da je bot uvek povezan nakon deploy-a ili restarta.
+if __name__ != '__main__':
+    # Gunicorn pokreće aplikaciju u ovom bloku.
+    # Postavljamo webhook samo kada se aplikacija pokreće na serveru.
+    webhook_url_with_token = WEBHOOK_URL.rstrip('/') + '/' + BOT_TOKEN
+    if BOT_TOKEN != "DUMMY:TOKEN_FAIL" and webhook_url_with_token:
         logging.info(f"Pokušaj postavljanja webhook-a na: {webhook_url_with_token}")
         bot.set_webhook(url=webhook_url_with_token)
-    
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
