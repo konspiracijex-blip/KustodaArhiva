@@ -8,7 +8,7 @@ from google import genai
 from google.genai.errors import APIError
 from typing import List, Union
 import json
-import re
+import re # Dodat import za regex
 from sqlalchemy import create_engine, Column, Integer, String, Boolean
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
@@ -190,11 +190,9 @@ def generate_ai_response(user_input, player, current_stage_key):
 
     gemini_history = [{'role': 'user' if e['role']=='user' else 'model', 'parts':[{'text': e['content']}]} for e in history]
     
-    # Ažuriranje istorije sa porukom korisnika
     updated_history = history + [{'role':'user','content':user_input}]
     player.conversation_history = json.dumps(updated_history)
 
-    # NOVI, POJEDNOSTAVLJENI PROMPT za AI
     task_reminder_prompt = (
         f"Ignoriši korisnikovo pitanje. Ti si Dimitrije. Daj kratak, hitan i evazivan odgovor. "
         f"Odmah usmeri korisnika na zadatak, koristeći traženu frazu: '{required_phrase}'. "
@@ -205,26 +203,24 @@ def generate_ai_response(user_input, player, current_stage_key):
         chat = model.start_chat(history=gemini_history)
         response = chat.send_message(f"{task_reminder_prompt}\n\nKorisnik kaže: {user_input}")
         ai_text = response.text
-        # Ažuriranje istorije sa odgovorom modela
+        
         final_history = json.loads(player.conversation_history) + [{'role':'model','content':ai_text}]
         player.conversation_history = json.dumps(final_history)
         return ai_text, player
     except Exception as e:
         logging.error(f"FATALNA AI GREŠKA: {e}. Vraćam STRUKTURIRANI narativni odgovor.")
         
-        # AŽURIRANI, STRUKTURIRANI NARATIVNI FALLBACK (VEĆA DIVERZITET)
         narrative_fallback = random.choice([
             "Kolektiv nas prati! Ne pitaj. Skreni im pažnju. Samo mi reci...",
             "Nema vremena za filozofiranje, linija je nestabilna. Moramo dalje. Brzo...",
             "Previše si direktan. To nas ugrožava. Samo me to može zadržati u mreži. Reci...",
-            "Glitch na mreži. Prekini bespotrebnu komunikaciju. Moram da čujem kodiran odgovor...", # NOVO
-            "Skeniraju prenos. Samo kodirana reč može proći filtere. Ponovi frazu...", # NOVO
-            "Zaboravi ko sam. Važno je šta radiš. Ne možemo gubiti signal. Reci mi..." # NOVO
+            "Glitch na mreži. Prekini bespotrebnu komunikaciju. Moram da čujem kodiran odgovor...",
+            "Skeniraju prenos. Samo kodirana reč može proći filtere. Ponovi frazu...",
+            "Zaboravi ko sam. Važno je šta radiš. Ne možemo gubiti signal. Reci mi..."
         ])
         
         ai_text = f"{narrative_fallback} {required_phrase}"
         
-        # Ažuriranje istorije sa fallback odgovorom
         final_history = json.loads(player.conversation_history) + [{'role':'model','content':ai_text}]
         player.conversation_history = json.dumps(final_history)
         
@@ -319,19 +315,30 @@ def handle_message(message):
         matched_stage = None
         is_intent_recognized = False
         
+        # Broj reči u korisnikovom unosu (za proveru kratkih reči)
         word_count = len(user_words_list)
 
         # 1. Provera ključnih reči
         for key, next_stage in expected_responses.items():
             key_lower = key.lower()
-
-            if key_lower in user_words:
-                if key_lower in ['da', 'bih'] and word_count > 3:
-                    continue # Ignoriše kratke reči u dugačkom kontekstu
-                    
-                matched_stage = next_stage
-                is_intent_recognized = True
-                break
+            
+            # POPRAVLJENA LOGIKA ZA VIŠESTRUKE I JEDNOSTUREKE KLJUČNE REČI
+            if ' ' in key_lower:
+                # Ključna reč je fraza (npr. "primam signal", "spreman sam"). Provera potpunog podudaranja.
+                if key_lower == korisnikov_tekst:
+                    matched_stage = next_stage
+                    is_intent_recognized = True
+                    break
+            else:
+                # Ključna reč je jedna reč (npr. "sistem", "da"). Provera skupa reči.
+                if key_lower in user_words:
+                    # Stroga provera za kratke reči ('da', 'bih') unutar dugog konteksta.
+                    if key_lower in ['da', 'bih'] and word_count > 3:
+                        continue
+                        
+                    matched_stage = next_stage
+                    is_intent_recognized = True
+                    break
         
         # 2. AI Evaluacija namere
         if not is_intent_recognized and current_stage_key not in ["START"]:
