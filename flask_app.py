@@ -226,10 +226,11 @@ def evaluate_intent_with_ai(question_text, user_answer, expected_intent_keywords
         "Odgovori samo sa jednom rečju: 'TAČNO' ako je odgovor prihvatljiv, ili 'NETAČNO' ako nije."
     )
     try:
-        response = ai_client.generate_content(
+        # KRITIČNA KOREKCIJA: Koristiti ai_client.models.generate_content i 'config'
+        response = ai_client.models.generate_content(
             model='gemini-1.5-flash',
             contents=[prompt],
-            generation_config={"temperature": 0.0} # Niska temperatura za konzistentnu evaluaciju
+            config={"temperature": 0.0} # Korigovano na 'config'
         )
         return "TAČNO" in response.text.upper()
     except APIError as e:
@@ -238,6 +239,7 @@ def evaluate_intent_with_ai(question_text, user_answer, expected_intent_keywords
         return any(kw in user_answer.lower() for kw in expected_intent_keywords)
     except Exception as e:
         logging.error(f"Nepredviđena greška u generisanju AI (Evaluacija): {e}")
+        # Fallback u slučaju greške (npr. 'Client' object has no attribute 'generate_content')
         return any(kw in user_answer.lower() for kw in expected_intent_keywords)
 
 def generate_ai_response(user_input, player, current_stage_key):
@@ -288,14 +290,14 @@ def generate_ai_response(user_input, player, current_stage_key):
     )
 
     try:
-        # Kreiranje konverzacionog modela sa istorijom
-        model = ai_client.GenerativeModel(model_name='gemini-1.5-flash', system_instruction=SYSTEM_INSTRUCTION)
+        # KRITIČNA KOREKCIJA: Koristiti genai.GenerativeModel
+        model = genai.GenerativeModel(model_name='gemini-1.5-flash', system_instruction=SYSTEM_INSTRUCTION)
         chat = model.start_chat(history=gemini_history) # Istorija bez poslednje poruke korisnika
         
         # Šaljemo kombinaciju podsetnika i korisnikovog unosa
         response = chat.send_message(
             f"{task_reminder_prompt}\n\nKorisnik kaže: {user_input}",
-            generation_config={"temperature": 0.7} # POVEĆANA TEMPERATURA ZA VARIJABILNOST
+            config={"temperature": 0.7} # Korigovano na 'config'
         )
 
         ai_text = response.text
