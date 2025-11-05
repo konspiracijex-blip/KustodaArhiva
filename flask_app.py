@@ -213,13 +213,14 @@ Pogledaj Logdef evaluate_intent_with_ai(question_text, user_answer, expected_int
     )
     if conversation_history:
         prompt += "\n".join([f"{msg['role']}: {msg['content']}" for msg in conversation_history])
-        f"Tvoje pitanje je bilo: '{question_text}'\n"
+    prompt += (
+        f"\nTvoje pitanje je bilo: '{question_text}'\n"
         f"Korisnikov odgovor je: '{user_answer}'\n"
         f"Očekivana namera iza odgovora se može opisati ključnim rečima: {expected_intent_keywords}\n"
         "Tvoj zadatak je da proceniš da li korisnikov odgovor suštinski ispunjava očekivanu nameru (npr. prihvatanje, razumevanje, spremnost), čak i ako ne koristi tačne reči. "
         "Budi fleksibilan. Na primer, ako su ključne reči 'da, spreman sam', prihvati i 'ok', 'može', 'idemo dalje', 'uradimo to'. "
         "Odgovori samo sa jednom rečju: 'TAČNO' ako je odgovor prihvatljiv, ili 'NETAČNO' ako nije."
-    )
+    )    
     try:
         response = ai_client.models.generate_content(
             model='gemini-2.5-flash',
