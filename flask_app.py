@@ -503,10 +503,11 @@ def handle_general_message(message):
                     response_text = random.choice(next_stage_data["text"])
                     send_msg(message, response_text)
         else:
-            # Ako namera nije prepoznata, tretiraj kao pitanje/komentar i generiši AI odgovor
-            # Ako namera NIJE prepoznata, generiši AI odgovor, ali NE MENJAJ FAZU.
-            # Igrač ostaje u istoj fazi, čekajući ispravan unos.
-            ai_response = generate_ai_response(message.text.strip(), player, current_stage_key)
+            # Ako namera NIJE prepoznata, generiši AI odgovor.
+            # Ovo pokriva slučajeve kada korisnik postavlja pitanja ili daje odgovore
+            # koji ne pokreću prelazak u sledeću fazu. Igrač ostaje u istoj fazi.
+            user_text = message.text.strip()
+            ai_response = generate_ai_response(user_text, player, current_stage_key)
             send_msg(message, ai_response)
             player.general_conversation_count += 1 # Povećava brojač opštih razgovora
 
