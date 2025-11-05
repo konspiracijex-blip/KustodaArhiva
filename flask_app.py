@@ -68,7 +68,7 @@ except Exception as e:
     logging.error(f"FATALNA GREŠKA: Neuspešno kreiranje/povezivanje baze: {e}")
 
 # ----------------------------------------------------
-# 4. AI KLIJENT I DATA (V4.5)
+# 4. AI KLIJENT I DATA (V4.6)
 # ----------------------------------------------------
 
 ai_client = None
@@ -91,7 +91,7 @@ SYSTEM_INSTRUCTION = (
 )
 
 
-# --- FAZE IGRE (V4.5 - Implementiran novi početak) ---
+# --- FAZE IGRE (V4.6 - Fiksirana START_INIT faza sa kompleksnijim ključnim rečima) ---
 GAME_STAGES = {
     # 0. FAZA: USPOSTAVLJANJE VEZE (Novi početak)
     "START_INIT": {
@@ -100,8 +100,8 @@ GAME_STAGES = {
             ["Testiram kanal. Možeš li potvrditi prijem?"],
             ["Signal nestabilan. Daj mi potvrdu."]
         ],
-        # Prelazi na START_MISSION nakon potvrde
-        "responses": {"da": "START_MISSION", "vidim": "START_MISSION", "jesam": "START_MISSION", "moze": "START_MISSION"}
+        # KLJUČNA IZMENA: Stroge ključne reči za izbegavanje slučajnog prelaska na 'da'
+        "responses": {"vidim poruku": "START_MISSION", "potvrđujem prijem": "START_MISSION", "potvrdujem prijem": "START_MISSION", "da vidim": "START_MISSION"}
     },
     
     # 1. FAZA: MISIJA/PRAVILA (Preuređeni uvod, prethodno "START")
@@ -171,7 +171,7 @@ GAME_STAGES = {
 }
 
 # ----------------------------------------------------
-# 5. POMOĆNE FUNKCIJE I KONSTANTE (V4.5)
+# 5. POMOĆNE FUNKCIJE I KONSTANTE (V4.6)
 # ----------------------------------------------------
 INVALID_INPUT_MESSAGES = [
     "Signal slabi... Odgovor nije prepoznat. Pokušaj ponovo.",
@@ -281,7 +281,13 @@ def generate_ai_response(user_input, player, current_stage_key):
         # POUZDANO VADIMO POSLEDNJE PITANJE/ZAHTEV
         if current_stage_key in ["START_INIT", "START_MISSION"]:
             # Za početne faze, uzimamo poslednju rečenicu prve varijacije
-            current_riddle_text = random.choice(stage_data['text'])[0][-1]
+            # Pošto je 'text' lista listi (varijacija, a unutar nje poruke)
+            try:
+                # Pokušavamo da nađemo frazu za potvrdu
+                confirmation_phrase = next(iter(stage_data['responses'].keys()))
+                current_riddle_text = f"Odgovori sa frazom: **{confirmation_phrase}**."
+            except StopIteration:
+                current_riddle_text = random.choice(stage_data['text'])[0][-1] # Fallback na poslednju rečenicu
         else:
             # Za ostale faze, to je cela rečenica pitanja
             current_riddle_text = random.choice(stage_data['text'])
@@ -293,7 +299,7 @@ def generate_ai_response(user_input, player, current_stage_key):
     task_reminder_prompt = (
         f"Korisnik postavlja pitanje umesto da odgovori na zadatak. Tvoj odgovor mora da sadrži narativno objašnjenje u 1-2 rečenice (kolektiv/signal/vreme), a zatim **MORAŠ** da usmeriš korisnika nazad. "
         f"Trenutni zadatak ili fraza koju očekuješ je: '{current_riddle_text}' "
-        "Završi svoj odgovor na korisnikovu poruku tako što ćeš citirati ili parafrazirati traženu frazu/pitanje da bi ga vratio na igru."
+        "Završi svoj odgovor na korisnikovu poruku tako što ćeš citirati ili parafrazirati traženu frazu/pitanje da bi ga vratio na igru. **OVO JE KRITIČNO.**"
     )
 
 
@@ -543,7 +549,7 @@ def handle_general_message(message):
         session.close()
 
 # ----------------------------------------------------
-# 8. POKRETANJE APLIKACIJE (V4.5)
+# 8. POKRETANJE APLIKACIJE (V4.6)
 # ----------------------------------------------------
 
 # Automatsko postavljanje webhook-a pri pokretanju aplikacije.
