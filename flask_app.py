@@ -68,11 +68,11 @@ except Exception as e:
     logging.error(f"FATALNA GREŠKA: Neuspešno kreiranje/povezivanje baze: {e}")
 
 # ----------------------------------------------------
-# 4. AI KLIJENT I DATA (V4.7 - Fiksiran Model Name)
+# 4. AI KLIJENT I DATA (V4.8 - Fiksiran Model na gemini-2.5-flash)
 # ----------------------------------------------------
 
-# KRITIČNA ISPRAVKA: Korišćenje ispravnog naziva modela za v1beta API
-GEMINI_MODEL_NAME = 'gemini-1.5-flash-latest' 
+# KRITIČNA ISPRAVKA: Korišćenje najnovijeg, stabilnog modela za v1beta API
+GEMINI_MODEL_NAME = 'gemini-2.5-flash' 
 
 ai_client = None
 try:
@@ -166,7 +166,7 @@ GAME_STAGES = {
 }
 
 # ----------------------------------------------------
-# 5. POMOĆNE FUNKCIJE I KONSTANTE (V4.7 - Fiksiran Model Name)
+# 5. POMOĆNE FUNKCIJE I KONSTANTE (V4.8 - Fiksiran Model na gemini-2.5-flash)
 # ----------------------------------------------------
 INVALID_INPUT_MESSAGES = [
     "Signal slabi... Odgovor nije prepoznat. Pokušaj ponovo.",
@@ -250,9 +250,9 @@ def evaluate_intent_with_ai(question_text, user_answer, expected_intent_keywords
         "Odgovori samo sa jednom rečju: 'TAČNO' ako je odgovor prihvatljiv, ili 'NETAČNO' ako nije."
     )
     try:
-        # KRITIČNA ISPRAVKA: Korišćenje ispravne konstante za naziv modela
+        # KRITIČNA ISPRAVKA: HARD-KODIRANO ZA SIGURNOST PROTIV 404 GREŠKE
         response = ai_client.models.generate_content(
-            model=GEMINI_MODEL_NAME, 
+            model='gemini-2.5-flash', 
             contents=[prompt],
             config={"temperature": 0.0}
         )
@@ -315,9 +315,9 @@ def generate_ai_response(user_input, player, current_stage_key):
 
         try:
             # 2. Direktni API poziv (one-shot)
-            # KRITIČNA ISPRAVKA: Korišćenje ispravne konstante za naziv modela
+            # KRITIČNA ISPRAVKA: HARD-KODIRANO ZA SIGURNOST PROTIV 404 GREŠKE
             response = ai_client.models.generate_content(
-                model=GEMINI_MODEL_NAME, 
+                model='gemini-2.5-flash', 
                 contents=full_contents
             )
             
