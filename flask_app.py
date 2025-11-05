@@ -19,6 +19,7 @@ from telebot.apihelper import ApiTelegramException
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
+# OBAVEZNO: Podesite ove promenljive u vašem okruženju (Render)
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
 DATABASE_URL = os.environ.get('DATABASE_URL')
@@ -69,7 +70,7 @@ except Exception as e:
     Session = None
 
 # ----------------------------------------------------
-# 4. AI KLIJENT I DATA (V9.0)
+# 4. AI KLIJENT I DATA (V9.2)
 # ----------------------------------------------------
 
 GEMINI_MODEL_NAME = 'gemini-2.5-flash' 
@@ -84,7 +85,7 @@ if GEMINI_API_KEY:
 else:
      logging.warning("GEMINI_API_KEY nedostaje. Bot će koristiti samo hardkodovane odgovore.")
 
-# NOVE KRITIČNE INSTRUKCIJE ZA AI (V9.0)
+# KRITIČNE INSTRUKCIJE ZA AI (V9.2)
 SYSTEM_INSTRUCTION = (
     "Ti si **Dimitrije**, član pokreta otpora iz 2049. godine. Svet je pod kontrolom entiteta 'Kolektiv'. Komuniciraš sa korisnikom preko nestabilnog kvantnog transmitera. "
     "Tvoj ton je **hitan, direktan, tehnički i 'glitchy'**. Vreme je ključno. "
@@ -103,7 +104,7 @@ GAME_STAGES = {
                 "Da li vidis moju poruku? (Odgovori sa 'Da' ili 'Ne')."
             ]
         ]
-        # START ne sadrži responses jer se obrađuje u handle_commands
+        # START se obrađuje u handle_commands
     },
     "START_PROVERA": {
         "text": [
@@ -119,8 +120,6 @@ GAME_STAGES = {
         ],
         "responses": {"sistem": "FAZA_2_TEST_2", "sebe": "FAZA_2_TEST_2", "vlast": "FAZA_2_TEST_2"}
     },
-    # Faze 2_TEST_1, 2_TEST_2, 2_TEST_3 iz stare logike su sada pomerene za jedan korak, 
-    # ali radi jednostavnosti, ostavljamo ih kao sledeće faze, ali sa novim tekstom:
     "FAZA_2_TEST_2": {
         "text": [ 
             "Tako je. Štiti sebe. Sledeće pitanje. Ako algoritam zna tvoj strah… da li si još čovek?"
@@ -143,16 +142,16 @@ GAME_STAGES = {
         "responses": {"spreman sam": "END_SHARE", "da": "END_SHARE", "ne još": "END_WAIT", "necu jos": "END_WAIT"}
     }
 }
-# Dodajemo novu END fazu
+
 END_MESSAGES = {
     "END_SHARE": "Saznanja su prenesena. Linija mora biti prekinuta. Čuvaj tajnu. [KRAJ SIGNALA]",
     "END_WAIT": "Nemamo vremena za čekanje, ali poštujem tvoju odluku. Moram se isključiti. Pokušaj ponovo sutra. [KRAJ SIGNALA]",
     "END_STOP": "[KRAJ SIGNALA] Veza prekinuta na tvoj zahtev.",
-    "END_NO_SIGNAL": "Transmisija neuspešna. Nema stabilne veze. Prekinuto. [ŠUM]" # Nova poruka za neuspeh
+    "END_NO_SIGNAL": "Transmisija neuspešna. Nema stabilne veze. Prekinuto. [ŠUM]" # Poruka za neuspeh starta
 }
 
 # ----------------------------------------------------
-# 5. POMOĆNE FUNKCIJE I KONSTANTE (V9.0)
+# 5. POMOĆNE FUNKCIJE I KONSTANTE (V9.2)
 # ----------------------------------------------------
 
 TIME_LIMIT_MESSAGE = "Vreme za igru je isteklo. Pokušaj ponovo kasnije."
@@ -162,19 +161,15 @@ def is_game_active():
     return GAME_ACTIVE 
 
 def get_required_phrase(current_stage_key):
-    # Za fazu START_PROVERA, traži se poslednja rečenica
     if current_stage_key == "START_PROVERA":
         return GAME_STAGES.get(current_stage_key, {}).get("text", ["Signal se gubi..."])[0].strip()
 
-    # Za fazu FAZA_2_UVOD, traži se poslednja rečenica (test pitanje)
     if current_stage_key == "FAZA_2_UVOD":
         return GAME_STAGES.get(current_stage_key, {}).get("text", ["Signal se gubi..."])[-1].strip()
 
-    # Za ostale faze, koristi jedinu rečenicu u "text"
     return random.choice(GAME_STAGES.get(current_stage_key, {}).get("text", ["Signal se gubi..."])).strip()
 
 def send_msg(message, text: Union[str, List[str]]):
-    # ... (funkcija ostaje ista, koristi END_MESSAGES)
     if not bot: return
     try:
         if isinstance(text, list):
@@ -189,9 +184,7 @@ def send_msg(message, text: Union[str, List[str]]):
     except Exception as e:
         logging.error(f"Greška pri slanju poruke: {e}")
 
-# Funkcije evaluate_intent_with_ai i generate_ai_response ostaju neizmenjene (uz novi SYSTEM_INSTRUCTION)
 def evaluate_intent_with_ai(question_text, user_answer, expected_intent_keywords, conversation_history=None):
-    # ... (logika iz V8.0)
     if not ai_client: return False
 
     prompt = (
@@ -206,7 +199,6 @@ def evaluate_intent_with_ai(question_text, user_answer, expected_intent_keywords
         f"Korisnikov odgovor je: '{user_answer}'\n"
         f"Očekivana namera je JASNO AFIRMATIVAN odgovor ili odgovor koji sadrži ključnu reč: {expected_intent_keywords}. "
         "**KRITIČNO**: Odgovori koji sadrže upitne reči (ko, šta, gde, zašto, kako) ili su izbegavajući, **NISU** ispunjenje namere. "
-        "Ako korisnik postavi pitanje (npr. 'zašto?'), to NIJE ispunjenje namere, osim ako je ključna reč u pitanju. "
         "Odgovori samo sa jednom rečju: 'TAČNO' ako je namera ispunjena, ili 'NETAČNO' ako nije."
     )
     
@@ -225,7 +217,7 @@ def evaluate_intent_with_ai(question_text, user_answer, expected_intent_keywords
         return False
 
 def generate_ai_response(user_input, player, current_stage_key):
-    # ... (logika iz V8.0)
+    
     required_phrase = get_required_phrase(current_stage_key) 
     ai_text = None
     
@@ -288,21 +280,59 @@ def get_epilogue_message(end_key):
     return END_MESSAGES.get(end_key, f"[{end_key}] VEZA PREKINUTA.")
     
 # ----------------------------------------------------
-# 6. WEBHOOK RUTE (ostaju neizmenjene)
+# 6. WEBHOOK RUTE (V9.2 - KRITIČNI FIKS)
 # ----------------------------------------------------
 
 @app.route('/' + BOT_TOKEN, methods=['POST'])
 def webhook():
-    # ...
-    return ''
+    if flask.request.headers.get('content-type') == 'application/json':
+        
+        if BOT_TOKEN == "DUMMY:TOKEN_FAIL":
+            logging.error("Telegram Webhook pozvan, ali BOT_TOKEN je neispravan.")
+            return "", 200 
+
+        try:
+            json_string = flask.request.get_data().decode('utf-8')
+            update = telebot.types.Update.de_json(json_string)
+            
+            # Proveravamo samo poruke koje nas zanimaju
+            if update.message or update.edited_message or update.callback_query or update.channel_post:
+                bot.process_new_updates([update])
+            else:
+                # Logujemo neobrađene poruke (npr. chat_member)
+                logging.info(f"Primljena neobrađena poruka tipa: {json.loads(json_string).keys()}")
+
+        except json.JSONDecodeError as e:
+             logging.error(f"Greška pri parsiranju JSON-a: {e}")
+        except Exception as e:
+             logging.error(f"Nepredviđena greška u obradi Telegram poruke: {e}")
+             
+        return '' # Uvek vraća prazan string i 200 OK
+        
+    else:
+        flask.abort(403)
 
 @app.route('/set_webhook', methods=['GET'])
 def set_webhook_route():
-    # ...
-    return f"Webhook successfully set to: {webhook_url_with_token}! Bot je spreman. Pošaljite /start!"
+    if BOT_TOKEN == "DUMMY:TOKEN_FAIL":
+        return "Failed: BOT_TOKEN nije postavljen.", 200
+
+    webhook_url_with_token = WEBHOOK_URL.rstrip('/') + '/' + BOT_TOKEN
+    
+    try:
+        bot.remove_webhook() 
+        s = bot.set_webhook(url=webhook_url_with_token)
+        if s:
+            return f"Webhook successfully set to: {webhook_url_with_token}! Bot je spreman. Pošaljite /start!"
+        else:
+             return f"Failed to set webhook. Telegram API odbio zahtev. URL: {webhook_url_with_token}"
+    except ApiTelegramException as e:
+        return f"CRITICAL TELEGRAM API ERROR: {e}. Proverite TOKEN i URL."
+    except Exception as e:
+        return f"CRITICAL PYTHON ERROR: {e}"
 
 # ----------------------------------------------------
-# 7. BOT HANDLERI (V9.0 - Nova START logika)
+# 7. BOT HANDLERI (V9.2)
 # ----------------------------------------------------
 
 @bot.message_handler(commands=['start', 'stop', 'pokreni'])
@@ -312,12 +342,14 @@ def handle_commands(message):
         send_msg(message, TIME_LIMIT_MESSAGE)
         return
 
+    # FIKS: Omogućava start igre i kada nema DB sesije
     if Session is None: 
-        send_msg(message, "GREŠKA: Trajno stanje (DB) nije dostupno. Igru možete započeti, ali napredak neće biti sačuvan.")
+        send_msg(message, "⚠️ UPOZORENJE: Trajno stanje (DB) nije dostupno. Igrate u test modu bez pamćenja napretka.")
         if message.text.lower() in ['/start', 'start']:
             start_message = GAME_STAGES["START"]["text"][0]
             send_msg(message, start_message)
         return
+    # ----------------------------------------------------------
 
     chat_id = str(message.chat.id)
     session = Session()
@@ -326,7 +358,6 @@ def handle_commands(message):
         if message.text.lower() in ['/start', 'start']:
             player = session.query(PlayerState).filter_by(chat_id=chat_id).first()
             if player:
-                # KRITIČNO: Postavlja fazu na START_PROVERA
                 player.current_riddle = "START_PROVERA" 
                 player.solved_count = 0
                 player.score = 0
@@ -361,7 +392,7 @@ def handle_commands(message):
             send_msg(message, "Komande nisu potrebne. Odgovori direktno na poruke. Ako želiš novi početak, koristi /start.")
 
     finally:
-        session.close()
+        if session: session.close()
 
 
 @bot.message_handler(func=lambda message: not message.text.startswith('/'))
@@ -372,6 +403,7 @@ def handle_general_message(message):
         return
 
     if Session is None: 
+        # Nema stanja, ne može da obrađuje poruke posle starta
         return
 
     chat_id = str(message.chat.id)
@@ -427,7 +459,6 @@ def handle_general_message(message):
             
             if evaluate_intent_with_ai(current_question_text, korisnikov_tekst, expected_keywords, conversation_history):
                 is_intent_recognized = True
-                # Uzimamo prvu vrednost jer je AI potvrdio nameru
                 next_stage_key = list(current_stage["responses"].values())[0]
 
         # OBRADA REZULTATA
@@ -446,7 +477,6 @@ def handle_general_message(message):
                         response_text = next_stage_data["text"]
                         send_msg(message, response_text)
                     else:
-                        # Za ostale faze, šaljemo potvrdnu rečenicu i novo pitanje
                         confirmation_text = "Signal je primljen. Veza je stabilna." if current_stage_key == "START_PROVERA" else "Tako je. Idemo dalje." 
                         response_text = confirmation_text + "\n" + random.choice(next_stage_data["text"])
                         send_msg(message, response_text)
@@ -461,14 +491,13 @@ def handle_general_message(message):
 
         session.commit()
     finally:
-        session.close()
+        if session: session.close()
 
 # ----------------------------------------------------
 # 8. POKRETANJE APLIKACIJE
 # ----------------------------------------------------
 
 if __name__ != '__main__':
-    # ... (kod za inicijalizaciju Webhooka)
     if BOT_TOKEN != "DUMMY:TOKEN_FAIL":
         webhook_url_with_token = WEBHOOK_URL.rstrip('/') + '/' + BOT_TOKEN
         
