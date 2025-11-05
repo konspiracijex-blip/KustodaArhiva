@@ -509,15 +509,15 @@ def handle_general_message(message):
                 send_msg(message, epilogue_message)
             else:
                 next_stage_data = GAME_STAGES.get(next_stage_key)
+
                 if next_stage_data:
                     response_text = random.choice(next_stage_data["text"])
                     send_msg(message, response_text)
         else:
             # 3. KORAK: Ako namera NIJE prepoznata, generiši AI odgovor za opšta pitanja
 
-            user_text = message.text.strip()
             # generate_ai_response interno menja 'player' objekat (dodaje istoriju)
-            ai_response, updated_player = generate_ai_response(user_text, player, current_stage_key)
+            ai_response, updated_player = generate_ai_response(korisnikov_tekst, player, current_stage_key)
             player = updated_player # Preuzimamo ažurirani objekat
             send_msg(message, ai_response)
             player.general_conversation_count += 1
