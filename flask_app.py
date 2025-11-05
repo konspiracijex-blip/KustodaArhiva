@@ -201,7 +201,7 @@ def is_game_active():
 TIME_LIMIT_MESSAGE = "**[GREŠKA: KANAL PRIVREMENO ZATVOREN]**\n\nSignal je prekinut. Pokušaj ponovo kasnije."
 DISQUALIFIED_MESSAGE = "**[KRAJ SIGNALA]** Veza je trajno prekinuta."
 
-def evaluate_intent_with_ai(question_text, user_answer, expected_intent_keywords):
+Pogledaj Logdef evaluate_intent_with_ai(question_text, user_answer, expected_intent_keywords, conversation_history=None):
     """Koristi AI da proceni da li odgovor igrača odgovara očekivanoj nameri."""
     if not ai_client:
         # Fallback na staru logiku ako AI nije dostupan
@@ -209,6 +209,10 @@ def evaluate_intent_with_ai(question_text, user_answer, expected_intent_keywords
 
     prompt = (
         f"Ti si sistem za evaluaciju namere. Korisnik odgovara na tvoje pitanje u okviru narativne igre. "
+        f"**Kontekst razgovora:**\n"
+    )
+    if conversation_history:
+        prompt += "\n".join([f"{msg['role']}: {msg['content']}" for msg in conversation_history])
         f"Tvoje pitanje je bilo: '{question_text}'\n"
         f"Korisnikov odgovor je: '{user_answer}'\n"
         f"Očekivana namera iza odgovora se može opisati ključnim rečima: {expected_intent_keywords}\n"
@@ -228,6 +232,7 @@ def evaluate_intent_with_ai(question_text, user_answer, expected_intent_keywords
         # Fallback u slučaju greške API-ja
         return any(kw in user_answer.lower() for kw in expected_intent_keywords)
     except Exception as e:
+
         logging.error(f"Nepredviđena greška u generisanju AI (Evaluacija): {e}")
         return any(kw in user_answer.lower() for kw in expected_intent_keywords)
 
@@ -481,16 +486,21 @@ def handle_general_message(message):
         else:
             # Za sve ostale faze, uzmi nasumičnu (ali reprezentativnu) varijaciju pitanja.
             current_question_text = random.choice(current_stage['text'])
-            expected_keywords = list(current_stage["responses"].keys())
-        for response_keyword, next_key in current_stage["responses"].items():
-            # Koristimo AI za prepoznavanje namere.
-            # Proveravamo samo pozitivne ključne reči. Ako se ne poklopi, idemo na AI odgovor.
-            if evaluate_intent_with_ai(current_question_text, korisnikov_tekst, list(current_stage["responses"].keys())):
-                next_stage_key = next_key
-                print(f"Odgovor prepoznat! Sledeća faza: {next_stage_key}")
-                break
+        
+        # Jedinstvena provera namere pre grananja logike
+        expected_keywords = list(current_stage["responses"].keys())
+        conversation_history = json.loads(player.conversation_history)
+        is_intent_recognized = evaluate_intent_with_ai(current_question_text, korisnikov_tekst, expected_keywords, conversation_history)
 
-        if next_stage_key:
+        if is_intent_recognized:
+            # Pronađi koji je 'next_stage_key' na osnovu prepoznate namere
+            for keyword, next_key in current_stage["responses"].items():
+                if keyword in korisnikov_tekst: # Jednostavna provera je dovoljna ovde
+                    next_stage_key = next_key
+                    break
+            # Ako jednostavna provera ne uspe, uzmi prvi mogući sledeći korak
+            if not next_stage_key:
+                next_stage_key = next_key
             # Ako je odgovor prepoznat, pređi na sledeću fazu
             player.current_riddle = next_stage_key
             if next_stage_key.startswith("END_"):
