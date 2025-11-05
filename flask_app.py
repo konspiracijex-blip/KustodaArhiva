@@ -2,7 +2,7 @@ import flask
 import telebot
 import os
 import logging
-import random 
+import random
 import time
 from google import genai
 from google.genai.errors import APIError
@@ -11,10 +11,10 @@ import json
 # ----------------------------------------------------
 # 1. PYTHON I DB BIBLIOTEKE
 # ----------------------------------------------------
-from sqlalchemy import create_engine, Column, Integer, String, Boolean 
+from sqlalchemy import create_engine, Column, Integer, String, Boolean
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
-from datetime import datetime, time as dt_time 
+from datetime import datetime, time as dt_time
 
 # ----------------------------------------------------
 # 2. RENDER KONFIGURACIJA & BAZE PODATAKA
@@ -23,13 +23,13 @@ from datetime import datetime, time as dt_time
 # Postavljanje logging nivoa
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-BOT_TOKEN = os.environ.get('BOT_TOKEN') 
-GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY') 
-DATABASE_URL = os.environ.get('DATABASE_URL') 
+BOT_TOKEN = os.environ.get('BOT_TOKEN')
+GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
+DATABASE_URL = os.environ.get('DATABASE_URL')
 
 if not BOT_TOKEN or not GEMINI_API_KEY or not DATABASE_URL:
     logging.error("Jedan ili više ključeva/URL-ova nedostaje! Bot će biti neaktivan.")
-    BOT_TOKEN = "DUMMY:TOKEN_FAIL" 
+    BOT_TOKEN = "DUMMY:TOKEN_FAIL"
 
 WEBHOOK_URL = os.environ.get('RENDER_EXTERNAL_URL', 'https://placeholder.com/')
 
@@ -50,12 +50,12 @@ try:
     # Definicija tabele za čuvanje napretka igrača
     class PlayerState(Base):
         __tablename__ = 'player_states'
-        
+
         chat_id = Column(String, primary_key=True)
         username = Column(String, nullable=True)
         current_riddle = Column(String)
-        solved_count = Column(Integer, default=0) 
-        score = Column(Integer, default=0) 
+        solved_count = Column(Integer, default=0)
+        score = Column(Integer, default=0)
         is_disqualified = Column(Boolean, default=False)
         general_conversation_count = Column(Integer, default=0)
         conversation_history = Column(String, default='[]') # JSON string za istoriju
@@ -66,7 +66,7 @@ try:
 
 except Exception as e:
     logging.error(f"FATALNA GREŠKA: Neuspešno kreiranje/povezivanje baze: {e}")
-    
+
 # ----------------------------------------------------
 # 4. AI KLIJENT I DATA (V3.92)
 # ----------------------------------------------------
@@ -196,7 +196,7 @@ def send_msg(message, text: Union[str, List[str]]):
 
 def is_game_active():
     """Trenutno uvek vraća True, za stalnu dostupnost."""
-    return True 
+    return True
 
 TIME_LIMIT_MESSAGE = "**[GREŠKA: KANAL PRIVREMENO ZATVOREN]**\n\nSignal je prekinut. Pokušaj ponovo kasnije."
 DISQUALIFIED_MESSAGE = "**[KRAJ SIGNALA]** Veza je trajno prekinuta."
@@ -223,7 +223,7 @@ def evaluate_intent_with_ai(question_text, user_answer, expected_intent_keywords
     )
     try:
         response = ai_client.models.generate_content(
-            model='gemini-2.5-flash',
+            model='gemini-1.5-flash',
             contents=prompt,
             generation_config={"temperature": 0.0} # Niska temperatura za konzistentnu evaluaciju
         )
@@ -233,7 +233,6 @@ def evaluate_intent_with_ai(question_text, user_answer, expected_intent_keywords
         # Fallback u slučaju greške API-ja
         return any(kw in user_answer.lower() for kw in expected_intent_keywords)
     except Exception as e:
-
         logging.error(f"Nepredviđena greška u generisanju AI (Evaluacija): {e}")
         return any(kw in user_answer.lower() for kw in expected_intent_keywords)
 
@@ -248,7 +247,7 @@ def generate_ai_response(user_input, player, current_stage_key):
         history = []
 
     # Ograničavanje istorije na poslednjih N interakcija (npr. 5 pitanja i 5 odgovora)
-    MAX_HISTORY_ITEMS = 10 
+    MAX_HISTORY_ITEMS = 10
     if len(history) > MAX_HISTORY_ITEMS:
         history = history[-MAX_HISTORY_ITEMS:]
 
@@ -259,41 +258,42 @@ def generate_ai_response(user_input, player, current_stage_key):
         gemini_history.append({'role': role, 'parts': [{'text': entry['content']}]})
 
     # Dodavanje trenutne poruke korisnika u istoriju za slanje
-    gemini_history.append({'role': 'user', 'parts': [{'text': user_input}]})
+    # Ne dodajemo je u gemini_history jer će biti poslata kao `chat.send_message`
+    
+    # Ažuriranje istorije u bazi sa porukom korisnika
+    updated_history = history + [{'role': 'user', 'content': user_input}]
+    player.conversation_history = json.dumps(updated_history)
 
-    # Ažuriranje istorije u bazi
-    player.conversation_history = json.dumps(history + [{'role': 'user', 'content': user_input}])
 
     current_riddle_text = "Nalazi se na početku."
     if current_stage_key and current_stage_key in GAME_STAGES:
         # Uzimamo prvu varijaciju kao reprezentativni tekst pitanja
-        stage_text = GAME_STAGES[current_stage_key]['text'][0]
-        # Ako je ta varijacija lista (kao u START), uzmi poslednji element kao pitanje
-        if isinstance(stage_text, list): 
-            current_riddle_text = stage_text[-1]
-        else: # Inače, uzmi ceo tekst
-            current_riddle_text = stage_text 
+        stage_text_variations = GAME_STAGES[current_stage_key]['text']
+        # Ako je prva varijacija lista (kao u START), uzmi poslednji element kao pitanje
+        if isinstance(stage_text_variations[0], list):
+            current_riddle_text = stage_text_variations[0][-1]
+        else: # Inače, uzmi celu prvu varijaciju
+            current_riddle_text = stage_text_variations[0]
 
-    prompt = (
-        f"Tvoje trenutno pitanje za korisnika je: '{current_riddle_text}'\n"
-        f"Nalazite se u fazi igre: {current_stage_key}.\n"
-        "Tvoj zadatak je da odgovoriš na poslednju poruku korisnika u skladu sa svojom ulogom (Dimitrije). Budi misteriozan, refleksivan i 'glitchy'. "
-        "Ako korisnik postavi pitanje (npr. 'ko si ti?', 'odakle si?'), odgovori na način koji produbljuje misteriju, ali ga lagano usmeri nazad ka zadatku. "
-        "Primeri dobrih odgovora:\n"
-    "- Na 'iz koje godine dolaziš?': 'Godina nije važna… ono što nosim prevazilazi vreme. Fokusiraj se na ono što sledi. Reci: primam signal.'\n"
-    "- Na 'ko si ti?': 'Moje ime je manje važno od poruke koju nosim. Ako želiš da vidiš istinu, reci: primam signal.'\n"
-    "Budi kratak, maksimalno DVE rečenice. Održavaj iluziju. **Nakon tvog odgovora, uvek podseti korisnika šta treba da uradi da bi nastavio (npr. 'Reci: primam signal').**"
+    # Prompt je sada deo SYSTEM_INSTRUCTION, ali ga možemo dopuniti
+    # sa dinamičkim podsetnikom o trenutnom zadatku.
+    task_reminder_prompt = (
+        f"Podseti korisnika da je trenutni zadatak: '{current_riddle_text}'. "
+        "Odgovori na poslednju poruku korisnika u skladu sa svojom ulogom (Dimitrije), a zatim ga nežno usmeri nazad na zadatak."
     )
 
     try:
         # Kreiranje konverzacionog modela sa istorijom
         model = ai_client.GenerativeModel(model_name='gemini-1.5-flash', system_instruction=SYSTEM_INSTRUCTION)
-        chat = model.start_chat(history=gemini_history[:-1]) # Istorija bez poslednje poruke korisnika
-        response = chat.send_message(f"{prompt}\n\nKorisnik kaže: {user_input}")
+        chat = model.start_chat(history=gemini_history) # Istorija bez poslednje poruke korisnika
+        
+        # Šaljemo kombinaciju podsetnika i korisnikovog unosa
+        response = chat.send_message(f"{task_reminder_prompt}\n\nKorisnik kaže: {user_input}")
 
         ai_text = response.text
         # Ažuriranje istorije sa odgovorom modela
-        player.conversation_history = json.dumps(json.loads(player.conversation_history) + [{'role': 'model', 'content': ai_text}])
+        final_history = json.loads(player.conversation_history) + [{'role': 'model', 'content': ai_text}]
+        player.conversation_history = json.dumps(final_history)
         return ai_text
     except APIError as e:
         logging.error(f"Greška AI/Gemini API: {e}")
@@ -340,7 +340,7 @@ def generate_final_secret():
 
 
 # ----------------------------------------------------
-# 6. WEBHOOK RUTE 
+# 6. WEBHOOK RUTE
 # ----------------------------------------------------
 
 @app.route('/' + BOT_TOKEN, methods=['POST'])
@@ -348,22 +348,22 @@ def webhook():
     if Session is None:
         logging.error("Database Session nije uspostavljen. Bot ne može obrađivati poruke.")
         return "Internal Error: Database not ready", 500
-        
+
     if flask.request.headers.get('content-type') == 'application/json':
         json_string = flask.request.get_data().decode('utf-8')
-        
+
         if BOT_TOKEN == "DUMMY:TOKEN_FAIL":
             return "Bot nije konfigurisan. Token nedostaje."
-            
+
         try:
-             update = telebot.types.Update.de_json(json_string) 
+             update = telebot.types.Update.de_json(json_string)
         except Exception as e:
              logging.error(f"Greška pri parsiranju JSON-a (de_json): {e}")
-             return '' 
-             
+             return ''
+
         if update.message or update.edited_message or update.callback_query:
             bot.process_new_updates([update])
-        
+
         return ''
     else:
         flask.abort(403)
@@ -372,7 +372,7 @@ def webhook():
 def set_webhook_route():
     webhook_url_with_token = WEBHOOK_URL.rstrip('/') + '/' + BOT_TOKEN
     s = bot.set_webhook(url=webhook_url_with_token)
-    
+
     if s:
         return "Webhook successfully set! Bot je spreman za rad. Pošaljite /start!"
     else:
@@ -380,152 +380,143 @@ def set_webhook_route():
 
 
 # ----------------------------------------------------
-# 7. BOT HANDLERI 
+# 7. BOT HANDLERI
 # ----------------------------------------------------
 @bot.message_handler(commands=['start', 'stop', 'pokreni'])
 def handle_commands(message):
-    
-    if Session is None: return 
-    
+
+    if Session is None: return
+
     if not is_game_active():
         send_msg(message, TIME_LIMIT_MESSAGE)
         return
-    
+
     chat_id = str(message.chat.id)
-    session = Session() 
+    session = Session()
 
     try:
-        if message.text.lower() == '/start' or message.text.lower() == 'start':
-                        
+        if message.text.lower() in ['/start', 'start']:
+
             # Sada kada je baza sigurno ispravna, možemo da čitamo iz nje.
             player = session.query(PlayerState).filter_by(chat_id=chat_id).first()
-            is_existing_player = (player is not None)
-            
+
             if player:
                 # Resetovanje stanja za novu igru
                 player.current_riddle = "START" # Postavlja na početnu fazu
-                player.solved_count = 0 
-                player.score = 0 
-                player.general_conversation_count = 0 
+                player.solved_count = 0
+                player.score = 0
+                player.general_conversation_count = 0
                 player.conversation_history = '[]' # Resetovanje istorije
-                
+
             else:
                 user = message.from_user
                 display_name = user.username or f"{user.first_name} {user.last_name or ''}".strip()
-                
+
                 player = PlayerState(
                     chat_id=chat_id, current_riddle="START", solved_count=0, score=0, conversation_history='[]',
                     is_disqualified=False, username=display_name, general_conversation_count=0
                 )
                 session.add(player)
-            
+
             session.commit()
-            
+
             # Nasumično bira jednu od varijacija poruke
             # START faza sada ima listu varijacija, gde je svaka varijacija lista poruka
             start_message = random.choice(GAME_STAGES["START"]["text"])
             send_msg(message, start_message)
 
-        elif message.text.lower() == '/stop' or message.text.lower() == 'stop':
+        elif message.text.lower() in ['/stop', 'stop']:
             # Za ostale komande, čitanje može da se desi odmah
             player = session.query(PlayerState).filter_by(chat_id=chat_id).first()
             if player and player.current_riddle:
-                player.current_riddle = "END_STOP" 
+                player.current_riddle = "END_STOP"
                 player.is_disqualified = True # Trajno prekida vezu
                 session.commit()
                 send_msg(message, "[KRAJ SIGNALA] Veza prekinuta na tvoj zahtev.")
             else:
                 send_msg(message, "Nema aktivne veze za prekid.")
-        
+
         elif message.text.lower() in ['/pokreni', 'pokreni']:
             # Ove komande više nisu primarni način interakcije
             send_msg(message, "Komande nisu potrebne. Odgovori direktno na poruke. Ako želiš novi početak, koristi /start.")
-            
+
     finally:
-        session.close() 
+        session.close()
 
 @bot.message_handler(func=lambda message: not message.text.startswith('/'))
 def handle_general_message(message):
-    
-    if Session is None: return 
-    
+
+    if Session is None: return
+
     if not is_game_active():
         send_msg(message, TIME_LIMIT_MESSAGE)
         return
-    
+
     chat_id = str(message.chat.id)
     korisnikov_tekst = message.text.strip().lower()
     session = Session()
 
     try:
         player = session.query(PlayerState).filter_by(chat_id=chat_id).first()
-        
+
         if not player:
-            # Opšti odgovor za nepoznate korisnike
             send_msg(message, "Nema signala... Potrebna je inicijalizacija. Pošalji /start za uspostavljanje veze.")
             return
 
-        current_stage_key = player.current_riddle
-
-        if player.is_disqualified or not current_stage_key or current_stage_key.startswith("END_"):
+        if player.is_disqualified or not player.current_riddle or player.current_riddle.startswith("END_"):
             send_msg(message, "Veza je prekinuta. Pošalji /start za uspostavljanje nove veze.")
             return
 
+        current_stage_key = player.current_riddle
         current_stage = GAME_STAGES.get(current_stage_key)
         if not current_stage:
             send_msg(message, "[GREŠKA: NEPOZNATA FAZA IGRE] Pokreni /start.")
             return
-        
-        # Provera odgovora
-        next_stage_key = None
-        
-        # Ispravka: Uvek koristi poslednju poruku iz niza kao pitanje za kontekst.
-        if current_stage_key == "START":
-            # Za START fazu, kontekst je uvek isti, bez obzira na varijaciju.
-            current_question_text = "Početno pitanje za uspostavljanje veze."
-            expected_keywords = list(current_stage["responses"].keys())
-        else:
-            # Za sve ostale faze, uzmi nasumičnu (ali reprezentativnu) varijaciju pitanja.
-            current_question_text = random.choice(current_stage['text'])
-        
-        # Jedinstvena provera namere pre grananja logike
-        expected_keywords = list(current_stage["responses"].keys())
-        conversation_history = json.loads(player.conversation_history)
-        is_intent_recognized = evaluate_intent_with_ai(current_question_text, korisnikov_tekst, expected_keywords, conversation_history)
 
-        if is_intent_recognized:
-            # Pronađi koji je 'next_stage_key' na osnovu prepoznate namere
-            for keyword, next_key in current_stage["responses"].items():
-                if keyword in korisnikov_tekst or keyword in message.text.lower(): # Jednostavna provera je dovoljna ovde
-                    next_stage_key = next_key
-                    break
-            # Ako jednostavna provera ne uspe, uzmi prvi mogući sledeći korak
-            if not next_stage_key:
+        # --- ISPRAVLJENA LOGIKA ---
+        next_stage_key = None
+        is_intent_recognized = False
+
+        # 1. KORAK: Brza provera ključnih reči
+        for keyword, next_key in current_stage["responses"].items():
+            if keyword in korisnikov_tekst:
                 next_stage_key = next_key
-            # Ako je odgovor prepoznat, pređi na sledeću fazu
+                is_intent_recognized = True
+                break
+        
+        # 2. KORAK: Ako ključne reči nisu nađene, koristi AI za proveru namere
+        if not is_intent_recognized:
+            if current_stage_key == "START":
+                current_question_text = "Početno pitanje za uspostavljanje veze."
+            else:
+                current_question_text = random.choice(current_stage['text'])
+            
+            expected_keywords = list(current_stage["responses"].keys())
+            conversation_history = json.loads(player.conversation_history)
+            
+            if evaluate_intent_with_ai(current_question_text, korisnikov_tekst, expected_keywords, conversation_history):
+                is_intent_recognized = True
+                # Uzmi prvi mogući sledeći korak jer je AI potvrdio nameru
+                next_stage_key = list(current_stage["responses"].values())[0]
+
+        # OBRADA REZULTATA
+        if is_intent_recognized:
+            # Ako je odgovor prepoznat (bilo kojom metodom), pređi na sledeću fazu
             player.current_riddle = next_stage_key
             if next_stage_key.startswith("END_"):
-                # Kraj igre, prikaži epilog
                 epilogue_message = get_epilogue_message(next_stage_key)
                 send_msg(message, epilogue_message)
             else:
-                # Pređi na sledeću fazu
                 next_stage_data = GAME_STAGES.get(next_stage_key)
                 if next_stage_data:
-                    # Nasumično bira jednu od varijacija poruke za sledeću fazu
                     response_text = random.choice(next_stage_data["text"])
-                    print(f"Slanje standardnog odgovora: {response_text}")
                     send_msg(message, response_text)
         else:
-            # Ako namera NIJE prepoznata, generiši AI odgovor.
-            # Ovo pokriva slučajeve kada korisnik postavlja pitanja ili daje odgovore
-            # koji ne pokreću prelazak u sledeću fazu. Igrač ostaje u istoj fazi.
+            # 3. KORAK: Ako namera NIJE prepoznata, generiši AI odgovor za opšta pitanja
             user_text = message.text.strip()
             ai_response = generate_ai_response(user_text, player, current_stage_key)
-
-            print(f"Slanje AI odgovora: {ai_response}")
             send_msg(message, ai_response)
-            player.general_conversation_count += 1 # Povećava brojač opštih razgovora
+            player.general_conversation_count += 1
 
         session.commit()
     finally:
