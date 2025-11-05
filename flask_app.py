@@ -222,9 +222,9 @@ def evaluate_intent_with_ai(question_text, user_answer, expected_intent_keywords
         "Odgovori samo sa jednom rečju: 'TAČNO' ako je odgovor prihvatljiv, ili 'NETAČNO' ako nije."
     )
     try:
-        response = ai_client.models.generate_content(
+        response = ai_client.generate_content(
             model='gemini-1.5-flash',
-            contents=prompt,
+            contents=[prompt],
             generation_config={"temperature": 0.0} # Niska temperatura za konzistentnu evaluaciju
         )
         return "TAČNO" in response.text.upper()
@@ -239,7 +239,7 @@ def evaluate_intent_with_ai(question_text, user_answer, expected_intent_keywords
 def generate_ai_response(user_input, player, current_stage_key):
     """Generiše odgovor koristeći Gemini model za pitanja igrača."""
     if not ai_client:
-        return random.choice(INVALID_INPUT_MESSAGES) # Fallback
+        return random.choice(AI_FALLBACK_MESSAGES), player
 
     try:
         history = json.loads(player.conversation_history)
@@ -256,9 +256,6 @@ def generate_ai_response(user_input, player, current_stage_key):
     for entry in history:
         role = 'user' if entry['role'] == 'user' else 'model'
         gemini_history.append({'role': role, 'parts': [{'text': entry['content']}]})
-
-    # Dodavanje trenutne poruke korisnika u istoriju za slanje
-    # Ne dodajemo je u gemini_history jer će biti poslata kao `chat.send_message`
     
     # Ažuriranje istorije u bazi sa porukom korisnika
     updated_history = history + [{'role': 'user', 'content': user_input}]
@@ -275,8 +272,6 @@ def generate_ai_response(user_input, player, current_stage_key):
         else: # Inače, uzmi celu prvu varijaciju
             current_riddle_text = stage_text_variations[0]
 
-    # Prompt je sada deo SYSTEM_INSTRUCTION, ali ga možemo dopuniti
-    # sa dinamičkim podsetnikom o trenutnom zadatku.
     task_reminder_prompt = (
         f"Podseti korisnika da je trenutni zadatak: '{current_riddle_text}'. "
         "Odgovori na poslednju poruku korisnika u skladu sa svojom ulogom (Dimitrije), a zatim ga nežno usmeri nazad na zadatak."
@@ -297,10 +292,10 @@ def generate_ai_response(user_input, player, current_stage_key):
         return ai_text, player
     except APIError as e:
         logging.error(f"Greška AI/Gemini API: {e}")
-        return random.choice(AI_FALLBACK_MESSAGES)
+        return random.choice(AI_FALLBACK_MESSAGES), player
     except Exception as e:
         logging.error(f"Nepredviđena greška u generisanju AI: {e}")
-        return random.choice(AI_FALLBACK_MESSAGES)
+        return random.choice(AI_FALLBACK_MESSAGES), player
 
 
 def get_epilogue_message(epilogue_type):
@@ -453,7 +448,7 @@ def handle_general_message(message):
         return
 
     chat_id = str(message.chat.id)
-    korisnikov_tekst = message.text.strip().lower()
+    korisnikov_tekst = message.text.strip() # Nema .lower() ovde, AI bolje radi sa originalnim tekstom
     session = Session()
 
     try:
@@ -476,10 +471,11 @@ def handle_general_message(message):
         # --- ISPRAVLJENA LOGIKA ---
         next_stage_key = None
         is_intent_recognized = False
+        tekst_za_proveru = korisnikov_tekst.lower()
 
         # 1. KORAK: Brza provera ključnih reči
         for keyword, next_key in current_stage["responses"].items():
-            if keyword in korisnikov_tekst:
+            if keyword in tekst_za_proveru:
                 next_stage_key = next_key
                 is_intent_recognized = True
                 break
@@ -492,7 +488,11 @@ def handle_general_message(message):
                 current_question_text = random.choice(current_stage['text'])
             
             expected_keywords = list(current_stage["responses"].keys())
-            conversation_history = json.loads(player.conversation_history)
+            
+            try:
+                conversation_history = json.loads(player.conversation_history)
+            except (json.JSONDecodeError, TypeError):
+                conversation_history = []
             
             if evaluate_intent_with_ai(current_question_text, korisnikov_tekst, expected_keywords, conversation_history):
                 is_intent_recognized = True
@@ -500,7 +500,6 @@ def handle_general_message(message):
                 next_stage_key = list(current_stage["responses"].values())[0]
 
         # OBRADA REZULTATA
-
         if is_intent_recognized:
             # Ako je odgovor prepoznat (bilo kojom metodom), pređi na sledeću fazu
             player.current_riddle = next_stage_key
@@ -509,14 +508,16 @@ def handle_general_message(message):
                 send_msg(message, epilogue_message)
             else:
                 next_stage_data = GAME_STAGES.get(next_stage_key)
-
                 if next_stage_data:
                     response_text = random.choice(next_stage_data["text"])
                     send_msg(message, response_text)
-        else:
-            # 3. KORAK: Ako namera NIJE prepoznata, generiši AI odgovor za opšta pitanja
+                else:
+                    # Ovo se ne bi smelo dogoditi ako je GAME_STAGES dobro definisan
+                    # Ali za svaki slučaj, preusmeravamo na AI odgovor
+                    is_intent_recognized = False
 
-            # generate_ai_response interno menja 'player' objekat (dodaje istoriju)
+        if not is_intent_recognized:
+            # 3. KORAK: Ako namera NIJE prepoznata, generiši AI odgovor za opšta pitanja
             ai_response, updated_player = generate_ai_response(korisnikov_tekst, player, current_stage_key)
             player = updated_player # Preuzimamo ažurirani objekat
             send_msg(message, ai_response)
