@@ -519,6 +519,8 @@ def handle_general_message(message):
             ai_response = generate_ai_response(user_text, player, current_stage_key)
             send_msg(message, ai_response)
             player.general_conversation_count += 1
+            session.commit() # Sačuvaj promenu brojača i istorije
+            return # Ključna izmena: Prekini dalje izvršavanje nakon slanja AI odgovora
 
         session.commit()
     finally:
