@@ -68,7 +68,7 @@ except Exception as e:
     logging.error(f"FATALNA GREŠKA: Neuspešno kreiranje/povezivanje baze: {e}")
 
 # ----------------------------------------------------
-# 4. AI KLIJENT I DATA (V3.92)
+# 4. AI KLIJENT I DATA (V4.6)
 # ----------------------------------------------------
 
 ai_client = None
@@ -164,7 +164,7 @@ GAME_STAGES = {
 }
 
 # ----------------------------------------------------
-# 5. POMOĆNE FUNKCIJE I KONSTANTE (V4.5 - Fiksiran AI Fallback i SDK pozivi)
+# 5. POMOĆNE FUNKCIJE I KONSTANTE (V4.6 - Fiksiran AI poziv)
 # ----------------------------------------------------
 INVALID_INPUT_MESSAGES = [
     "Signal slabi... Odgovor nije prepoznat. Pokušaj ponovo.",
@@ -263,27 +263,27 @@ def evaluate_intent_with_ai(question_text, user_answer, expected_intent_keywords
         return any(kw in user_answer.lower() for kw in expected_intent_keywords)
     except Exception as e:
         logging.error(f"Nepredviđena greška u generisanju AI (Evaluacija): {e}")
-        # Logika ostaje ista jer je nejasno zašto je greška, fallback na ključne reči.
         return any(kw in user_answer.lower() for kw in expected_intent_keywords)
 
 def generate_ai_response(user_input, player, current_stage_key):
-    """Generiše odgovor koristeći Gemini model za pitanja igrača."""
+    """Generiše odgovor koristeći Gemini model za pitanja igrača, koristeći one-shot poziv."""
     
     # 1. PRIPREMA: Uzimanje obavezne fraze za nastavak
     required_phrase = get_required_phrase(current_stage_key) 
     ai_text = None
+    narrative_starter = None
 
     try:
         history = json.loads(player.conversation_history)
     except (json.JSONDecodeError, TypeError):
         history = []
 
-    # Ograničavanje istorije na poslednjih N interakcija
+    # Ograničavanje istorije na poslednjih N interakcija (zbog veličine API poziva)
     MAX_HISTORY_ITEMS = 10
     if len(history) > MAX_HISTORY_ITEMS:
         history = history[-MAX_HISTORY_ITEMS:]
 
-    # Formatiranje istorije za Gemini
+    # Formatiranje istorije za Gemini (uloga 'user' i 'model')
     gemini_history = []
     for entry in history:
         role = 'user' if entry['role'] == 'user' else 'model'
@@ -298,51 +298,49 @@ def generate_ai_response(user_input, player, current_stage_key):
         narrative_starter = random.choice(AI_FALLBACK_MESSAGES)
         ai_text = f"{narrative_starter}{required_phrase}"
     else:
-        current_riddle_text = "Nalaziš se na početku. Tvoj zadatak je da odgovoriš sa 'primam signal'."
-        if current_stage_key and current_stage_key in GAME_STAGES:
-            stage_text_variations = GAME_STAGES[current_stage_key]['text']
-            if isinstance(stage_text_variations, list) and len(stage_text_variations) > 0:
-                first_variation = stage_text_variations[0]
-                if isinstance(first_variation, list) and len(first_variation) > 0:
-                    current_riddle_text = first_variation[-1]
-                else:
-                    current_riddle_text = first_variation
-            else:
-                current_riddle_text = stage_text_variations
-
-        task_reminder_prompt = (
-            f"Korisnik je postavio irelevantno pitanje: '{user_input}'. Tvoj odgovor mora biti **potpuno jedinstven, nikako sličan prethodnom**, kratak, evazivan, dramatičan i mora se držati 'glitchy' tona. "
-            f"U odgovoru **NEMOJ NIKAKO** pominjati zadatak ili frazu koju korisnik treba da ponovi. Samo daj narativni komentar. Mora biti **maksimalno dve rečenice**."
+        # 1. Priprema kompletnog prompta za one-shot call (Sistem + Istorija + Trenutni upit)
+        full_contents = [{'role': 'system', 'parts': [{'text': SYSTEM_INSTRUCTION}]}]
+        
+        # Dodavanje istorije (model i user role)
+        full_contents.extend(gemini_history)
+        
+        # Dodavanje poslednjeg prompta i instrukcije
+        final_prompt_text = (
+            f"Korisnik je postavio irelevantno pitanje: '{user_input}'. "
+            "Odgovori kratko, u formi DVE rečenice. Budi evazivan i drži se tona konspiracije/opasnosti. "
+            "Ne pominji frazu za nastavak, samo daj narativni komentar. Osloni se na ceo kontekst razgovora."
         )
+        # Finalna poruka korisnika za AI poziv
+        full_contents.append({'role': 'user', 'parts': [{'text': final_prompt_text}]})
 
         try:
-            # FIX: Ispravljanje instanciranja GenerativeModel
-            model = genai.GenerativeModel(model_name='gemini-1.5-flash', system_instruction=SYSTEM_INSTRUCTION)
-            chat = model.start_chat(history=gemini_history)
-            
-            response = chat.send_message(task_reminder_prompt) 
+            # 2. Direktni API poziv (one-shot)
+            response = ai_client.models.generate_content(
+                model='gemini-1.5-flash',
+                contents=full_contents
+            )
             
             narrative_starter = response.text.strip()
+            
+            # 3. Dodatna provera za prazan odgovor (ili previše kratak, npr. samo interpunkcija)
+            if not narrative_starter or len(narrative_starter) < 5:
+                raise ValueError("AI vratio prazan ili neadekvatan odgovor.")
+                
             ai_text = f"{narrative_starter}{required_phrase}" # RUČNA KONKATENACIJA OBAVEZNE FRAZE
             
-        except APIError as e:
-            logging.error(f"Greška AI/Gemini API: {e}")
-            # 2b. FALLBACK ZA API GREŠKU: Osigurava da uvek dobije potrebnu frazu
+        except (APIError, Exception, ValueError) as e:
+            # 4. Jedan konsolidovani fallback (APIError/Timeout/Prazan odgovor/Ostale greške)
+            logging.error(f"AI Call failed or returned empty. Falling back. Error: {e}")
             narrative_starter = random.choice(AI_FALLBACK_MESSAGES)
-            ai_text = f"{narrative_starter}{required_phrase}"
-        
-        except Exception as e:
-            # 2c. FALLBACK ZA OSTALE GREŠKE: Osigurava da uvek dobije potrebnu frazu
-            logging.error(f"Nepredviđena greška u generisanju AI: {e}")
-            narrative_starter = random.choice(AI_FALLBACK_MESSAGES)
-            ai_text = f"{narrative_starter}{required_phrase}"
+            ai_text = f"{narrative_starter}{required_phrase}" # Osigurano dodavanje fraze
 
     # --- ZAVRŠNO AŽURIRANJE (Bez obzira na uspeh/neuspjeh AI poziva) ---
     if ai_text:
         # Ažuriranje istorije sa odgovorom modela/fallback-om
-        final_history = json.loads(player.conversation_history) + [{'role': 'model', 'content': ai_text}]
+        # Koristimo narrative_starter jer je on "čist" narativni deo odgovora
+        final_history = json.loads(player.conversation_history) + [{'role': 'model', 'content': narrative_starter or ai_text}]
         player.conversation_history = json.dumps(final_history)
-        player.general_conversation_count += 1 # 4. CENTRALIZOVANA KONTROLA BROJAČA
+        player.general_conversation_count += 1 
 
     return ai_text or "Signal se raspao. Pokušaj /start.", player
 
@@ -561,17 +559,13 @@ def handle_general_message(message):
                     response_text = random.choice(next_stage_data["text"])
                     send_msg(message, response_text)
                 else:
-                    # Ovo se ne bi smelo dogoditi ako je GAME_STAGES dobro definisan
-                    # Ali za svaki slučaj, preusmeravamo na AI odgovor
                     is_intent_recognized = False
 
         if not is_intent_recognized:
             # 3. KORAK: Ako namera NIJE prepoznata, generiši AI odgovor za opšta pitanja
-            # generate_ai_response sada vraća i ažurirani player, uključujući increment general_conversation_count
             ai_response, updated_player = generate_ai_response(korisnikov_tekst, player, current_stage_key)
             player = updated_player # Preuzimamo ažurirani objekat
             send_msg(message, ai_response)
-            # Uklonjeno: player.general_conversation_count += 1, centralizovano u generate_ai_response
 
         session.commit()
     finally:
