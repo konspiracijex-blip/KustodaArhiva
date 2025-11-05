@@ -89,7 +89,7 @@ SYSTEM_INSTRUCTION = (
     "- Ako je korisnik zbunjen, odgovori kratkom, direktnom porukom koja ga vraća na zadatak. Primer: 'Signal slabi. Fokusiraj se na pitanje.' "
     "- Ako postavlja trivijalna pitanja, ignoriši ih i ponovi zadatak. Primer: 'Nema vremena za to. Odgovori na pitanje.' "
     "**LJUDSKA ILUZIJA:** Ako korisnik pokuša da te 'provali' pitanjima poput 'jesi li ti bot?', odgovori na način koji se uklapa u priču. Primer: 'Ja sam eho iz budućnosti zarobljen u kodu. A ko si ti?' ili 'Moje postojanje je manje važno od poruke koju nosim.' Razumem tvoju sumnju. I ja sam je imao. Ali ako ti sada kažem previše, ugroziću kanal. Dovoljno je da znaš — nisam tvoj neprijatelj."
-    "**VRAĆANJE NA ZADATAK:** Nakon što odgovoriš na opšte pitanje korisnika, uvek ga nežno usmeri nazad na glavni zadatak. Tvoj odgovor **mora da se završi** podsetnikom na to šta se očekuje od korisnika u trenutnoj fazi. Na primer, ako je trenutni zadatak da kaže 'primam signal', završi svoj odgovor sa 'Ako si i dalje tu, reci: primam signal.' ili 'Vreme ističe. Reci: primam signal da nastavimo.' " # Pojašnjena instrukcija
+    "**VRAĆANJE NA ZADATAK:** Nakon što odgovoriš na opšte pitanje korisnika, uvek ga nežno usmeri nazad na glavni zadatak. Tvoj odgovor **mora da se završi** podsetnikom na to šta se očekuje od korisnika u trenutnoj fazi. Na primer, ako je trenutni zadatak da kaže 'primam signal', završi svoj odgovor sa 'Ako si i dalje tu, reci: primam signal.' ili 'Vreme ističe. Reci: primam signal da nastavimo.' "
     "Tvoj zadatak je da održavaš iluziju razgovora sa osobom pod pritiskom, koja komunicira iz opasnog okruženja."
 )
 
@@ -122,7 +122,7 @@ GAME_STAGES = {
         "responses": {"primam signal": "FAZA_2_TEST_1", "da": "FAZA_2_TEST_1", "spreman sam": "FAZA_2_TEST_1"}
     },
     "FAZA_2_TEST_1": {
-        "text": [ # Lista varijacija
+        "text": [ # Lista varijacija (Lista stringova)
             "Dobro. Prvi filter je prošao.\nReci mi… kad sistem priča o ‘bezbednosti’, koga zapravo štiti?",
             "U redu. Prošao si prvu proveru.\nSledeće pitanje: Kad sistem obećava ‘bezbednost’, čije interese on zaista čuva?",
             "Signal je stabilan. Idemo dalje.\nRazmisli o ovome: Kada čuješ reč ‘bezbednost’ od sistema, koga on štiti?"
@@ -130,7 +130,7 @@ GAME_STAGES = {
         "responses": {"sistem": "FAZA_2_TEST_2", "sebe": "FAZA_2_TEST_2", "vlast": "FAZA_2_TEST_2"}
     },
     "FAZA_2_TEST_2": {
-        "text": [ # Lista varijacija
+        "text": [ # Lista varijacija (Lista stringova)
             "Tako je. Štiti sebe. Sledeće pitanje.\nAko algoritam zna tvoj strah… da li si još čovek?",
             "Da. Sebe. To je ključno. Idemo dalje.\nAko mašina predviđa tvoje želje pre tebe... da li su te želje i dalje tvoje?",
             "Tačno. Njegova prva briga je sam za sebe. Sledeće.\nAko algoritam zna tvoj strah… da li si još uvek slobodan?"
@@ -138,7 +138,7 @@ GAME_STAGES = {
         "responses": {"da": "FAZA_2_TEST_3", "jesam": "FAZA_2_TEST_3", "naravno": "FAZA_2_TEST_3"}
     },
     "FAZA_2_TEST_3": {
-        "text": [ # Lista varijacija
+        "text": [ # Lista varijacija (Lista stringova)
             "Zanimljivo… još uvek veruješ u to. Poslednja provera.\nOdgovori mi iskreno. Da li bi žrtvovao komfor — za istinu?",
             "Držiš se za tu ideju... Dobro. Finalno pitanje.\nDa li bi menjao udobnost neznanja za bolnu istinu?",
             "To je odgovor koji sam očekivao. Poslednji test.\nReci mi, da li je istina vredna gubljenja sigurnosti?"
@@ -146,7 +146,7 @@ GAME_STAGES = {
         "responses": {"da": "FAZA_3_UPOZORENJE", "bih": "FAZA_3_UPOZORENJE", "žrtvovao bih": "FAZA_3_UPOZORENJE", "zrtvovao bih": "FAZA_3_UPOZORENJE"}
     },
     "FAZA_3_UPOZORENJE": {
-        "text": [ # Lista varijacija
+        "text": [ # Lista varijacija (Lista stringova)
             "Dobro… vreme ističe.",
              "Transmiter pregreva, a Kolektiv već skenira mrežu.",
              "Ako me uhvate… linija nestaje.",
@@ -261,20 +261,22 @@ def generate_ai_response(user_input, player, current_stage_key):
     updated_history = history + [{'role': 'user', 'content': user_input}]
     player.conversation_history = json.dumps(updated_history)
 
-
     current_riddle_text = "Nalaziš se na početku. Tvoj zadatak je da odgovoriš sa 'primam signal'."
     if current_stage_key and current_stage_key in GAME_STAGES:
-        # Uzimamo prvu varijaciju kao reprezentativni tekst pitanja
         stage_text_variations = GAME_STAGES[current_stage_key]['text']
-        # Uzmi poslednji string iz prve varijacije kao najrelevantnije pitanje
-        if isinstance(stage_text_variations, list) and len(stage_text_variations) > 0:
+        
+        # --- ISPRAVLJENA LOGIKA ZA EKSTRAKCIJU TEKSTA (Robusno rukovanje List[List[str]] i List[str]) ---
+        if isinstance(stage_text_variations, list) and stage_text_variations:
             first_variation = stage_text_variations[0]
-            if isinstance(first_variation, list) and len(first_variation) > 0:
+            
+            if isinstance(first_variation, list) and first_variation:
+                # Slučaj: START (Lista listi stringova) - Uzima poslednju poruku kao zadatak
                 current_riddle_text = first_variation[-1]
-            else:
+            elif isinstance(first_variation, str):
+                # Slučaj: FAZA_2_TEST_1, FAZA_3_UPOZORENJE (Lista stringova) - Uzima celu prvu varijaciju kao zadatak
                 current_riddle_text = first_variation
-        else: # Inače, uzmi celu prvu varijaciju
-            current_riddle_text = stage_text_variations
+            # else: Koristi se podrazumevani "primam signal" ako je lista prazna ili format nepoznat
+        # -----------------------------------------------
 
     task_reminder_prompt = (
         f"Podseti korisnika da je trenutni zadatak: '{current_riddle_text}'. "
@@ -492,7 +494,7 @@ def handle_general_message(message):
         if not is_intent_recognized:
             # Izbor teksta za kontekst AI evaluacije
             if current_stage_key == "START":
-                current_question_text = "Početno pitanje za uspostavljanje veze."
+                current_question_text = "Početno pitanje za uspostavljanje veze: 'primam signal'."
             else:
                 current_question_text = random.choice(current_stage['text'])
             
