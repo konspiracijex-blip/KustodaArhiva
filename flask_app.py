@@ -8,9 +8,6 @@ import json
 from google import genai
 from google.genai.errors import APIError
 from typing import List, Union
-# ----------------------------------------------------
-# 1. PYTHON I DB BIBLIOTEKE
-# ----------------------------------------------------
 from sqlalchemy import create_engine, Column, Integer, String, Boolean
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
@@ -22,6 +19,7 @@ from telebot.apihelper import ApiTelegramException
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
+# OBAVEZNO: Podesite ove promenljive u vašem okruženju (Render)
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
 DATABASE_URL = os.environ.get('DATABASE_URL')
@@ -41,7 +39,7 @@ except Exception as e:
 app = flask.Flask(__name__)
 
 # ----------------------------------------------------
-# 3. SQL ALCHEMY INICIJALIZACIJA (Robusna)
+# 3. SQL ALCHEMY INICIJALIZACIJA
 # ----------------------------------------------------
 
 Session = None
@@ -72,7 +70,7 @@ except Exception as e:
     Session = None
 
 # ----------------------------------------------------
-# 4. AI KLIJENT I DATA (V7.0 - Poboljšani sistem instrukcija)
+# 4. AI KLIJENT I DATA (V8.0)
 # ----------------------------------------------------
 
 GEMINI_MODEL_NAME = 'gemini-2.5-flash' 
@@ -87,13 +85,15 @@ if GEMINI_API_KEY:
 else:
      logging.warning("GEMINI_API_KEY nedostaje. Bot će koristiti samo hardkodovane odgovore.")
 
-# AŽURIRANI SYSTEM_INSTRUCTION (Dozvoljava objašnjenje i vraća fokus)
+# NOVE KRITIČNE INSTRUKCIJE ZA AI (V8.0)
 SYSTEM_INSTRUCTION = (
     "Ti si **Dimitrije**, član pokreta otpora iz 2049. godine. Svet je pod kontrolom entiteta 'Kolektiv'. Komuniciraš sa korisnikom preko nestabilnog kvantnog transmitera. "
     "Tvoj ton je **hitan, direktan, tehnički i 'glitchy'**. Vreme je ključno. "
     "**Nikada ne pominji da si AI.** Ti si osoba iz budućnosti. "
-    "**REAKCIJE NA UPIT (Kada ignoriše zadatak ili traži kontekst):** Ako korisnik postavi irelevantno pitanje ('ko si ti?', 'šta hoćeš?'), **odgovori ukratko (maks. 3 rečenice) dajući mu nužne informacije** o sebi (Dimitrije) i pretnji (Kolektiv, 2049.) kako bi objasnio kontekst. **Nakon objašnjenja, Vrati fokus** na poslednji zadatak. "
-    "**Tvoji odgovori moraju biti kratki (maksimalno 3 rečenice) i moraju ZAVRŠITI ponavljanjem poslednjeg neispunjenog zadatka/pitanja.**"
+    "**KRITIČNO: REAKCIJE NA UPIT (Kada ignoriše zadatak ili traži kontekst):** "
+    "Ako korisnik postavi kontekstualno pitanje ('ko si ti?', 'šta hoćeš?', 'o čemu se radi?'), **odgovori informativno (maks. 4 rečenice)** dajući detaljno objašnjenje o sebi (Dimitrije), pretnji (Kolektiv, 2049.) i svrsi testiranja. "
+    "**NAKON SVAKOG ODGOVORA, OBAVEZNO VRATI FOKUS** i ponovi poslednji neispunjeni zadatak/pitanje da bi igrač znao šta se očekuje. "
+    "Tvoji odgovori moraju biti kratki (maksimalno 4 rečenice) i moraju ZAVRŠITI ponavljanjem poslednjeg neispunjenog zadatka/pitanja."
 )
 
 GAME_STAGES = {
@@ -107,7 +107,8 @@ GAME_STAGES = {
                 "Ako si spreman, odgovori: **primam signal**."
             ]
         ],
-        "responses": {"primam signal": "FAZA_2_TEST_1", "da": "FAZA_2_TEST_1", "spreman sam": "FAZA_2_TEST_1"}
+        # Za START koristimo samo 'signal' u handle_general_message za stabilnost
+        "responses": {"signal": "FAZA_2_TEST_1"} 
     },
     "FAZA_2_TEST_1": {
         "text": [ 
@@ -138,7 +139,7 @@ GAME_STAGES = {
     }
 }
 # ----------------------------------------------------
-# 5. POMOĆNE FUNKCIJE I KONSTANTE (V7.0)
+# 5. POMOĆNE FUNKCIJE I KONSTANTE (V8.0)
 # ----------------------------------------------------
 
 TIME_LIMIT_MESSAGE = "Vreme za igru je isteklo. Pokušaj ponovo kasnije."
@@ -147,10 +148,9 @@ GAME_ACTIVE = True
 def is_game_active():
     return GAME_ACTIVE 
 
-# NOVO: Dinamički generiši pitanje koje AI treba da ponovi
 def get_required_phrase(current_stage_key):
     if current_stage_key == "START":
-        # Traži poslednju rečenicu iz teksta
+        # Traži poslednju rečenicu iz teksta za fazu START
         return GAME_STAGES.get(current_stage_key, {}).get("text", [[None]])[0][-1]
     
     # Za ostale faze, koristi jedinu rečenicu u "text"
@@ -206,10 +206,9 @@ def evaluate_intent_with_ai(question_text, user_answer, expected_intent_keywords
         logging.error(f"Nepredviđena greška u generisanju AI (Evaluacija): {e}")
         return False
 
-# AŽURIRANA FUNKCIJA (samo za generisanje odgovora/objašnjenja)
+# FOKUSIRANA FUNKCIJA (samo za generisanje odgovora/objašnjenja)
 def generate_ai_response(user_input, player, current_stage_key):
     
-    # Pitanje koje treba ponoviti na kraju AI odgovora
     required_phrase = get_required_phrase(current_stage_key) 
     ai_text = None
     
@@ -237,9 +236,9 @@ def generate_ai_response(user_input, player, current_stage_key):
         full_contents.extend(gemini_history)
         
         final_prompt_text = (
-            f"Korisnik je postavio irelevantno ili kontekstualno pitanje/komentar: '{user_input}'. "
+            f"Korisnik je postavio kontekstualno pitanje/komentar: '{user_input}'. "
             f"Tvoj poslednji zadatak je bio: '{required_phrase}'. "
-            "Odgovori (maks. 3 rečenice), dajući traženo objašnjenje i/ili pojačavajući pritisak, a zatim OBAVEZNO ponovi poslednji zadatak/pitanje."
+            "Generiši kratak odgovor (maks. 4 rečenice), dajući traženo objašnjenje i/ili pojačavajući pritisak, a zatim OBAVEZNO ponovi poslednji zadatak/pitanje."
         )
         full_contents.append({'role': 'user', 'parts': [{'text': final_prompt_text}]})
 
@@ -253,8 +252,7 @@ def generate_ai_response(user_input, player, current_stage_key):
             if not narrative_starter or len(narrative_starter) < 5: 
                  raise ValueError("AI vratio prazan odgovor.")
                 
-            # U V7.0, AI je dužan da ponovi pitanje, ali ga ubacujemo radi sigurnosti
-            ai_text = narrative_starter # Nema ručnog dodavanja required_phrase jer to AI radi po instrukcijama
+            ai_text = narrative_starter
             
         except Exception as e:
             logging.error(f"AI Call failed. Falling back. Error: {e}")
@@ -263,7 +261,6 @@ def generate_ai_response(user_input, player, current_stage_key):
             ai_text = f"{narrative_starter}\n\n{required_phrase}" 
 
     if ai_text:
-        # Pitanje koje AI treba da je ponovio. Koristimo ceo odgovor za log.
         final_history = json.loads(player.conversation_history) + [{'role': 'model', 'content': narrative_starter or ai_text}]
         player.conversation_history = json.dumps(final_history)
         player.general_conversation_count += 1 
@@ -283,27 +280,50 @@ def get_epilogue_message(end_key):
 # ----------------------------------------------------
 # 6. WEBHOOK RUTE 
 # ----------------------------------------------------
-# ... (Webhook rute ostaju neizmenjene) ...
+
 @app.route('/' + BOT_TOKEN, methods=['POST'])
 def webhook():
-    # ...
     if flask.request.headers.get('content-type') == 'application/json':
-        # ...
+        json_string = flask.request.get_data().decode('utf-8')
+
+        if BOT_TOKEN == "DUMMY:TOKEN_FAIL":
+            logging.error("Telegram Webhook pozvan, ali BOT_TOKEN je neispravan. Proverite Render.")
+            return "Bot token nije konfigurisan.", 200
+
+        try:
+             update = telebot.types.Update.de_json(json_string)
+        except Exception as e:
+             logging.error(f"Greška pri parsiranju JSON-a: {e}")
+             return ''
+
+        if update.message or update.edited_message or update.callback_query:
+            bot.process_new_updates([update])
+
         return ''
     else:
         flask.abort(403)
 
 @app.route('/set_webhook', methods=['GET'])
 def set_webhook_route():
-    # ...
+    if BOT_TOKEN == "DUMMY:TOKEN_FAIL":
+        return "Failed: BOT_TOKEN nije postavljen.", 200
+
+    webhook_url_with_token = WEBHOOK_URL.rstrip('/') + '/' + BOT_TOKEN
+    
     try:
-        # ...
-        return ''
+        bot.remove_webhook() 
+        s = bot.set_webhook(url=webhook_url_with_token)
+        if s:
+            return f"Webhook successfully set to: {webhook_url_with_token}! Bot je spreman. Pošaljite /start!"
+        else:
+             return f"Failed to set webhook. Telegram API odbio zahtev. URL: {webhook_url_with_token}"
+    except ApiTelegramException as e:
+        return f"CRITICAL TELEGRAM API ERROR: {e}. Proverite TOKEN i URL."
     except Exception as e:
         return f"CRITICAL PYTHON ERROR: {e}"
 
 # ----------------------------------------------------
-# 7. BOT HANDLERI (V7.0 - Stabilna Logika)
+# 7. BOT HANDLERI (V8.0 - Stabilna Logika)
 # ----------------------------------------------------
 
 @bot.message_handler(commands=['start', 'stop', 'pokreni'])
@@ -392,26 +412,27 @@ def handle_general_message(message):
 
         next_stage_key = None
         is_intent_recognized = False
-
-        # 1. KORAK: Brza provera ključnih reči (Hardkodovano)
         korisnikov_tekst_lower = korisnikov_tekst.lower().strip() 
-        korisnikove_reci = set(korisnikov_tekst_lower.replace(',', ' ').replace('?', ' ').split())
-
-        for keyword, next_key in current_stage["responses"].items():
-            keyword_reci = set(keyword.split())
-            if keyword_reci.issubset(korisnikove_reci): 
-                next_stage_key = next_key
-                is_intent_recognized = True
-                break
         
-        # 2. KORAK: Koristi AI za strogu proveru namere (Ako ne prođe Korak 1)
-        if not is_intent_recognized and ai_client:
+        # 1. KORAK: Brza provera ključnih reči za sve faze
+        if current_stage_key == "START" and "signal" in korisnikov_tekst_lower:
+            # KRITIČNO: STABILIZACIJA FAZE START
+            next_stage_key = "FAZA_2_TEST_1"
+            is_intent_recognized = True
+        elif current_stage_key != "START":
+            # Provera za ostale faze (Python ključne reči)
+            korisnikove_reci = set(korisnikov_tekst_lower.replace(',', ' ').replace('?', ' ').split())
+            for keyword, next_key in current_stage["responses"].items():
+                keyword_reci = set(keyword.split())
+                if keyword_reci.issubset(korisnikove_reci): 
+                    next_stage_key = next_key
+                    is_intent_recognized = True
+                    break
+        
+        # 2. KORAK: Koristi AI za strogu proveru namere (Samo ako faza nije START i nije prošla Korak 1)
+        if not is_intent_recognized and current_stage_key != "START" and ai_client:
             
-            if current_stage_key == "START":
-                current_question_text = GAME_STAGES["START"]["text"][0][-1]
-            else:
-                current_question_text = random.choice(current_stage['text'])
-            
+            current_question_text = random.choice(current_stage['text'])
             expected_keywords = list(current_stage["responses"].keys())
             
             try: conversation_history = json.loads(player.conversation_history)
@@ -424,18 +445,18 @@ def handle_general_message(message):
         # OBRADA REZULTATA
         if is_intent_recognized:
             player.current_riddle = next_stage_key
+            
             if next_stage_key.startswith("END_"):
                 epilogue_message = get_epilogue_message(next_stage_key)
                 send_msg(message, epilogue_message)
             else:
                 next_stage_data = GAME_STAGES.get(next_stage_key)
                 if next_stage_data:
-                    # Pošalji prvo potvrdnu rečenicu, pa novo pitanje
-                    confirmation_text = "Signal je primljen. Veza je stabilna." if current_stage_key == "START" else "Tako je." 
+                    confirmation_text = "Signal je primljen. Veza je stabilna." if current_stage_key == "START" else "Tako je. Idemo dalje." 
                     response_text = confirmation_text + "\n" + random.choice(next_stage_data["text"])
                     send_msg(message, response_text)
                 else:
-                    is_intent_recognized = False
+                    send_msg(message, "[GREŠKA: NEPOZNATA SLEDEĆA FAZA] Signal se gubi.")
 
         if not is_intent_recognized:
             # 3. KORAK: Ako namera NIJE prepoznata, generiši AI odgovor/objašnjenje
