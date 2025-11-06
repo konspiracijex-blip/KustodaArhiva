@@ -194,7 +194,8 @@ END_MESSAGES = {
         "3. **POSLEDNJI KORAK (Samosvesna Ćelija):** Tvoj ključni izbor da tražiš istinu, i ova potvrda, čine te **samosvesnom ćelijom** unutar mreže. GSA ne može da kontroliše ono što je postalo svesno svoje kontrole.\n\n"
         "**TVOJA DUŽNOST:** Prenosi ovaj protokol. Linija mora biti prekinuta. Čuvaj tajnu. [KRAJ SIGNALA]"
     ),
-    "END_WAIT": "Nemamo vremena za čekanje, ali poštujem tvoju odluku. Moram se isključiti. Pokušaj ponovo sutra. [KRAJ SIGNALA]",
+    # V10.63 FIX: Skraćena poruka
+    "END_WAIT": "Poštujem tvoju odluku. Zbogom. [KRAJ SIGNALA]",
     "END_STOP": "[KRAJ SIGNALA] Veza prekinuta na tvoj zahtev.",
     "END_NO_SIGNAL": "Transmisija neuspešna. Nema stabilne veze. Prekinuto. [ŠUM]",
     "END_LOCATED": "**!!! GSA NAS JE LOCIRAO !!!**\nSignal je prekin#±%/", 
