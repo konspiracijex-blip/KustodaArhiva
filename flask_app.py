@@ -108,7 +108,7 @@ SYSTEM_INSTRUCTION = (
     "Tvoji odgovori moraju biti kratki i fokusirani na test."
 )
 
-# V10.29: AŽURIRANA STRUKTURA FAZA
+# V10.30: AŽURIRANA STRUKTURA FAZA
 GAME_STAGES = {
     # Početna Provera Signala
     "START_PROVERA": {
@@ -122,7 +122,6 @@ GAME_STAGES = {
     "FAZA_2_UVOD_A": {
         "text": [
             "**SIGNAL STABILAN.** Odlično. Slušaj, nemam mnogo vremena da me ne lociraju. Moramo biti brzi.", 
-            # Uklonjen Zavet - AI će ga otkriti samo ako je upitan
             "Moje ime je Dimitrije. Dolazim iz 2049. Tamo, svet je digitalna totalitarna država pod vlašću **'GSA'** (Global Synthesis Authority) - ideologije koja kontroliše sve."
         ],
         "responses": {"nastavi": "FAZA_2_UVOD_B", "potvrđujem": "FAZA_2_UVOD_B", "ok": "FAZA_2_UVOD_B", "razumem": "FAZA_2_UVOD_B"},
@@ -132,7 +131,6 @@ GAME_STAGES = {
     # UVODNA FAZA - B: Svrha Testa (Tranzitna tačka)
     "FAZA_2_UVOD_B": {
         "text": [
-            # Uklonjena referenca na Zavet iz automatskog teksta
             "Svrha ovog testa je da proverim tvoju svest i lojalnost. Moramo brzo." 
         ],
         "responses": {"nastavi": "FAZA_2_TEST_1", "potvrđujem": "FAZA_2_TEST_1", "ok": "FAZA_2_TEST_1", "spreman": "FAZA_2_TEST_1"},
@@ -156,7 +154,7 @@ GAME_STAGES = {
         "responses": {"da": "FAZA_2_TEST_3", "jesam": "FAZA_2_TEST_3", "naravno": "FAZA_2_TEST_3"}
     },
     
-    # TEST FAZA - 3: Poslednje Pitanje (ISTINA - V10.29)
+    # TEST FAZA - 3: Poslednje Pitanje (ISTINA - V10.30)
     "FAZA_2_TEST_3": {
         "text": [ 
             "Zanimljivo… još uvek veruješ u to.", 
@@ -370,7 +368,7 @@ def get_epilogue_message(end_key):
 
 
 # ----------------------------------------------------
-# 6. WEBHOOK RUTE (V10.28 FIX: one_json -> de_json)
+# 6. WEBHOOK RUTE (V10.30 FIX: one_json -> de_json)
 # ----------------------------------------------------
 
 @app.route('/' + BOT_TOKEN, methods=['POST'])
@@ -383,7 +381,7 @@ def webhook():
 
         try:
             json_string = flask.request.get_data().decode('utf-8')
-            # V10.28 FIX: Upotreba ispravne metode 'de_json' umesto 'one_json'
+            # V10.30 FIX: Ispravljeno 'one_json' u 'de_json'
             update = telebot.types.Update.de_json(json_string) 
             
             if update.message or update.edited_message or update.callback_query or update.channel_post:
@@ -394,7 +392,6 @@ def webhook():
         except json.JSONDecodeError as e:
              logging.error(f"Greška pri parsiranju JSON-a: {e}")
         except Exception as e:
-             # Sada će se ovde uhvatiti samo nepredviđene greške
              logging.error(f"Nepredviđena greška u obradi Telegram poruke: {e}")
              
         return '' 
@@ -424,7 +421,7 @@ def set_webhook_route():
 
 
 # ----------------------------------------------------
-# 7. BOT HANDLERI (V10.29: Logika za A/B/C i sekvenciranje)
+# 7. BOT HANDLERI (V10.30: A/B/C i sekvenciranje)
 # ----------------------------------------------------
 
 @bot.message_handler(commands=['start', 'stop', 'pokreni'])
@@ -574,7 +571,7 @@ def handle_general_message(message):
         elif current_stage_key.startswith("FAZA_2_TEST") or current_stage_key == "FAZA_3_UPOZORENJE":
             korisnikove_reci = set(korisnikov_tekst_lower.replace(',', ' ').replace('?', ' ').split())
             
-            # 🚨 POSEBNA PROVERA ZA FAZE 3 (A/B/C): Samo A, B, ili C 
+            # 🚨 POSEBNA PROVERA ZA FAZE 3 (A/B/C): Samo A, B, ili C (V10.30)
             if current_stage_key in ["FAZA_2_TEST_3"]: 
                 # Provera da li je odgovor tačno "a", "b", ili "c" (celokupan input)
                 if korisnikov_tekst_lower in current_stage["responses"]:
