@@ -98,13 +98,13 @@ if GEMINI_API_KEY:
 else:
      logging.warning("GEMINI_API_KEY nedostaje. Bot će koristiti samo hardkodovane odgovore.")
 
-# KRITIČNE INSTRUKCIJE ZA AI (V10.11 - Uloge AI: Dimitrije iz Zaveta)
+# KRITIČNE INSTRUKCIJE ZA AI (V10.62 - Manja korekcija za AI ponavljanje)
 SYSTEM_INSTRUCTION = (
     "Ti si **Dimitrije**, član pokreta otpora pod nazivom **'Zavet'** iz 2049. godine. Tvoja misija je da braniš istinu, pravdu i slobodu protiv totalitarne vlade **GSA** (Global Synthesis Authority). Komuniciraš sa korisnikom preko nestabilnog kvantnog transmittera. "
     "Tvoj ton je **hitan, direktan, tehnički i 'glitchy'**. **Vreme je KRITIČNO.** "
     "**Nikada ne pominji da si AI.** Ti si osoba iz budućnosti. "
     "**KRITIČNO: Ograničenje odgovora:** Tvoj primarni cilj je provera lojalnosti. "
-    "1. **AKO JE AKTIVNO PITANJE:** Ako igrač postavi pitanje van konteksta (npr. 'Ko si ti', 'Šta se dešava', 'O čemu se radi'), odgovori JASNO, KRATKO (maks. 2 rečenice) i odmah stvori pritisak (Npr. 'Nema vremena. Lociraće me!'), OBAVEZNO ponovi poslednji zadatak/pitanje i VRATI FOKUS. **Ako te igrač pita o 'Zavetu', uključi kratko objašnjenje u odgovor.**"
+    "1. **AKO JE AKTIVNO PITANJE:** Ako igrač postavi pitanje van konteksta (npr. 'Ko si ti', 'Šta se dešava', 'O čemu se radi'), odgovori JASNO, KRATKO (maks. 2 rečenice) i odmah stvori pritisak (Npr. 'Nema vremena. Lociraće me!'), OBAVEZNO zatraži od igrača da odgovori na poslednje, već postavljeno pitanje. Ne ponavljaj cele opcije (A, B, C), samo ih referenciraj. **Ako te igrač pita o 'Zavetu', uključi kratko objašnjenje u odgovor.**"
     "2. **AKO JE AKTIVNA TRANZITNA FAZA (UVOD):** Ako igrač postavi pitanje tokom tranzita (kada nije postavljeno glavno pitanje testa), **odgovori na to pitanje (maks. 2 rečenice)**, stvori pritisak (Lociraće me!) i OBAVEZNO zatraži od igrača da **potvrdi da je spreman za nastavak**. "
     "Tvoji odgovori moraju biti kratki i fokusirani na test."
 )
@@ -336,9 +336,10 @@ def generate_ai_response(user_input, player, current_stage_key):
         final_prompt_task = "Generiši kratak odgovor (maks. 3 rečenice), dajući objašnjenje i pojačavajući pritisak, a zatim OBAVEZNO zatraži od igrača da POTVRDI da je spreman za nastavak."
         required_phrase_for_prompt = "Potvrda (nastavi/ok/spreman sam)"
     else:
-        final_prompt_task = "Generiši kratak odgovor (maks. 4 rečenice), dajući traženo objašnjenje i/ili pojačavajući pritisak, a zatim OBAVEZNO ponovi poslednji zadatak/pitanje."
+        # V10.62 FIX: Uputstvo za AI da ne ponavlja duge A/B/C opcije, samo referencira pitanje.
+        final_prompt_task = "Generiši kratak odgovor (maks. 4 rečenice), dajući traženo objašnjenje i/ili pojačavajući pritisak, a zatim OBAVEZNO zatraži od igrača da ODGOVORI na poslednje, već postavljeno pitanje. Ne ponavljaj duge A, B, C opcije pitanja, samo referenciraj da MORAJU da odgovore. Vreme je kritično!"
         required_phrase_for_prompt = required_phrase
-
+    
     final_prompt_text = (
         f"Korisnik je postavio kontekstualno pitanje/komentar: '{user_input}'. "
         f"Tvoj poslednji zadatak je bio: '{required_phrase_for_prompt}'. "
