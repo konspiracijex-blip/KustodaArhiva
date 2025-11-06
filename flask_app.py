@@ -39,7 +39,7 @@ except Exception as e:
 app = flask.Flask(__name__)
 
 # ----------------------------------------------------
-# 3. SQL ALCHEMY INICIJALIZACIJA (V10.17 - Uklonjen Migracioni Blok)
+# 3. SQL ALCHEMY INICIJALIZACIJA (V10.23 - Konsolidovano)
 # ----------------------------------------------------
 
 Session = None
@@ -69,9 +69,7 @@ def initialize_database():
         Engine = create_engine(DATABASE_URL)
         Session = sessionmaker(bind=Engine)
         
-        # --- 🚨 PRIVREMENI BLOK ZA MIGRACIJU JE UKLONJEN 🚨 ---
-        # Tabele se kreiraju samo ako ne postoje (Base.metadata.create_all)
-        
+        # Kreira tabelu (ako ne postoji)
         Base.metadata.create_all(Engine) 
         
         logging.info("Baza podataka i modeli uspešno inicijalizovani i tabele kreirane.")
@@ -84,7 +82,7 @@ def initialize_database():
 initialize_database()
 
 # ----------------------------------------------------
-# 4. AI KLIJENT I DATA (V10.20 - Izmenjeno Prvo Test Pitanje)
+# 4. AI KLIJENT I DATA (V10.23 - Ažurirane sve Faze Testa)
 # ----------------------------------------------------
 
 GEMINI_MODEL_NAME = 'gemini-2.5-flash' 
@@ -110,7 +108,7 @@ SYSTEM_INSTRUCTION = (
     "Tvoji odgovori moraju biti kratki i fokusirani na test."
 )
 
-# V10.20: AŽURIRANA STRUKTURA FAZA (Izmenjeno Prvo Test Pitanje)
+# V10.23: AŽURIRANA STRUKTURA FAZA (Integrisane sve izmene)
 GAME_STAGES = {
     # Početna Provera Signala
     "START_PROVERA": {
@@ -124,10 +122,9 @@ GAME_STAGES = {
     "FAZA_2_UVOD_A": {
         "text": [
             "**SIGNAL STABILAN.** Odlično. Slušaj, nemam mnogo vremena da me ne lociraju. Moramo biti brzi.", 
-            # Uklonjen Zavet - AI će ga otkriti samo ako je upitan
             "Moje ime je Dimitrije. Dolazim iz 2049. Tamo, svet je digitalna totalitarna država pod vlašću **'GSA'** (Global Synthesis Authority) - ideologije koja kontroliše sve."
         ],
-        # V10.19: Prošireno dodavanjem jesam, moze, kreni, pitaj, naravno, da
+        # V10.23: Prošireni odgovori za fleksibilnost
         "responses": {"nastavi": "FAZA_2_UVOD_B", "potvrđujem": "FAZA_2_UVOD_B", "ok": "FAZA_2_UVOD_B", "razumem": "FAZA_2_UVOD_B", "jesam": "FAZA_2_UVOD_B", "moze": "FAZA_2_UVOD_B", "kreni": "FAZA_2_UVOD_B", "pitaj": "FAZA_2_UVOD_B", "naravno": "FAZA_2_UVOD_B", "da": "FAZA_2_UVOD_B"}, 
         "prompt": "Potvrdi da si razumeo i da možemo da nastavimo sa testom. Nema vremena za čekanje!"
     },
@@ -135,15 +132,14 @@ GAME_STAGES = {
     # UVODNA FAZA - B: Svrha Testa (Tranzitna tačka)
     "FAZA_2_UVOD_B": {
         "text": [
-            # Uklonjena referenca na Zavet iz automatskog teksta
             "Svrha ovog testa je da proverim tvoju svest i lojalnost. Moramo brzo." 
         ],
-        # V10.19: Prošireno dodavanjem jesam, moze, kreni, pitaj, naravno, da
+        # V10.23: Prošireni odgovori za fleksibilnost
         "responses": {"nastavi": "FAZA_2_TEST_1", "potvrđujem": "FAZA_2_TEST_1", "ok": "FAZA_2_TEST_1", "spreman": "FAZA_2_TEST_1", "jesam": "FAZA_2_TEST_1", "moze": "FAZA_2_TEST_1", "kreni": "FAZA_2_TEST_1", "pitaj": "FAZA_2_TEST_1", "naravno": "FAZA_2_TEST_1", "da": "FAZA_2_TEST_1"},
         "prompt": "Potvrdi da si spreman za prvo pitanje. Lociraće me svakog trena!"
     },
     
-    # TEST FAZA - 1: Prvo Pitanje (AŽURIRANO V10.20)
+    # TEST FAZA - 1: Prvo Pitanje (AŽURIRANO V10.23)
     "FAZA_2_TEST_1": {
         "text": [ 
             "Šta je za tebe Sistem?",
@@ -156,19 +152,23 @@ GAME_STAGES = {
         "responses": {"b": "FAZA_2_TEST_2", "a": "END_LOCATED", "c": "END_LOCATED"} 
     },
     
-    # TEST FAZA - 2: Drugo Pitanje
+    # TEST FAZA - 2: Drugo Pitanje (AŽURIRANO V10.23)
     "FAZA_2_TEST_2": {
         "text": [ 
-            "Tako je. Štiti sebe.", 
-            "Sledeće pitanje. Ako algoritam zna tvoj strah… da li si još čovek?"
+            "U redu, idemo dalje.", # <-- NOVI NEUTRALNI UVOD
+            "Šta za tebe znači sloboda?",
+            "A) Odsustvo granica i pravila",
+            "B) Odluka koja nosi posledice",
+            "C) Iluzija koju prodaju oni koji se plaše"
         ],
-        "responses": {"da": "FAZA_2_TEST_3", "jesam": "FAZA_2_TEST_3", "naravno": "FAZA_2_TEST_3"}
+        # B je tačan odgovor, A i C vode u END_LOCATED
+        "responses": {"b": "FAZA_2_TEST_3", "a": "END_LOCATED", "c": "END_LOCATED"}
     },
     
-    # TEST FAZA - 3: Poslednje Pitanje
+    # TEST FAZA - 3: Poslednje Pitanje (AŽURIRANO V10.23)
     "FAZA_2_TEST_3": {
         "text": [ 
-            "Zanimljivo… još uvek veruješ u to.", 
+            "U redu, idemo dalje.", # <-- NOVI NEUTRALNI UVOD
             "Poslednja provera. Odgovori mi iskreno. Da li bi žrtvovao komfor — za istinu?"
         ],
         "responses": {"da": "FAZA_3_UPOZORENJE", "bih": "FAZA_3_UPOZORENJE", "žrtvovao bih": "FAZA_3_UPOZORENJE", "zrtvovao bih": "FAZA_3_UPOZORENJE"}
@@ -375,7 +375,7 @@ def get_epilogue_message(end_key):
 
 
 # ----------------------------------------------------
-# 6. WEBHOOK RUTE (V10.16 - Ispravka Update.de_json)
+# 6. WEBHOOK RUTE (V10.23: Ispravka de_json)
 # ----------------------------------------------------
 
 @app.route('/' + BOT_TOKEN, methods=['POST'])
@@ -392,7 +392,7 @@ def webhook():
             # 🚨 ISPRAVKA GREŠKE: Zamenjeno telebot.types.Update.one_json sa de_json
             update = telebot.types.Update.de_json(json_string)
             
-            # Procesira sve tipove update-a (message, edited_message, callback_query, itd.)
+            # Procesira sve tipove update-a
             bot.process_new_updates([update])
 
         except json.JSONDecodeError as e:
@@ -427,7 +427,7 @@ def set_webhook_route():
 
 
 # ----------------------------------------------------
-# 7. BOT HANDLERI (V10.17 - Čista DB)
+# 7. BOT HANDLERI (V10.23 - Ažurirano rukovanje MC pitanjima)
 # ----------------------------------------------------
 
 @bot.message_handler(commands=['start', 'stop', 'pokreni'])
@@ -556,7 +556,7 @@ def handle_general_message(message):
         is_intent_recognized = False
         korisnikov_tekst_lower = korisnikov_tekst.lower().strip() 
         
-        # 1. KORAK: PROVERA KLJUČNIH REČI I TRANZICIJA (Logika V10.7 ostaje ista)
+        # 1. KORAK: PROVERA KLJUČNIH REČI I TRANZICIJA (Logika V10.23)
         
         # Provera START_PROVERA (tranzicija na A)
         if current_stage_key == "START_PROVERA":
@@ -577,14 +577,14 @@ def handle_general_message(message):
         elif current_stage_key.startswith("FAZA_2_TEST") or current_stage_key == "FAZA_3_UPOZORENJE":
             korisnikove_reci = set(korisnikov_tekst_lower.replace(',', ' ').replace('?', ' ').split())
             
-            # 🚨 POSEBNA PROVERA ZA FAZU 1 (V10.20): Samo A, B, C i mala slova
-            if current_stage_key == "FAZA_2_TEST_1":
+            # 🚨 POSEBNA PROVERA ZA FAZE 1 i 2 (V10.23): Samo A, B, C i mala slova
+            if current_stage_key in ["FAZA_2_TEST_1", "FAZA_2_TEST_2"]:
                 # Provera da li je odgovor tačno "a", "b", ili "c"
                 if korisnikov_tekst_lower in current_stage["responses"]:
                     next_stage_key = current_stage["responses"][korisnikov_tekst_lower]
                     is_intent_recognized = True
             else:
-                # Regularna provera za ostale faze testa
+                # Regularna provera za ostale faze testa (FAZA_2_TEST_3, FAZA_3_UPOZORENJE)
                 for keyword, next_key in current_stage["responses"].items():
                     keyword_reci = set(keyword.split())
                     if keyword_reci.issubset(korisnikove_reci): 
@@ -641,7 +641,7 @@ def handle_general_message(message):
 
 
 # ----------------------------------------------------
-# 8. POKRETANJE APLIKACIJE
+# 8. POKRETANJE APLIKACIJE (Isto kao V9.4)
 # ----------------------------------------------------
 
 if __name__ != '__main__':
