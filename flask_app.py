@@ -123,7 +123,9 @@ GAME_STAGES = {
     "FAZA_2_UVOD_A": {
         "text": [
             "**SIGNAL STABILAN.** Odlično. Slušaj, nemam mnogo vremena da me ne lociraju. Moramo biti brzi.", 
-            "Moje ime je Dimitrije. Dolazim iz 2049. Tamo, svet je digitalna totalitarna država pod vlašću **'GSA'** (Global Synthesis Authority) - ideologije koja kontroliše sve."
+            "Moje ime je Dimitrije. Dolazim iz 2049. Tamo, svet je digitalna totalitarna država pod vlašću **'GSA'** (Global Synthesis Authority) - ideologije koja kontroliše sve.",
+            # V10.43: Spojen prompt u text listu da bi se izbeglo dvostruko slanje poruke
+            "Potvrdi da si razumeo i da možemo da nastavimo sa testom. Nema vremena za čekanje!" 
         ],
         "responses": {"nastavi": "FAZA_2_UVOD_B", "potvrđujem": "FAZA_2_UVOD_B", "potvrdjujem": "FAZA_2_UVOD_B", "ok": "FAZA_2_UVOD_B", "razumem": "FAZA_2_UVOD_B", "da": "FAZA_2_UVOD_B", "jesam": "FAZA_2_UVOD_B"},
         "prompt": "Potvrdi da si razumeo i da možemo da nastavimo sa testom. Nema vremena za čekanje!"
@@ -132,7 +134,9 @@ GAME_STAGES = {
     # UVODNA FAZA - B: Svrha Testa (Tranzitna tačka)
     "FAZA_2_UVOD_B": {
         "text": [
-            "Svrha ovog testa je da proverim tvoju svest i lojalnost. Moramo brzo." 
+            "Svrha ovog testa je da proverim tvoju svest i lojalnost. Moramo brzo.",
+            # V10.43: Spojen prompt u text listu da bi se izbeglo dvostruko slanje poruke
+            "Potvrdi da si spreman za prvo pitanje. Lociraće me svakog trena!" 
         ],
         "responses": {"nastavi": "FAZA_2_TEST_1", "potvrđujem": "FAZA_2_TEST_1", "potvrdjujem": "FAZA_2_TEST_1", "ok": "FAZA_2_TEST_1", "spreman": "FAZA_2_TEST_1", "da": "FAZA_2_TEST_1", "jesam": "FAZA_2_TEST_1"},
         "prompt": "Potvrdi da si spreman za prvo pitanje. Lociraće me svakog trena!"
@@ -650,11 +654,10 @@ def handle_general_message(message):
                     # V10.8: Dodajemo upozorenje
                     send_msg(message, response_text, add_warning=True, elapsed_time=elapsed_time)
                     
-                    # V10.7 Dodatak: Ako je nova faza TRANZITNA, šalje se i PROMPT
-                    if next_stage_key in ["FAZA_2_UVOD_A", "FAZA_2_UVOD_B"]:
-                        prompt_text = get_required_phrase(next_stage_key)
-                        # V10.8: Prompt se šalje u zasebnoj poruci, pa se na njega dodaje upozorenje
-                        send_msg(message, prompt_text, add_warning=True, elapsed_time=elapsed_time)
+                    # V10.43: Uklonjen uslov koji je dvaput slao prompt za tranzitne faze
+                    # if next_stage_key in ["FAZA_2_UVOD_A", "FAZA_2_UVOD_B"]:
+                    #     prompt_text = get_required_phrase(next_stage_key)
+                    #     send_msg(message, prompt_text, add_warning=True, elapsed_time=elapsed_time)
 
                 else:
                     send_msg(message, "[GREŠKA: NEPOZNATA SLEDEĆA FAZA] Signal se gubi.")
