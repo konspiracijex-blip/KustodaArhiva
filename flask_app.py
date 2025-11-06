@@ -82,7 +82,7 @@ def initialize_database():
 initialize_database()
 
 # ----------------------------------------------------
-# 4. AI KLIJENT I DATA (V10.26 - AŽURIRANA FAZA IGRE)
+# 4. AI KLIJENT I DATA
 # ----------------------------------------------------
 
 GEMINI_MODEL_NAME = 'gemini-2.5-flash' 
@@ -108,7 +108,7 @@ SYSTEM_INSTRUCTION = (
     "Tvoji odgovori moraju biti kratki i fokusirani na test."
 )
 
-# V10.26: AŽURIRANA STRUKTURA FAZA (Uklonjena FAZA_2_UVOD_B, Vraćena A/B/C Pitanja)
+# V10.26: AŽURIRANA STRUKTURA FAZA (Jedna Poruka Po Fazi)
 GAME_STAGES = {
     # Početna Provera Signala
     "START_PROVERA": {
@@ -119,14 +119,13 @@ GAME_STAGES = {
     },
     
     # UVODNA FAZA - A: Ko je Dimitrije i GSA -> Traži potvrdu za TEST
-    # V10.26: Uklonjena FAZA_2_UVOD_B, spojeno
     "FAZA_2_UVOD_A": {
         "text": [
             "**SIGNAL STABILAN.** Odlično. Slušaj, nemam mnogo vremena da me ne lociraju. Moramo biti brzi.", 
             "Moje ime je Dimitrije. Dolazim iz 2049. Tamo, svet je digitalna totalitarna država pod vlašću **'GSA'** (Global Synthesis Authority) - ideologije koja kontroliše sve.",
             "Svrha ovog testa je da proverim tvoju svest i lojalnost. Moramo brzo." # Dodat tekst iz UVOD_B
         ],
-        # V10.26: Prelaz direktno na TEST_1 sa više ključnih reči za potvrdu
+        # V10.26: Prelaz direktno na TEST_1
         "responses": {"nastavi": "FAZA_2_TEST_1", "potvrđujem": "FAZA_2_TEST_1", "ok": "FAZA_2_TEST_1", "razumem": "FAZA_2_TEST_1", "jesam": "FAZA_2_TEST_1", "moze": "FAZA_2_TEST_1", "kreni": "FAZA_2_TEST_1", "pitaj": "FAZA_2_TEST_1", "naravno": "FAZA_2_TEST_1", "da": "FAZA_2_TEST_1", "spreman": "FAZA_2_TEST_1"}, 
         "prompt": "Potvrdi da si spreman za prvo pitanje. Lociraće me svakog trena!" # Prompt ostaje
     },
@@ -364,7 +363,7 @@ def get_epilogue_message(end_key):
 
 
 # ----------------------------------------------------
-# 6. WEBHOOK RUTE
+# 6. WEBHOOK RUTE (V10.27 - FIX: one_json -> de_json)
 # ----------------------------------------------------
 
 @app.route('/' + BOT_TOKEN, methods=['POST'])
@@ -378,7 +377,8 @@ def webhook():
         try:
             json_string = flask.request.get_data().decode('utf-8')
             
-            update = telebot.types.Update.one_json(json_string)
+            # V10.27 FIX: Upotreba ispravne metode 'de_json'
+            update = telebot.types.Update.de_json(json_string) 
             
             # Procesira sve tipove update-a
             bot.process_new_updates([update])
@@ -386,6 +386,7 @@ def webhook():
         except json.JSONDecodeError as e:
              logging.error(f"Greška pri parsiranju JSON-a: {e}")
         except Exception as e:
+             # Sada će se ovde uhvatiti samo nepredviđene greške, ne i greška tipa 'one_json'
              logging.error(f"Nepredviđena greška u obradi Telegram poruke: {e}")
              
         return '' 
