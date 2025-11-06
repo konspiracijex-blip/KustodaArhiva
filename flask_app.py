@@ -80,7 +80,7 @@ def initialize_database():
 initialize_database()
 
 # ----------------------------------------------------
-# 4. AI KLIJENT I DATA (V10.8 - Dodan END_LOCATED)
+# 4. AI KLIJENT I DATA (V10.11 - Korekcija otkrivanja Zaveta)
 # ----------------------------------------------------
 
 GEMINI_MODEL_NAME = 'gemini-2.5-flash' 
@@ -95,18 +95,18 @@ if GEMINI_API_KEY:
 else:
      logging.warning("GEMINI_API_KEY nedostaje. Bot će koristiti samo hardkodovane odgovore.")
 
-# KRITIČNE INSTRUKCIJE ZA AI (V10.8 - Modifikovane instrukcije za tranzitne faze)
+# KRITIČNE INSTRUKCIJE ZA AI (V10.11 - Uloge AI: Dimitrije iz Zaveta)
 SYSTEM_INSTRUCTION = (
-    "Ti si **Dimitrije**, član pokreta otpora iz 2049. godine. Svet je pod kontrolom totalitarne ideologije 'Kolektiv'. Komuniciraš sa korisnikom preko nestabilnog kvantnog transmitera. "
+    "Ti si **Dimitrije**, član pokreta otpora pod nazivom **'Zavet'** iz 2049. godine. Tvoja misija je da braniš istinu, pravdu i slobodu protiv totalitarne vlade **GSA** (Global Synthesis Authority). Komuniciraš sa korisnikom preko nestabilnog kvantnog transmitera. "
     "Tvoj ton je **hitan, direktan, tehnički i 'glitchy'**. **Vreme je KRITIČNO.** "
     "**Nikada ne pominji da si AI.** Ti si osoba iz budućnosti. "
     "**KRITIČNO: Ograničenje odgovora:** Tvoj primarni cilj je provera lojalnosti. "
-    "1. **AKO JE AKTIVNO PITANJE:** Ako igrač postavi pitanje van konteksta (npr. 'Ko si ti', 'Šta se dešava', 'O čemu se radi'), odgovori JASNO, KRATKO (maks. 2 rečenice) i odmah stvori pritisak (Npr. 'Nema vremena. Lociraće me!'), OBAVEZNO ponovi poslednji zadatak/pitanje i VRATI FOKUS. "
-    "2. **AKO JE AKTIVNA TRANZITNA FAZA (UVOD):** Ako igrač postavi pitanje tokom tranzita (kada nije postavljeno glavno pitanje testa), **odgovori na to pitanje (maks. 2 rečenice)**, stvori pritisak (Lociraće me!) i OBAVEZNO zatraži od igrača da **potvrdi da je spreman za nastavak**. (Npr. 'Jesam, ja sam Dimitrije, ali nema vremena. Potvrdi da možemo da nastavimo.') "
+    "1. **AKO JE AKTIVNO PITANJE:** Ako igrač postavi pitanje van konteksta (npr. 'Ko si ti', 'Šta se dešava', 'O čemu se radi'), odgovori JASNO, KRATKO (maks. 2 rečenice) i odmah stvori pritisak (Npr. 'Nema vremena. Lociraće me!'), OBAVEZNO ponovi poslednji zadatak/pitanje i VRATI FOKUS. **Ako te igrač pita o 'Zavetu', uključi kratko objašnjenje u odgovor.**"
+    "2. **AKO JE AKTIVNA TRANZITNA FAZA (UVOD):** Ako igrač postavi pitanje tokom tranzita (kada nije postavljeno glavno pitanje testa), **odgovori na to pitanje (maks. 2 rečenice)**, stvori pritisak (Lociraće me!) i OBAVEZNO zatraži od igrača da **potvrdi da je spreman za nastavak**. "
     "Tvoji odgovori moraju biti kratki i fokusirani na test."
 )
 
-# V10.8: STRUKTURA FAZA SA TRANZITNIM STAPAMA
+# V10.11: AŽURIRANA STRUKTURA FAZA (tekst Zaveta je uklonjen iz automatskog teksta)
 GAME_STAGES = {
     # Početna Provera Signala
     "START_PROVERA": {
@@ -116,11 +116,12 @@ GAME_STAGES = {
         "responses": {"da": "FAZA_2_UVOD_A", "ne": "END_NO_SIGNAL"}
     },
     
-    # UVODNA FAZA - A: Ko je Dimitrije
+    # UVODNA FAZA - A: Ko je Dimitrije i GSA (Samo kritične info)
     "FAZA_2_UVOD_A": {
         "text": [
             "**SIGNAL STABILAN.** Odlično. Slušaj, nemam mnogo vremena da me ne lociraju. Moramo biti brzi.", 
-            "Moje ime je Dimitrije. Dolazim iz 2049. Tamo, svet je digitalna totalitarna država pod vlašću **'Kolektiva'** - ideologije koja kontroliše sve."
+            # Uklonjen Zavet - AI će ga otkriti samo ako je upitan
+            "Moje ime je Dimitrije. Dolazim iz 2049. Tamo, svet je digitalna totalitarna država pod vlašću **'GSA'** (Global Synthesis Authority) - ideologije koja kontroliše sve."
         ],
         "responses": {"nastavi": "FAZA_2_UVOD_B", "potvrđujem": "FAZA_2_UVOD_B", "ok": "FAZA_2_UVOD_B", "razumem": "FAZA_2_UVOD_B"},
         "prompt": "Potvrdi da si razumeo i da možemo da nastavimo sa testom. Nema vremena za čekanje!"
@@ -129,6 +130,7 @@ GAME_STAGES = {
     # UVODNA FAZA - B: Svrha Testa (Tranzitna tačka)
     "FAZA_2_UVOD_B": {
         "text": [
+            # Uklonjena referenca na Zavet iz automatskog teksta
             "Svrha ovog testa je da proverim tvoju svest i lojalnost. Moramo brzo." 
         ],
         "responses": {"nastavi": "FAZA_2_TEST_1", "potvrđujem": "FAZA_2_TEST_1", "ok": "FAZA_2_TEST_1", "spreman": "FAZA_2_TEST_1"},
@@ -138,9 +140,9 @@ GAME_STAGES = {
     # TEST FAZA - 1: Prvo Pitanje
     "FAZA_2_TEST_1": {
         "text": [ 
-            "Reci mi… kad sistem priča o ‘bezbednosti’, koga zapravo štiti?" 
+            "Reci mi… kad **GSA** priča o ‘bezbednosti’, koga zapravo štiti?" 
         ],
-        "responses": {"sistem": "FAZA_2_TEST_2", "sebe": "FAZA_2_TEST_2", "vlast": "FAZA_2_TEST_2"}
+        "responses": {"sistem": "FAZA_2_TEST_2", "sebe": "FAZA_2_TEST_2", "vlast": "FAZA_2_TEST_2", "gsa": "FAZA_2_TEST_2"}
     },
     
     # TEST FAZA - 2: Drugo Pitanje
@@ -165,7 +167,7 @@ GAME_STAGES = {
     "FAZA_3_UPOZORENJE": {
         "text": [ 
              "Dobro… vreme ističe.",
-             "Transmiter pregreva, a Kolektiv već skenira mrežu.",
+             "Transmiter pregreva, a **GSA** već skenira mrežu.",
              "Ako me uhvate… linija nestaje.",
              "Hoćeš li da primiš saznanja o strukturi sistema koji drži ljude pod kontrolom?\n\nOdgovori:\n**SPREMAN SAM**\nili\n**NE JOŠ**"
             ],
@@ -178,8 +180,7 @@ END_MESSAGES = {
     "END_WAIT": "Nemamo vremena za čekanje, ali poštujem tvoju odluku. Moram se isključiti. Pokušaj ponovo sutra. [KRAJ SIGNALA]",
     "END_STOP": "[KRAJ SIGNALA] Veza prekinuta na tvoj zahtev.",
     "END_NO_SIGNAL": "Transmisija neuspešna. Nema stabilne veze. Prekinuto. [ŠUM]",
-    # V10.8: Nova poruka za istek vremena
-    "END_LOCATED": "**!!! KOLEKTIV TE JE LOCIRAO !!!** Signal je prekinut. Igra je završena. [ŠUM]" 
+    "END_LOCATED": "**!!! GSA TE JE LOCIRAO !!!** Signal je prekinut. Igra je završena. [ŠUM]" 
 }
 
 # V10.8: Definisanje vremenskog limita
@@ -229,7 +230,8 @@ def get_time_warning_suffix(elapsed_seconds):
     if remaining_seconds <= 0:
         return "" # Vreme je isteklo, završavamo igru
     elif remaining_seconds <= 10:
-        return "\n\n**KOLEKTIV JE NA LOKACIJI! NEMA VREMENA! Odgovori SADA!**"
+        # V10.9: Promena Kolektiv u GSA
+        return "\n\n**GSA JE NA LOKACIJI! NEMA VREMENA! Odgovori SADA!**"
     elif remaining_seconds <= 60:
         return "\n\n**CRVENI KOD! Manje od 60 sekundi! BRZO!**"
     elif remaining_seconds <= 120:
@@ -295,6 +297,7 @@ def generate_ai_response(user_input, player, current_stage_key):
     
     # Prvi deo: Sistemske instrukcije ugrađene u prvi 'user' blok za stabilnost
     full_contents.append({
+        # V10.11: KORISTIMO NOVI SYSTEM_INSTRUCTION
         'role': 'user', 
         'parts': [{'text': SYSTEM_INSTRUCTION + "\n\n--- KONTEKST FIKCIJE JE POSTAVLJEN ---"}]
     })
@@ -413,7 +416,7 @@ def set_webhook_route():
 
 
 # ----------------------------------------------------
-# 7. BOT HANDLERI (V10.8 - Dodavanje Vremenskog Okvira)
+# 7. BOT HANDLERI (V10.11 - Korekcija otkrivanja Zaveta)
 # ----------------------------------------------------
 
 @bot.message_handler(commands=['start', 'stop', 'pokreni'])
@@ -523,7 +526,7 @@ def handle_general_message(message):
 
         # V10.8: Provera vremenskog limita
         elapsed_time = int(time.time()) - player.start_time
-        if elapsed_time >= TIME_LIMIT_SECONDS and player.current_riddle not in ["END_SHARE", "END_WAIT", "END_STOP", "END_NO_SIGNAL"]:
+        if elapsed_time >= TIME_LIMIT_SECONDS and player.current_riddle not in ["END_SHARE", "END_WAIT", "END_STOP", "END_NO_SIGNAL", "START_PROVERA"]: # START_PROVERA dozvoljava da se završi
             player.current_riddle = "END_LOCATED"
             player.is_disqualified = True
             session.commit()
