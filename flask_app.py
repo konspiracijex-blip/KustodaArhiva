@@ -109,7 +109,7 @@ SYSTEM_INSTRUCTION = (
     "Tvoji odgovori moraju biti kratki i fokusirani na test."
 )
 
-# V10.51: AŽURIRANA STRUKTURA FAZA (Sva narativna objašnjenja spojena u Long Monolog)
+# V10.51: NOVA STRUKTURA FAZA (Sva narativna objašnjenja spojena u Long Monolog)
 GAME_STAGES = {
     # Početna Provera Signala
     "START_PROVERA": {
@@ -176,10 +176,9 @@ GAME_STAGES = {
     # NOVA FAZA: Finalni Prompt (Prikazuje se SAMO ako je skor 4/4)
     "FAZA_3_FINAL_PROMPT": {
         "text": [ 
-             "**TEST ZAVRŠEN.** Rezultati su pozitivni. Naša veza je kritična, GSA je blizu. Vreme je za finalnu odluku.",
-             "Da li si spreman da primiš saznanja o strukturi sistema koji drži ljude pod kontrolom?\n\nOdgovori:\n**DA**\nili\n**NE**" 
+             "Test je završen.\nUspešno si proša proveru.\nČestitam!", # V10.53: Novi tekst
+             "Da li si spreman da primiš saznanja o strukturi sistema koji drži ljude pod kontrolom?\n\nOdgovori:\n**DA ili NE**" # V10.52: Ažuriran format prompta
             ],
-        # V10.50: Ažurirani odgovori
         "responses": {"da": "END_SHARE", "ne": "END_WAIT"}
     }
 }
@@ -434,7 +433,7 @@ def set_webhook_route():
 
 
 # ----------------------------------------------------
-# 7. BOT HANDLERI (V10.51 - Logika evaluacije i Long Monolog)
+# 7. BOT HANDLERI (V10.53 - Logika evaluacije i Long Monolog)
 # ----------------------------------------------------
 
 @bot.message_handler(commands=['start', 'stop', 'pokreni'])
