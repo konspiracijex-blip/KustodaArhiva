@@ -442,7 +442,7 @@ def set_webhook_route():
 
 
 # ----------------------------------------------------
-# 7. BOT HANDLERI (V10.56 - Silent Exit nakon brisanja stanja)
+# 7. BOT HANDLERI (V10.57 - Korekcija logike prelaska faze)
 # ----------------------------------------------------
 
 @bot.message_handler(commands=['start', 'stop', 'pokreni'])
@@ -600,16 +600,24 @@ def handle_general_message(message):
                 next_stage_key = "FAZA_2_UVOD_LONG" # V10.51: Novo preusmeravanje
                 is_intent_recognized = True
         
-        # Provera TRANZITNIH FAZA (LONG MONOLOG na TEST_1) - FIX V10.49: Koristimo tokenizaciju za robustno prepoznavanje
+        # Provera TRANZITNIH FAZA (LONG MONOLOG na TEST_1) - FIX V10.57: Korekcija logike
         elif current_stage_key == "FAZA_2_UVOD_LONG":
-            # V10.49: Koristimo token-based (issubset) logiku da prepoznamo fraze poput "razumeo sam"
             for keyword, next_key in current_stage["responses"].items():
                 keyword_reci = set(keyword.split())
-                # Proverava da li su sve reči ključne fraze sadržane u korisnikovom tekstu
-                if keyword_reci.issubset(korisnikove_reci): 
-                    next_stage_key = next_key 
-                    is_intent_recognized = True
-                    break
+                
+                # V10.57 FIX: Ako je ključna reč od JEDNE reči, unos mora biti TA JEDNA reč.
+                if len(keyword_reci) == 1:
+                    # Dodatna provera da ne bi 'da' unutar rečenice aktiviralo prelazak.
+                    if korisnikov_tekst_lower.strip() == keyword:
+                        next_stage_key = next_key
+                        is_intent_recognized = True
+                        break
+                else:
+                    # Za ključne reči od više reči (npr. 'razumeo sam'), koristimo robustan issubset
+                    if keyword_reci.issubset(korisnikove_reci): 
+                        next_stage_key = next_key 
+                        is_intent_recognized = True
+                        break
         
         # Provera TEST FAZA (TEST_1, TEST_2, TEST_3, TEST_4, FINAL_PROMPT)
         elif current_stage_key.startswith("FAZA_2_TEST") or current_stage_key == "FAZA_3_FINAL_PROMPT":
@@ -640,15 +648,22 @@ def handle_general_message(message):
                     else:
                         next_stage_key = "END_FAILED_TEST" # Nije prošao, kraj igre
 
-            # Redovna provera za fazu FAZA_3_FINAL_PROMPT - V10.50: Koristi token-based (da/ne)
+            # Redovna provera za fazu FAZA_3_FINAL_PROMPT - V10.57 FIX: Korekcija logike
             elif current_stage_key == "FAZA_3_FINAL_PROMPT":
                 for keyword, next_key in current_stage["responses"].items():
-                    # Koristimo token-based (issubset) logiku
                     keyword_reci = set(keyword.split()) 
-                    if keyword_reci.issubset(korisnikove_reci): 
-                        next_stage_key = next_key 
-                        is_intent_recognized = True
-                        break
+                    
+                    # V10.57 FIX: Ista logika za jednosložne/višesložne odgovore
+                    if len(keyword_reci) == 1:
+                        if korisnikov_tekst_lower.strip() == keyword:
+                            next_stage_key = next_key
+                            is_intent_recognized = True
+                            break
+                    else:
+                        if keyword_reci.issubset(korisnikove_reci): 
+                            next_stage_key = next_key 
+                            is_intent_recognized = True
+                            break
 
 
         # OBRADA REZULTATA
