@@ -119,12 +119,13 @@ GAME_STAGES = {
         "responses": {"da": "FAZA_2_UVOD_LONG", "ne": "END_NO_SIGNAL"}
     },
     
-    # NOVA FAZA - LONG MONOLOG (Spojen FAZA_2_UVOD_A i FAZA_2_UVOD_B)
+    # NOVA FAZA - LONG MONOLOG (Obogaćen tekst)
     "FAZA_2_UVOD_LONG": {
         "text": [
             "**SIGNAL STABILAN.** Odlično. Slušaj, nemam mnogo vremena da me ne lociraju. Moramo biti brzi.", 
             "Moje ime je Dimitrije. Dolazim iz 2049. Tamo, svet je digitalna totalitarna država pod vlašću **'GSA'** (Global Synthesis Authority) - ideologije koja kontroliše sve.",
-            "Mi smo **Zavet**, pokret otpora koji se bori za slobodu i istinu. Svrha ovog testa je da proverim tvoju svest i lojalnost. Moram znati da li si sa nama.",
+            "Mi smo **Zavet**, poslednja linija odbrane. Cilj ovog kontakta je **dostavljanje KLJUČNOG protokola** – mape uticaja i strukture moći GSA. To je jedina šansa da zaustavimo **Veliki Filter** pre nego što postane trajan.", # <- V10.55: Novi detalj o misiji
+            "Svrha ovog testa je da proverim tvoju svest i lojalnost, da budem siguran da si *ti* onaj koji će širiti Istinu. Moram znati da li si spreman za borbu.", # <- V10.55: Detalj o tome zašto se vrši provera
             "Potvrdi da si spreman za prvi, najvažniji test. Lociraće me svakog trena!" 
         ],
         # Ključne reči za prelazak na FAZA_2_TEST_1
@@ -441,7 +442,7 @@ def set_webhook_route():
 
 
 # ----------------------------------------------------
-# 7. BOT HANDLERI (V10.54 - Logika evaluacije i Long Monolog)
+# 7. BOT HANDLERI (V10.55 - Obogaćeni uvodni tekst)
 # ----------------------------------------------------
 
 @bot.message_handler(commands=['start', 'stop', 'pokreni'])
