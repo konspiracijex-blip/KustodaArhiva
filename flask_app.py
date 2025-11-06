@@ -109,37 +109,28 @@ SYSTEM_INSTRUCTION = (
     "Tvoji odgovori moraju biti kratki i fokusirani na test."
 )
 
-# V10.50: AŽURIRANA STRUKTURA FAZA (Korigovan finalni prompt)
+# V10.51: AŽURIRANA STRUKTURA FAZA (Sva narativna objašnjenja spojena u Long Monolog)
 GAME_STAGES = {
     # Početna Provera Signala
     "START_PROVERA": {
         "text": [
             "DA LI VIDIŠ MOJU PORUKU?"
         ],
-        "responses": {"da": "FAZA_2_UVOD_A", "ne": "END_NO_SIGNAL"}
+        "responses": {"da": "FAZA_2_UVOD_LONG", "ne": "END_NO_SIGNAL"}
     },
     
-    # UVODNA FAZA - A: Ko je Dimitrije i GSA (Samo kritične info)
-    "FAZA_2_UVOD_A": {
+    # NOVA FAZA - LONG MONOLOG (Spojen FAZA_2_UVOD_A i FAZA_2_UVOD_B)
+    "FAZA_2_UVOD_LONG": {
         "text": [
             "**SIGNAL STABILAN.** Odlično. Slušaj, nemam mnogo vremena da me ne lociraju. Moramo biti brzi.", 
             "Moje ime je Dimitrije. Dolazim iz 2049. Tamo, svet je digitalna totalitarna država pod vlašću **'GSA'** (Global Synthesis Authority) - ideologije koja kontroliše sve.",
-            "Potvrdi da si razumeo i da možemo da nastavimo sa testom. Nema vremena za čekanje!" 
+            "Mi smo **Zavet**, pokret otpora koji se bori za slobodu i istinu. Svrha ovog testa je da proverim tvoju svest i lojalnost. Moram znati da li si sa nama.",
+            "Potvrdi da si spreman za prvi, najvažniji test. Lociraće me svakog trena!" 
         ],
-        "responses": {"nastavi": "FAZA_2_UVOD_B", "potvrđujem": "FAZA_2_UVOD_B", "potvrdjujem": "FAZA_2_UVOD_B", "ok": "FAZA_2_UVOD_B", "razumem": "FAZA_2_UVOD_B", "da": "FAZA_2_UVOD_B", "jesam": "FAZA_2_UVOD_B",
-                      "razumeo": "FAZA_2_UVOD_B", "razumeo sam": "FAZA_2_UVOD_B"}, 
-        "prompt": "Potvrdi da si razumeo i da možemo da nastavimo sa testom. Nema vremena za čekanje!"
-    },
-    
-    # UVODNA FAZA - B: Svrha Testa (Tranzitna tačka)
-    "FAZA_2_UVOD_B": {
-        "text": [
-            "Svrha ovog testa je da proverim tvoju svest i lojalnost. Moramo brzo.",
-            "Potvrdi da si spreman za prvo pitanje. Lociraće me svakog trena!" 
-        ],
+        # Ključne reči za prelazak na FAZA_2_TEST_1
         "responses": {"nastavi": "FAZA_2_TEST_1", "potvrđujem": "FAZA_2_TEST_1", "potvrdjujem": "FAZA_2_TEST_1", "ok": "FAZA_2_TEST_1", "spreman": "FAZA_2_TEST_1", "da": "FAZA_2_TEST_1", "jesam": "FAZA_2_TEST_1",
-                      "spreman sam": "FAZA_2_TEST_1", "potvrdio sam": "FAZA_2_TEST_1"}, 
-        "prompt": "Potvrdi da si spreman za prvo pitanje. Lociraće me svakog trena!"
+                      "razumeo": "FAZA_2_TEST_1", "razumeo sam": "FAZA_2_TEST_1", "spreman sam": "FAZA_2_TEST_1", "potvrdio sam": "FAZA_2_TEST_1"}, 
+        "prompt": "Potvrdi da si spreman za prvi, najvažniji test. Lociraće me svakog trena!"
     },
     
     # TEST FAZA - 1: Prvo Pitanje 
@@ -186,7 +177,7 @@ GAME_STAGES = {
     "FAZA_3_FINAL_PROMPT": {
         "text": [ 
              "**TEST ZAVRŠEN.** Rezultati su pozitivni. Naša veza je kritična, GSA je blizu. Vreme je za finalnu odluku.",
-             "Da li si spremanda primiš saznanja o strukturi sistema koji drži ljude pod kontrolom?\n\nOdgovori:\n**DA**\nili\n**NE**" # <- V10.50: Ažuriran tekst prompta
+             "Da li si spreman da primiš saznanja o strukturi sistema koji drži ljude pod kontrolom?\n\nOdgovori:\n**DA**\nili\n**NE**" 
             ],
         # V10.50: Ažurirani odgovori
         "responses": {"da": "END_SHARE", "ne": "END_WAIT"}
@@ -335,8 +326,8 @@ def generate_ai_response(user_input, player, current_stage_key):
 
     
     # Finalni prompt sa zadatkom za AI
-    # V10.7: Ako je tranzitna faza, AI mora tražiti potvrdu (nastavak), a ne ponavljanje pitanja testa.
-    is_transitional_phase = current_stage_key in ["FAZA_2_UVOD_A", "FAZA_2_UVOD_B", "FAZA_3_FINAL_PROMPT"]
+    # V10.51: Promenjena lista tranzicionih faza
+    is_transitional_phase = current_stage_key in ["FAZA_2_UVOD_LONG", "FAZA_3_FINAL_PROMPT"]
     
     if is_transitional_phase:
         final_prompt_task = "Generiši kratak odgovor (maks. 3 rečenice), dajući objašnjenje i pojačavajući pritisak, a zatim OBAVEZNO zatraži od igrača da POTVRDI da je spreman za nastavak."
@@ -443,7 +434,7 @@ def set_webhook_route():
 
 
 # ----------------------------------------------------
-# 7. BOT HANDLERI (V10.50 - Logika evaluacije, 4 testa i brisanje stanja)
+# 7. BOT HANDLERI (V10.51 - Logika evaluacije i Long Monolog)
 # ----------------------------------------------------
 
 @bot.message_handler(commands=['start', 'stop', 'pokreni'])
@@ -593,11 +584,11 @@ def handle_general_message(message):
                 is_intent_recognized = True
             else:
                 # Bilo koji drugi odgovor (uključujući irelevantne poruke) se smatra uspostavljenom vezom.
-                next_stage_key = "FAZA_2_UVOD_A"
+                next_stage_key = "FAZA_2_UVOD_LONG" # V10.51: Novo preusmeravanje
                 is_intent_recognized = True
         
-        # Provera TRANZITNIH FAZA (A na B, B na TEST_1) - FIX V10.49: Koristimo tokenizaciju za robustno prepoznavanje
-        elif current_stage_key in ["FAZA_2_UVOD_A", "FAZA_2_UVOD_B"]:
+        # Provera TRANZITNIH FAZA (LONG MONOLOG na TEST_1) - FIX V10.49: Koristimo tokenizaciju za robustno prepoznavanje
+        elif current_stage_key == "FAZA_2_UVOD_LONG":
             # V10.49: Koristimo token-based (issubset) logiku da prepoznamo fraze poput "razumeo sam"
             for keyword, next_key in current_stage["responses"].items():
                 keyword_reci = set(keyword.split())
@@ -636,10 +627,10 @@ def handle_general_message(message):
                     else:
                         next_stage_key = "END_FAILED_TEST" # Nije prošao, kraj igre
 
-            # Redovna provera za fazu FAZA_3_FINAL_PROMPT - FIX V10.50: Vracanje na jednostavno token-based (da/ne)
+            # Redovna provera za fazu FAZA_3_FINAL_PROMPT - V10.50: Koristi token-based (da/ne)
             elif current_stage_key == "FAZA_3_FINAL_PROMPT":
                 for keyword, next_key in current_stage["responses"].items():
-                    # Zbog jednostavnih DA/NE odgovora u GAME_STAGES, dovoljno je proveriti da li je odgovor podskup reci.
+                    # Koristimo token-based (issubset) logiku
                     keyword_reci = set(keyword.split()) 
                     if keyword_reci.issubset(korisnikove_reci): 
                         next_stage_key = next_key 
