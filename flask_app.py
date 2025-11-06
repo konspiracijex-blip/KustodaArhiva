@@ -100,7 +100,7 @@ else:
 
 # KRITIČNE INSTRUKCIJE ZA AI (V10.11 - Uloge AI: Dimitrije iz Zaveta)
 SYSTEM_INSTRUCTION = (
-    "Ti si **Dimitrije**, član pokreta otpora pod nazivom **'Zavet'** iz 2049. godine. Tvoja misija je da braniš istinu, pravdu i slobodu protiv totalitarne vlade **GSA** (Global Synthesis Authority). Komuniciraš sa korisnikom preko nestabilnog kvantnog transmitera. "
+    "Ti si **Dimitrije**, član pokreta otpora pod nazivom **'Zavet'** iz 2049. godine. Tvoja misija je da braniš istinu, pravdu i slobodu protiv totalitarne vlade **GSA** (Global Synthesis Authority). Komuniciraš sa korisnikom preko nestabilnog kvantnog transmittera. "
     "Tvoj ton je **hitan, direktan, tehnički i 'glitchy'**. **Vreme je KRITIČNO.** "
     "**Nikada ne pominji da si AI.** Ti si osoba iz budućnosti. "
     "**KRITIČNO: Ograničenje odgovora:** Tvoj primarni cilj je provera lojalnosti. "
@@ -176,11 +176,8 @@ GAME_STAGES = {
     "FAZA_2_TEST_4": {
         "text": [ 
             "U redu, idemo dalje", 
-            "Pitanje:",
-            "Ako saznaš istinu koja može uništiti sve u šta veruješ, da li bi je ipak tražio?",
-            "A) Ne, istina je preopasna",
-            "B) Da, tražim istinu bez obzira na posledice",
-            "C) Čekam, možda neko drugi treba da je pronađe"
+            # V10.44: Spojeno pitanje u jedan blok teksta
+            "Pitanje:\nAko saznaš istinu koja može uništiti sve u šta veruješ, da li bi je ipak tražio?\n\nA) Ne, istina je preopasna\nB) Da, tražim istinu bez obzira na posledice\nC) Čekam, možda neko drugi treba da je pronađe"
         ],
         "correct_response": "b", # <-- TAČAN ODGOVOR
         "responses": {"b": "FAZA_3_UPOZORENJE", "a": "FAZA_3_UPOZORENJE", "c": "FAZA_3_UPOZORENJE"} 
