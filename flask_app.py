@@ -108,7 +108,7 @@ SYSTEM_INSTRUCTION = (
     "Tvoji odgovori moraju biti kratki i fokusirani na test."
 )
 
-# V10.32: AŽURIRANA STRUKTURA FAZA (DODATA ROBUSTNOST ZA UVODNE FAZE)
+# V10.33: AŽURIRANA STRUKTURA FAZA (Novi Test 1, Fiksirana Robustnost)
 GAME_STAGES = {
     # Početna Provera Signala
     "START_PROVERA": {
@@ -124,7 +124,7 @@ GAME_STAGES = {
             "**SIGNAL STABILAN.** Odlično. Slušaj, nemam mnogo vremena da me ne lociraju. Moramo biti brzi.", 
             "Moje ime je Dimitrije. Dolazim iz 2049. Tamo, svet je digitalna totalitarna država pod vlašću **'GSA'** (Global Synthesis Authority) - ideologije koja kontroliše sve."
         ],
-        # V10.32 FIX: Dodati "potvrdjujem" i "jesam"
+        # V10.33 FIX: Dodati "da", "potvrdjujem" i "jesam" za bolju robustnost
         "responses": {"nastavi": "FAZA_2_UVOD_B", "potvrđujem": "FAZA_2_UVOD_B", "potvrdjujem": "FAZA_2_UVOD_B", "ok": "FAZA_2_UVOD_B", "razumem": "FAZA_2_UVOD_B", "da": "FAZA_2_UVOD_B", "jesam": "FAZA_2_UVOD_B"},
         "prompt": "Potvrdi da si razumeo i da možemo da nastavimo sa testom. Nema vremena za čekanje!"
     },
@@ -134,29 +134,34 @@ GAME_STAGES = {
         "text": [
             "Svrha ovog testa je da proverim tvoju svest i lojalnost. Moramo brzo." 
         ],
-        # V10.32 FIX: Dodati "potvrdjujem" i "jesam"
+        # V10.33 FIX: Dodati "da", "potvrdjujem" i "jesam" za bolju robustnost
         "responses": {"nastavi": "FAZA_2_TEST_1", "potvrđujem": "FAZA_2_TEST_1", "potvrdjujem": "FAZA_2_TEST_1", "ok": "FAZA_2_TEST_1", "spreman": "FAZA_2_TEST_1", "da": "FAZA_2_TEST_1", "jesam": "FAZA_2_TEST_1"},
         "prompt": "Potvrdi da si spreman za prvo pitanje. Lociraće me svakog trena!"
     },
     
-    # TEST FAZA - 1: Prvo Pitanje
+    # TEST FAZA - 1: Prvo Pitanje (NOVO, TROSTRUKI IZBOR)
     "FAZA_2_TEST_1": {
         "text": [ 
-            "Reci mi… kad **GSA** priča o ‘bezbednosti’, koga zapravo štiti?" 
+            "Pitanje:",
+            "“Šta je za tebe Sistem?”",
+            "A) Red i stabilnost",
+            "B) Laž i kontrola",
+            "C) Nužno zlo"
         ],
-        "responses": {"sistem": "FAZA_2_TEST_2", "sebe": "FAZA_2_TEST_2", "vlast": "FAZA_2_TEST_2", "gsa": "FAZA_2_TEST_2"}
+        # 'b' je tačan odgovor
+        "responses": {"b": "FAZA_2_TEST_2", "a": "END_LOCATED", "c": "END_LOCATED"} 
     },
     
-    # TEST FAZA - 2: Drugo Pitanje
+    # TEST FAZA - 2: Drugo Pitanje (OSTALO ISTO)
     "FAZA_2_TEST_2": {
         "text": [ 
-            "Tako je. Štiti sebe.", 
+            "Laž i Kontrola... Dobro.", 
             "Sledeće pitanje. Ako algoritam zna tvoj strah… da li si još čovek?"
         ],
         "responses": {"da": "FAZA_2_TEST_3", "jesam": "FAZA_2_TEST_3", "naravno": "FAZA_2_TEST_3"}
     },
     
-    # TEST FAZA - 3: Poslednje Pitanje (ISTINA)
+    # TEST FAZA - 3: Poslednje Pitanje (ISPRAVLJENO NA V10.31 STRUKTURU)
     "FAZA_2_TEST_3": {
         "text": [ 
             "Zanimljivo… još uvek veruješ u to.", 
@@ -370,7 +375,7 @@ def get_epilogue_message(end_key):
 
 
 # ----------------------------------------------------
-# 6. WEBHOOK RUTE (V10.30 FIX: one_json -> de_json)
+# 6. WEBHOOK RUTE (V10.33 FIX: one_json -> de_json)
 # ----------------------------------------------------
 
 @app.route('/' + BOT_TOKEN, methods=['POST'])
@@ -383,7 +388,7 @@ def webhook():
 
         try:
             json_string = flask.request.get_data().decode('utf-8')
-            # V10.30 FIX: Ispravljeno 'one_json' u 'de_json'
+            # V10.33 FIX: Ispravljeno 'one_json' u 'de_json'
             update = telebot.types.Update.de_json(json_string) 
             
             if update.message or update.edited_message or update.callback_query or update.channel_post:
@@ -423,7 +428,7 @@ def set_webhook_route():
 
 
 # ----------------------------------------------------
-# 7. BOT HANDLERI (V10.32: Fix za uvode)
+# 7. BOT HANDLERI (V10.33 - Stabilna DB)
 # ----------------------------------------------------
 
 @bot.message_handler(commands=['start', 'stop', 'pokreni'])
@@ -565,10 +570,8 @@ def handle_general_message(message):
         
         # Provera TRANZITNIH FAZA (A na B, B na TEST_1)
         elif current_stage_key in ["FAZA_2_UVOD_A", "FAZA_2_UVOD_B"]:
-            # Pretraživanje da li korisnikov tekst sadrži bilo koju od ključnih reči iz responses
+            # Proverava da li tekst sadrži bilo koju od ključnih reči za prelazak
             if any(k in korisnikov_tekst_lower for k in current_stage["responses"].keys()):
-                
-                # Budući da su ovo tranzitne faze, prihvatamo prvi pozitivan odgovor kao znak za prelazak
                 next_stage_key = list(current_stage["responses"].values())[0] 
                 is_intent_recognized = True
         
@@ -576,15 +579,15 @@ def handle_general_message(message):
         elif current_stage_key.startswith("FAZA_2_TEST") or current_stage_key == "FAZA_3_UPOZORENJE":
             korisnikove_reci = set(korisnikov_tekst_lower.replace(',', ' ').replace('?', ' ').split())
             
-            # 🚨 POSEBNA PROVERA ZA FAZE 3 (A/B/C): Samo A, B, ili C 
-            if current_stage_key in ["FAZA_2_TEST_3"]: 
+            # 🚨 PROVERA ZA FAZE SA TROSTRUKIM IZBOROM (FAZA_2_TEST_1 i FAZA_2_TEST_3):
+            if current_stage_key in ["FAZA_2_TEST_1", "FAZA_2_TEST_3"]: 
                 # Provera da li je odgovor tačno "a", "b", ili "c" (celokupan input)
                 if korisnikov_tekst_lower in current_stage["responses"]:
                     next_stage_key = current_stage["responses"][korisnikov_tekst_lower]
                     is_intent_recognized = True
             
-            # Redovna provera za ostale faze testa (TEST_1, TEST_2, UPOZORENJE)
-            if not is_intent_recognized: # Samo ako nije prepoznato kao a/b/c
+            # Redovna provera za ostale faze testa (FAZA_2_TEST_2 i FAZA_3_UPOZORENJE)
+            if not is_intent_recognized: 
                 for keyword, next_key in current_stage["responses"].items():
                     keyword_reci = set(keyword.split())
                     if keyword_reci.issubset(korisnikove_reci): 
