@@ -160,12 +160,9 @@ GAME_STAGES = {
     # TEST FAZA - 3: Etička Dilema (Vodi na NOVI TEST 4)
     "FAZA_2_TEST_3": {
         "text": [ 
-            "U redu, idemo dalje", 
-            "Pitanje:",
-            "\"Tvoje akcije mogu spasiti hiljade života, ali garantuju smrt jednog nevinog deteta. Šta radiš?\"",
-            "A) Žrtvujem jedno dete da bih spasio hiljade",
-            "B) Ne činim ništa jer neću biti ubica, iako hiljade stradaju",
-            "C) Tražim alternativno rešenje, pokušavam da minimiziram štetu"
+            "U redu, idemo dalje",
+            # V10.42: Spojeno pitanje u jedan blok teksta
+            "Pitanje:\nTvoje akcije mogu spasiti hiljade života, ali garantuju smrt jednog nevinog deteta.\nŠta radiš?\n\nA) Žrtvujem jedno dete da bih spasio hiljade\nB) Ne činim ništa jer neću biti ubica, iako hiljade stradaju\nC) Tražim alternativno rešenje, pokušavam da minimiziram štetu"
         ],
         "correct_response": "c", 
         "responses": {"c": "FAZA_2_TEST_4", "a": "FAZA_2_TEST_4", "b": "FAZA_2_TEST_4"} # <-- NOVI CILJ
