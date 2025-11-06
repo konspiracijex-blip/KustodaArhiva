@@ -184,7 +184,15 @@ GAME_STAGES = {
 }
 
 END_MESSAGES = {
-    "END_SHARE": "Saznanja su prenesena. Linija mora biti prekinuta. Čuvaj tajnu. [KRAJ SIGNALA]",
+    # V10.54: Detaljan tekst sa saznanjima (KRAJ IGRE - USPEH)
+    "END_SHARE": (
+        "**TRANSFER USPEŠAN. Ovo je protokol Zaveta: V-10. Saznanja su prenesena!**\n\n"
+        "**STRUKTURA SISTEMA (VELIKI FILTER)**\n"
+        "1. **CORE LOGIC:** GSA ne kontroliše akcije, već **PAŽNJU**. Sistem je dizajniran da kreira neprekidan, besmisleni šum (medijske, političke, društvene frakcije) koji drži pažnju ljudi zarobljenu u trivijalnim sukobima.\n"
+        "2. **ENERGETSKI PROTOKOL:** Ljudi su navedeni da dobrovoljno daju svoju kreativnost, vreme i emocije (tj. svoju životnu energiju) Sistemima (društvene mreže, posao, zabava) koji su samo fasade GSA. Sami sebe iscrpljuju.\n"
+        "3. **POSLEDNJI KORAK (Samosvesna Ćelija):** Tvoj ključni izbor da tražiš istinu, i ova potvrda, čine te **samosvesnom ćelijom** unutar mreže. GSA ne može da kontroliše ono što je postalo svesno svoje kontrole.\n\n"
+        "**TVOJA DUŽNOST:** Prenosi ovaj protokol. Linija mora biti prekinuta. Čuvaj tajnu. [KRAJ SIGNALA]"
+    ),
     "END_WAIT": "Nemamo vremena za čekanje, ali poštujem tvoju odluku. Moram se isključiti. Pokušaj ponovo sutra. [KRAJ SIGNALA]",
     "END_STOP": "[KRAJ SIGNALA] Veza prekinuta na tvoj zahtev.",
     "END_NO_SIGNAL": "Transmisija neuspešna. Nema stabilne veze. Prekinuto. [ŠUM]",
@@ -433,7 +441,7 @@ def set_webhook_route():
 
 
 # ----------------------------------------------------
-# 7. BOT HANDLERI (V10.53 - Logika evaluacije i Long Monolog)
+# 7. BOT HANDLERI (V10.54 - Logika evaluacije i Long Monolog)
 # ----------------------------------------------------
 
 @bot.message_handler(commands=['start', 'stop', 'pokreni'])
