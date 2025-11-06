@@ -440,7 +440,7 @@ def set_webhook_route():
 
 
 # ----------------------------------------------------
-# 7. BOT HANDLERI (V10.47 - Logika evaluacije, 4 testa i brisanje stanja)
+# 7. BOT HANDLERI (V10.48 - Logika evaluacije, 4 testa i brisanje stanja)
 # ----------------------------------------------------
 
 @bot.message_handler(commands=['start', 'stop', 'pokreni'])
@@ -552,7 +552,8 @@ def handle_general_message(message):
 
         # KRITIČNA PROVERA: Ako ne postoji igrač (stanje je obrisano)
         if not player or player.current_riddle.startswith("END_"):
-            send_msg(message, "Veza je prekinuta. Pokreni /start za novi pokušaj.") 
+            # V10.48: Uklanjanje eksplicitnog poziva na /start
+            send_msg(message, "Veza je prekinuta. Linija je sada neaktivna.") 
             return
 
         # V10.8: Provera vremenskog limita
