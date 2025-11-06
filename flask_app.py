@@ -84,7 +84,7 @@ def initialize_database():
 initialize_database()
 
 # ----------------------------------------------------
-# 4. AI KLIJENT I DATA (V10.11 - Korekcija otkrivanja Zaveta)
+# 4. AI KLIJENT I DATA (V10.18 - Ispravljena tranzicija A->B)
 # ----------------------------------------------------
 
 GEMINI_MODEL_NAME = 'gemini-2.5-flash' 
@@ -127,7 +127,8 @@ GAME_STAGES = {
             # Uklonjen Zavet - AI će ga otkriti samo ako je upitan
             "Moje ime je Dimitrije. Dolazim iz 2049. Tamo, svet je digitalna totalitarna država pod vlašću **'GSA'** (Global Synthesis Authority) - ideologije koja kontroliše sve."
         ],
-        "responses": {"nastavi": "FAZA_2_UVOD_B", "potvrđujem": "FAZA_2_UVOD_B", "ok": "FAZA_2_UVOD_B", "razumem": "FAZA_2_UVOD_B"},
+        # V10.18: Dodata reč 'spreman' u responses da bi se rešio problem u logu
+        "responses": {"nastavi": "FAZA_2_UVOD_B", "potvrđujem": "FAZA_2_UVOD_B", "ok": "FAZA_2_UVOD_B", "razumem": "FAZA_2_UVOD_B", "spreman": "FAZA_2_UVOD_B"}, 
         "prompt": "Potvrdi da si razumeo i da možemo da nastavimo sa testom. Nema vremena za čekanje!"
     },
     
@@ -137,7 +138,7 @@ GAME_STAGES = {
             # Uklonjena referenca na Zavet iz automatskog teksta
             "Svrha ovog testa je da proverim tvoju svest i lojalnost. Moramo brzo." 
         ],
-        "responses": {"nastavi": "FAZA_2_TEST_1", "potvrđujem": "FAZA_2_TEST_1", "ok": "FAZA_2_TEST_1", "spreman": "FAZA_2_TEST_1"},
+        "responses": {"nastavi": "FAZA_2_TEST_1", "potvrđujem": "FAZA_2_TEST_1", "ok": "FAZA_2_TEST_1", "spreman": "FAZA_2_TEST_1", "jesam": "FAZA_2_TEST_1"},
         "prompt": "Potvrdi da si spreman za prvo pitanje. Lociraće me svakog trena!"
     },
     
