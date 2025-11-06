@@ -39,7 +39,7 @@ except Exception as e:
 app = flask.Flask(__name__)
 
 # ----------------------------------------------------
-# 3. SQL ALCHEMY INICIJALIZACIJA (V10.14: Čista inicijalizacija)
+# 3. SQL ALCHEMY INICIJALIZACIJA (V10.15: PRIVREMENO VRAĆANJE MIGRACIJE)
 # ----------------------------------------------------
 
 Session = None
@@ -69,7 +69,12 @@ def initialize_database():
         Engine = create_engine(DATABASE_URL)
         Session = sessionmaker(bind=Engine)
         
-        # OBRISANE SU LINIJE: Base.metadata.drop_all(Engine) I ZAPIS O UPOZORENJU
+        # --- 🚨 KRITIČNO: PRIVREMENI BLOK ZA MIGRACIJU (V10.15) 🚨 ---
+        # Briše staru tabelu (bez start_time) i ponovo je kreira, rešavajući UndefinedColumn.
+        # OVO MORATE UKLONITI NAKON JEDNOG USPEŠNOG POKRETANJA!
+        Base.metadata.drop_all(Engine) 
+        logging.warning("!!! PRIVREMENO: STARA TABELA player_states JE OBRISANA RADI MIGRACIJE POLJA start_time. OBRISITE Base.metadata.drop_all LINIJU IZ KODA NAKON JEDNOG USPEŠNOG POKRETANJA!") 
+        # -----------------------------------------------------------
         
         # Kreira tabelu (ako ne postoji)
         Base.metadata.create_all(Engine) 
