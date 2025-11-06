@@ -39,7 +39,7 @@ except Exception as e:
 app = flask.Flask(__name__)
 
 # ----------------------------------------------------
-# 3. SQL ALCHEMY INICIJALIZACIJA (V10.23 - Konsolidovano)
+# 3. SQL ALCHEMY INICIJALIZACIJA
 # ----------------------------------------------------
 
 Session = None
@@ -82,7 +82,7 @@ def initialize_database():
 initialize_database()
 
 # ----------------------------------------------------
-# 4. AI KLIJENT I DATA (V10.25 - Refaktorisanje UVOD Faza)
+# 4. AI KLIJENT I DATA (V10.26 - AŽURIRANA FAZA IGRE)
 # ----------------------------------------------------
 
 GEMINI_MODEL_NAME = 'gemini-2.5-flash' 
@@ -108,7 +108,7 @@ SYSTEM_INSTRUCTION = (
     "Tvoji odgovori moraju biti kratki i fokusirani na test."
 )
 
-# V10.25: AŽURIRANA STRUKTURA FAZA (Uklonjena FAZA_2_UVOD_B)
+# V10.26: AŽURIRANA STRUKTURA FAZA (Uklonjena FAZA_2_UVOD_B, Vraćena A/B/C Pitanja)
 GAME_STAGES = {
     # Početna Provera Signala
     "START_PROVERA": {
@@ -119,19 +119,19 @@ GAME_STAGES = {
     },
     
     # UVODNA FAZA - A: Ko je Dimitrije i GSA -> Traži potvrdu za TEST
-    # V10.25: Spojena sa FAZA_2_UVOD_B
+    # V10.26: Uklonjena FAZA_2_UVOD_B, spojeno
     "FAZA_2_UVOD_A": {
         "text": [
             "**SIGNAL STABILAN.** Odlično. Slušaj, nemam mnogo vremena da me ne lociraju. Moramo biti brzi.", 
             "Moje ime je Dimitrije. Dolazim iz 2049. Tamo, svet je digitalna totalitarna država pod vlašću **'GSA'** (Global Synthesis Authority) - ideologije koja kontroliše sve.",
             "Svrha ovog testa je da proverim tvoju svest i lojalnost. Moramo brzo." # Dodat tekst iz UVOD_B
         ],
-        # V10.25: Prelaz direktno na TEST_1
+        # V10.26: Prelaz direktno na TEST_1 sa više ključnih reči za potvrdu
         "responses": {"nastavi": "FAZA_2_TEST_1", "potvrđujem": "FAZA_2_TEST_1", "ok": "FAZA_2_TEST_1", "razumem": "FAZA_2_TEST_1", "jesam": "FAZA_2_TEST_1", "moze": "FAZA_2_TEST_1", "kreni": "FAZA_2_TEST_1", "pitaj": "FAZA_2_TEST_1", "naravno": "FAZA_2_TEST_1", "da": "FAZA_2_TEST_1", "spreman": "FAZA_2_TEST_1"}, 
         "prompt": "Potvrdi da si spreman za prvo pitanje. Lociraće me svakog trena!" # Prompt ostaje
     },
     
-    # TEST FAZA - 1: Prvo Pitanje
+    # TEST FAZA - 1: Prvo Pitanje (A/B/C format)
     "FAZA_2_TEST_1": {
         "text": [ 
             "Šta je za tebe Sistem?",
@@ -144,10 +144,10 @@ GAME_STAGES = {
         "responses": {"b": "FAZA_2_TEST_2", "a": "END_LOCATED", "c": "END_LOCATED"} 
     },
     
-    # TEST FAZA - 2: Drugo Pitanje
+    # TEST FAZA - 2: Drugo Pitanje (A/B/C format)
     "FAZA_2_TEST_2": {
         "text": [ 
-            "U redu, idemo dalje.", # <-- NOVI NEUTRALNI UVOD
+            "U redu, idemo dalje.", 
             "Šta za tebe znači sloboda?",
             "A) Odsustvo granica i pravila",
             "B) Odluka koja nosi posledice",
@@ -157,10 +157,10 @@ GAME_STAGES = {
         "responses": {"b": "FAZA_2_TEST_3", "a": "END_LOCATED", "c": "END_LOCATED"}
     },
     
-    # TEST FAZA - 3: Poslednje Pitanje
+    # TEST FAZA - 3: Poslednje Pitanje (otvoreno)
     "FAZA_2_TEST_3": {
         "text": [ 
-            "U redu, idemo dalje.", # <-- NOVI NEUTRALNI UVOD
+            "U redu, idemo dalje.",
             "Poslednja provera. Odgovori mi iskreno. Da li bi žrtvovao komfor — za istinu?"
         ],
         "responses": {"da": "FAZA_3_UPOZORENJE", "bih": "FAZA_3_UPOZORENJE", "žrtvovao bih": "FAZA_3_UPOZORENJE", "zrtvovao bih": "FAZA_3_UPOZORENJE"}
@@ -247,27 +247,23 @@ def send_msg(message, text: Union[str, List[str]], add_warning=False, elapsed_ti
     if not bot: return
     try:
         
-        # V10.8: Dodavanje upozorenja na poslednju poruku u sekvenci
         warning_suffix = ""
         if add_warning and elapsed_time > 0:
             warning_suffix = get_time_warning_suffix(elapsed_time)
 
         if isinstance(text, list):
-            # Šalje jednu poruku za drugom sa pauzom
-            for i, part in enumerate(text):
-                final_part = part
-                # Dodaje upozorenje samo na poslednju poruku u nizu
-                if i == len(text) - 1:
-                    final_part += warning_suffix # Upozorenje se dodaje na poslednji element liste
-                
-                bot.send_chat_action(message.chat.id, 'typing')
-                time.sleep(random.uniform(1.0, 2.5)) 
-                bot.send_message(message.chat.id, final_part, parse_mode='Markdown')
+            # V10.26: Spajamo sve poruke u jednu, razdvojene sa dva nova reda
+            final_text_content = "\n\n".join(text) 
         else:
-            final_text = text + warning_suffix
-            bot.send_chat_action(message.chat.id, 'typing')
-            time.sleep(random.uniform(1.2, 2.8))
-            bot.send_message(message.chat.id, final_text, parse_mode='Markdown')
+            final_text_content = text
+            
+        final_text = final_text_content + warning_suffix
+
+        # Šaljemo JEDNU poruku
+        bot.send_chat_action(message.chat.id, 'typing')
+        # Zadržavamo jednu pauzu simulacije kucanja
+        time.sleep(random.uniform(1.2, 2.8)) 
+        bot.send_message(message.chat.id, final_text, parse_mode='Markdown')
             
     except Exception as e:
         # V10.6: Dodata provera za Bad Request (Markdown greške)
@@ -276,8 +272,8 @@ def send_msg(message, text: Union[str, List[str]], add_warning=False, elapsed_ti
             try:
                 # Pokušaj bez Markdowna
                 if isinstance(text, list):
-                    # Slanje samo poslednjeg dela bez Markdowna
-                    bot.send_message(message.chat.id, text[-1] + warning_suffix, parse_mode=None)
+                    # V10.26: Šalje celokupan sadržaj bez Markdowna, kao rezervnu opciju
+                    bot.send_message(message.chat.id, final_text_content + warning_suffix, parse_mode=None)
                 else:
                     bot.send_message(message.chat.id, text + warning_suffix, parse_mode=None)
             except Exception as e2:
@@ -313,8 +309,8 @@ def generate_ai_response(user_input, player, current_stage_key):
 
     
     # Finalni prompt sa zadatkom za AI
-    # V10.7: Ako je tranzitna faza, AI mora tražiti potvrdu (nastavak), a ne ponavljanje pitanja testa.
-    is_transitional_phase = current_stage_key in ["FAZA_2_UVOD_A"] # V10.25: Uklonjeno FAZA_2_UVOD_B
+    # V10.26: Samo FAZA_2_UVOD_A je tranzitna faza
+    is_transitional_phase = current_stage_key in ["FAZA_2_UVOD_A"] 
     
     if is_transitional_phase:
         final_prompt_task = "Generiši kratak odgovor (maks. 3 rečenice), dajući objašnjenje i pojačavajući pritisak, a zatim OBAVEZNO zatraži od igrača da POTVRDI da je spreman za nastavak."
@@ -382,7 +378,7 @@ def webhook():
         try:
             json_string = flask.request.get_data().decode('utf-8')
             
-            update = telebot.types.Update.de_json(json_string)
+            update = telebot.types.Update.one_json(json_string)
             
             # Procesira sve tipove update-a
             bot.process_new_updates([update])
@@ -419,7 +415,7 @@ def set_webhook_route():
 
 
 # ----------------------------------------------------
-# 7. BOT HANDLERI (V10.25 - Uklonjen FAZA_2_UVOD_B)
+# 7. BOT HANDLERI (V10.26 - Uprošćena logika tranzicije)
 # ----------------------------------------------------
 
 @bot.message_handler(commands=['start', 'stop', 'pokreni'])
@@ -443,7 +439,7 @@ def handle_commands(message):
                 messages_to_send.extend(glitch_lines)
                 messages_to_send.append(start_message_raw)
                 
-                # U startu nema upozorenja o vremenu
+                # V10.26: send_msg sada automatski spaja listu
                 send_msg(message, messages_to_send) 
             return
 
@@ -474,7 +470,7 @@ def handle_commands(message):
 
             session.commit()
             
-            # V10.7: Slanje samo Glitcha i Provere Signala (DB verzija)
+            # V10.7: Slanje Glitcha i Provere Signala
             start_message_raw = GAME_STAGES["START_PROVERA"]["text"][0]
             glitch_lines = generate_glitch_text(length=30, max_lines=4).strip().split('\n')
             
@@ -482,6 +478,7 @@ def handle_commands(message):
             messages_to_send.extend(glitch_lines)
             messages_to_send.append(start_message_raw)
             
+            # V10.26: send_msg sada automatski spaja listu
             send_msg(message, messages_to_send)
 
 
@@ -498,7 +495,6 @@ def handle_commands(message):
         elif message.text.lower() in ['/pokreni', 'pokreni']:
             send_msg(message, "Komande nisu potrebne. Odgovori direktno na poruke. Ako želiš novi početak, koristi /start.")
     except Exception as e:
-        # DB log greške ostaje, ali sada ne bi trebalo da se odnosi na UndefinedColumn
         logging.error(f"GREŠKA U BAZI (handle_commands): {e}")
         if session: session.rollback()
         send_msg(message, "Žao mi je, došlo je do greške u sistemu pri komandi. (DB FAILED)")
@@ -560,19 +556,24 @@ def handle_general_message(message):
                 next_stage_key = "END_NO_SIGNAL" 
                 is_intent_recognized = True
         
-        # Provera TRANZITNIH FAZA (V10.25: Samo FAZA_2_UVOD_A ostaje)
+        # Provera TRANZITNE FAZE (V10.26: Samo FAZA_2_UVOD_A)
         elif current_stage_key in ["FAZA_2_UVOD_A"]:
             if any(k in korisnikov_tekst_lower for k in current_stage["responses"].keys()):
-                next_stage_key = list(current_stage["responses"].values())[0] 
-                is_intent_recognized = True
+                next_stage_key = current_stage["responses"].get(korisnikov_tekst_lower, None)
+                if not next_stage_key: # Omogućava i proveru da li je deo odgovora ključna reč
+                    for k, v in current_stage["responses"].items():
+                        if k in korisnikov_tekst_lower:
+                            next_stage_key = v
+                            break
+                is_intent_recognized = next_stage_key is not None
         
         # Provera TEST FAZA (TEST_1, TEST_2, TEST_3, UPOZORENJE)
         elif current_stage_key.startswith("FAZA_2_TEST") or current_stage_key == "FAZA_3_UPOZORENJE":
             korisnikove_reci = set(korisnikov_tekst_lower.replace(',', ' ').replace('?', ' ').split())
             
-            # 🚨 POSEBNA PROVERA ZA FAZE 1 i 2: Samo A, B, ili C
+            # 🚨 POSEBNA PROVERA ZA FAZE 1 i 2 (A/B/C): Samo A, B, ili C
             if current_stage_key in ["FAZA_2_TEST_1", "FAZA_2_TEST_2"]:
-                # Provera da li je odgovor tačno "a", "b", ili "c"
+                # Provera da li je odgovor tačno "a", "b", ili "c" (celokupan input)
                 if korisnikov_tekst_lower in current_stage["responses"]:
                     next_stage_key = current_stage["responses"][korisnikov_tekst_lower]
                     is_intent_recognized = True
@@ -592,7 +593,6 @@ def handle_general_message(message):
             
             if next_stage_key.startswith("END_"):
                 epilogue_message = get_epilogue_message(next_stage_key)
-                # Završne poruke ne treba da imaju upozorenje
                 send_msg(message, epilogue_message)
                 player.is_disqualified = True 
             else:
@@ -601,12 +601,12 @@ def handle_general_message(message):
                     
                     messages_to_send = list(next_stage_data["text"])
                     
-                    # Ako je nova faza TRANZITNA (samo FAZA_2_UVOD_A ostaje), dodaje se PROMPT kao POSLEDNJA poruka u nizu
+                    # V10.26: Ako je nova faza TRANZITNA, OBAVEZNO dodajemo PROMPT na kraj liste poruka
                     if next_stage_key in ["FAZA_2_UVOD_A"]:
                         prompt_text = get_required_phrase(next_stage_key)
-                        messages_to_send.append(prompt_text) # Dodajemo prompt kao poslednji
+                        messages_to_send.append(prompt_text) 
                     
-                    # Šaljemo celu sekvencu. send_msg će primeniti upozorenje o vremenu SAMO na poslednji element liste.
+                    # V10.26: send_msg spaja listu u jednu poruku i dodaje upozorenje
                     send_msg(message, messages_to_send, add_warning=True, elapsed_time=elapsed_time)
                         
                 else:
@@ -618,7 +618,7 @@ def handle_general_message(message):
             player = updated_player 
             
             if ai_response:
-                # Opciona poruka od AI-ja se uvek šalje sa upozorenjem ako je potrebno
+                # Opciona poruka od AI-ja se uvek šalje sa upozorenjem
                 send_msg(message, ai_response, add_warning=True, elapsed_time=elapsed_time)
             else:
                  send_msg(message, "Veza je nestabilna. Moramo brzo! Ponovi odgovor!")
