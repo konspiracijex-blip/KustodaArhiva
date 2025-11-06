@@ -39,7 +39,7 @@ except Exception as e:
 app = flask.Flask(__name__)
 
 # ----------------------------------------------------
-# 3. SQL ALCHEMY INICIJALIZACIJA (V10.8 - Dodan start_time)
+# 3. SQL ALCHEMY INICIJALIZACIJA (V10.13: Drop/Create za migraciju)
 # ----------------------------------------------------
 
 Session = None
@@ -69,10 +69,19 @@ def initialize_database():
         Engine = create_engine(DATABASE_URL)
         Session = sessionmaker(bind=Engine)
         
+        # --------------------------------------------------------------------------------------
+        # !!! PRIVREMENA MIGRACIJSKA LINIJA (V10.13) - OBRISITE NAKON JEDNOG USPEŠNOG POKRETANJA! 
+        # Ova linija briše staru tabelu da bi dodala start_time kolonu.
+        Base.metadata.drop_all(Engine) 
+        logging.warning("!!! PRIVREMENO: STARA TABELA player_states JE OBRISANA RADI MIGRACIJE POLJA start_time. OBRISITE Base.metadata.drop_all LINIJU IZ KODA NAKON JEDNOG USPEŠNOG POKRETANJA!")
+        # --------------------------------------------------------------------------------------
+
+        # Kreira novu tabelu sa svim poljima, uključujući start_time
         Base.metadata.create_all(Engine) 
         
         logging.info("Baza podataka i modeli uspešno inicijalizovani i tabele kreirane.")
     except Exception as e:
+        # Greška pri inicijalizaciji baze se i dalje loguje
         logging.error(f"FATALNA GREŠKA: Neuspešno kreiranje/povezivanje baze. Greška: {e}") 
         Session = None
 
@@ -416,7 +425,7 @@ def set_webhook_route():
 
 
 # ----------------------------------------------------
-# 7. BOT HANDLERI (V10.11 - Korekcija otkrivanja Zaveta)
+# 7. BOT HANDLERI (V10.13 - Migracija)
 # ----------------------------------------------------
 
 @bot.message_handler(commands=['start', 'stop', 'pokreni'])
@@ -494,6 +503,7 @@ def handle_commands(message):
         elif message.text.lower() in ['/pokreni', 'pokreni']:
             send_msg(message, "Komande nisu potrebne. Odgovori direktno na poruke. Ako želiš novi početak, koristi /start.")
     except Exception as e:
+        # V10.13: Ovi logovi su očekivani nakon DROP TABLE, ali trebalo bi da nestanu nakon migracije
         logging.error(f"GREŠKA U BAZI (handle_commands): {e}")
         if session: session.rollback()
         send_msg(message, "Žao mi je, došlo je do greške u sistemu pri komandi. (DB FAILED)")
@@ -616,30 +626,4 @@ def handle_general_message(message):
         if session: session.rollback() 
         send_msg(message, "Žao mi je, došlo je do kritične greške u prijemu poruke. Veza je nestabilna. (DB FAILED)")
     finally:
-        if session: session.close()
-
-
-# ----------------------------------------------------
-# 8. POKRETANJE APLIKACIJE (Isto kao V9.4)
-# ----------------------------------------------------
-
-if __name__ != '__main__':
-    initialize_database() 
-    
-    if BOT_TOKEN != "DUMMY:TOKEN_FAIL":
-        webhook_url_with_token = WEBHOOK_URL.rstrip('/') + '/' + BOT_TOKEN
-        
-        try:
-            bot.remove_webhook()
-            success = bot.set_webhook(url=webhook_url_with_token)
-            
-            if success:
-                 logging.info(f"Webhook uspešno postavljen: {webhook_url_with_token}")
-            else:
-                 logging.error(f"Neuspešno postavljanje Webhooka. Telegram API odbio zahtev.")
-        except ApiTelegramException as e:
-            logging.critical(f"Kritična greška pri postavljanju Webhooka (API): {e}. Proverite token.")
-        except Exception as e:
-            logging.critical(f"Kritična nepoznata greška pri postavljanju Webhooka: {e}")
-    else:
-        logging.critical("Webhook inicijalizacija preskočena jer BOT_TOKEN nedostaje. Proverite Render.")
+        if session: session
