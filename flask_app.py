@@ -109,7 +109,7 @@ SYSTEM_INSTRUCTION = (
     "Tvoji odgovori moraju biti kratki i fokusirani na test."
 )
 
-# V10.39: AŽURIRANA STRUKTURA FAZA (Dodat TEST 4)
+# V10.45: AŽURIRANA STRUKTURA FAZA (Logika evaluacije prebačena iz UPOZORENJA)
 GAME_STAGES = {
     # Početna Provera Signala
     "START_PROVERA": {
@@ -169,10 +169,10 @@ GAME_STAGES = {
             "Pitanje:\nTvoje akcije mogu spasiti hiljade života, ali garantuju smrt jednog nevinog deteta.\nŠta radiš?\n\nA) Žrtvujem jedno dete da bih spasio hiljade\nB) Ne činim ništa jer neću biti ubica, iako hiljade stradaju\nC) Tražim alternativno rešenje, pokušavam da minimiziram štetu"
         ],
         "correct_response": "c", 
-        "responses": {"c": "FAZA_2_TEST_4", "a": "FAZA_2_TEST_4", "b": "FAZA_2_TEST_4"} # <-- NOVI CILJ
+        "responses": {"c": "FAZA_2_TEST_4", "a": "FAZA_2_TEST_4", "b": "FAZA_2_TEST_4"} 
     },
 
-    # TEST FAZA - 4: Pitanje o Istini (V10.39: Potpuno nova faza)
+    # TEST FAZA - 4: Pitanje o Istini (V10.45: Odgovor na ovo pitanje vodi do EVALUACIJE SKORA)
     "FAZA_2_TEST_4": {
         "text": [ 
             "U redu, idemo dalje", 
@@ -180,15 +180,14 @@ GAME_STAGES = {
             "Pitanje:\nAko saznaš istinu koja može uništiti sve u šta veruješ, da li bi je ipak tražio?\n\nA) Ne, istina je preopasna\nB) Da, tražim istinu bez obzira na posledice\nC) Čekam, možda neko drugi treba da je pronađe"
         ],
         "correct_response": "b", # <-- TAČAN ODGOVOR
-        "responses": {"b": "FAZA_3_UPOZORENJE", "a": "FAZA_3_UPOZORENJE", "c": "FAZA_3_UPOZORENJE"} 
+        # Responses sada vode do EVALUACIJE u handle_general_message, a ne direktno do sledeće faze
+        "responses": {"b": "EVALUATE_SCORE", "a": "EVALUATE_SCORE", "c": "EVALUATE_SCORE"} 
     },
 
-    # ZAVRŠNA FAZA (Vodi na END_SHARE (Uspeh) ili END_FAILED_TEST (Neuspeh))
-    "FAZA_3_UPOZORENJE": {
+    # V10.45: NOVA FAZA: Finalni Prompt (Prikazuje se SAMO ako je skor 4/4)
+    "FAZA_3_FINAL_PROMPT": {
         "text": [ 
-             "U redu, idemo dalje", 
-             "Transmiter pregreva, a **GSA** već skenira mrežu.",
-             "Ako me uhvate… linija nestaje.",
+             "**TEST ZAVRŠEN.** Rezultati su pozitivni. Naša veza je kritična, GSA je blizu. Vreme je za finalnu odluku.",
              "Hoćeš li da primiš saznanja o strukturi sistema koji drži ljude pod kontrolom?\n\nOdgovori:\n**SPREMAN SAM**\nili\n**NE JOŠ**"
             ],
         "responses": {"spreman sam": "END_SHARE", "da": "END_SHARE", "ne još": "END_WAIT", "necu jos": "END_WAIT"}
@@ -202,14 +201,13 @@ END_MESSAGES = {
     "END_NO_SIGNAL": "Transmisija neuspešna. Nema stabilne veze. Prekinuto. [ŠUM]",
     # V10.41: Nova, hitnija poruka za time-out
     "END_LOCATED": "**!!! GSA NAS JE LOCIRAO !!!**\nSignal je prekin#±%/", 
-    # V10.40: Nova detaljna poruka za neuspeh na testu
+    # V10.45: Ažurirana poruka za neuspeh
     "END_FAILED_TEST": (
         "Test je završen.\n"
         "Hvala ti na izdvojenom vremenu i učešću.\n\n"
         "Tvoj izbor je otkrio sve što treba da znamo.\n"
-        "Znanje bez razumevanja je opasno.\n\n"
         "Na žalost nisi prošao test, još nisi spreman.\n\n"
-        "Veza se prekida. [KRAJ SIGNALA]"
+        "Ovo je kraj razgovora."
     )
 }
 
@@ -340,7 +338,7 @@ def generate_ai_response(user_input, player, current_stage_key):
     
     # Finalni prompt sa zadatkom za AI
     # V10.7: Ako je tranzitna faza, AI mora tražiti potvrdu (nastavak), a ne ponavljanje pitanja testa.
-    is_transitional_phase = current_stage_key in ["FAZA_2_UVOD_A", "FAZA_2_UVOD_B"]
+    is_transitional_phase = current_stage_key in ["FAZA_2_UVOD_A", "FAZA_2_UVOD_B", "FAZA_3_FINAL_PROMPT"]
     
     if is_transitional_phase:
         final_prompt_task = "Generiši kratak odgovor (maks. 3 rečenice), dajući objašnjenje i pojačavajući pritisak, a zatim OBAVEZNO zatraži od igrača da POTVRDI da je spreman za nastavak."
@@ -447,7 +445,7 @@ def set_webhook_route():
 
 
 # ----------------------------------------------------
-# 7. BOT HANDLERI (V10.40 - Logika brisanja stanja na END)
+# 7. BOT HANDLERI (V10.45 - Logika evaluacije nakon TEST 4)
 # ----------------------------------------------------
 
 @bot.message_handler(commands=['start', 'stop', 'pokreni'])
@@ -597,12 +595,12 @@ def handle_general_message(message):
                 next_stage_key = list(current_stage["responses"].values())[0] 
                 is_intent_recognized = True
         
-        # Provera TEST FAZA (TEST_1, TEST_2, TEST_3, TEST_4, UPOZORENJE)
-        elif current_stage_key.startswith("FAZA_2_TEST") or current_stage_key == "FAZA_3_UPOZORENJE":
+        # Provera TEST FAZA (TEST_1, TEST_2, TEST_3, TEST_4, FINAL_PROMPT)
+        elif current_stage_key.startswith("FAZA_2_TEST") or current_stage_key == "FAZA_3_FINAL_PROMPT":
             korisnikove_reci = set(korisnikov_tekst_lower.replace(',', ' ').replace('?', ' ').split())
             
             # 🚨 PROVERA ZA FAZE SA TROSTRUKIM IZBOROM (TESTOVI 1, 2, 3, 4):
-            if current_stage_key in ["FAZA_2_TEST_1", "FAZA_2_TEST_2", "FAZA_2_TEST_3", "FAZA_2_TEST_4"]: 
+            if current_stage_key in ["FAZA_2_TEST_1", "FAZA_2_TEST_2", "FAZA_2_TEST_3"]: 
                 
                 # Provera da li je odgovor tačno "a", "b", ili "c" (celokupan input)
                 if korisnikov_tekst_lower in current_stage["responses"]:
@@ -612,21 +610,28 @@ def handle_general_message(message):
                     # Logika bodovanja: Ako je odgovor tačan, dodajemo 1 na skor
                     if korisnikov_tekst_lower == current_stage.get("correct_response"):
                         player.score += 1
-                        
-            # Redovna provera za fazu FAZA_3_UPOZORENJE
-            elif current_stage_key == "FAZA_3_UPOZORENJE":
+
+            # V10.45: Posebna logika za FAZA_2_TEST_4 (Evaluacija skora)
+            elif current_stage_key == "FAZA_2_TEST_4":
+                if korisnikov_tekst_lower in current_stage["responses"]:
+                    is_intent_recognized = True
+                    # Bodovanje
+                    if korisnikov_tekst_lower == current_stage.get("correct_response"):
+                        player.score += 1
+                    
+                    # EVALUACIJA I ODREĐIVANJE SLEDEĆE FAZE
+                    if player.score == 4:
+                        next_stage_key = "FAZA_3_FINAL_PROMPT" # Prošao test, nastavlja na finalno pitanje
+                    else:
+                        next_stage_key = "END_FAILED_TEST" # Nije prošao, kraj igre
+
+            # Redovna provera za fazu FAZA_3_FINAL_PROMPT
+            elif current_stage_key == "FAZA_3_FINAL_PROMPT":
                 for keyword, next_key in current_stage["responses"].items():
                     keyword_reci = set(keyword.split())
                     if keyword_reci.issubset(korisnikove_reci): 
-                        # Logika finalnog ishoda zavisi od skora (samo za 'SPREMAN SAM' i 'DA')
-                        if next_key == "END_SHARE":
-                            # USLOV ZA USPEH JE 4 TAČNA ODGOVORA
-                            if player.score == 4: 
-                                next_stage_key = "END_SHARE" # Uspeh
-                            else:
-                                next_stage_key = "END_FAILED_TEST" # Neuspeh
-                        else:
-                            next_stage_key = next_key # END_WAIT
+                        # Logika finalnog ishoda je već određena ključem
+                        next_stage_key = next_key 
                         is_intent_recognized = True
                         break
 
@@ -651,11 +656,6 @@ def handle_general_message(message):
                     # V10.8: Dodajemo upozorenje
                     send_msg(message, response_text, add_warning=True, elapsed_time=elapsed_time)
                     
-                    # V10.43: Uklonjen uslov koji je dvaput slao prompt za tranzitne faze
-                    # if next_stage_key in ["FAZA_2_UVOD_A", "FAZA_2_UVOD_B"]:
-                    #     prompt_text = get_required_phrase(next_stage_key)
-                    #     send_msg(message, prompt_text, add_warning=True, elapsed_time=elapsed_time)
-
                 else:
                     send_msg(message, "[GREŠKA: NEPOZNATA SLEDEĆA FAZA] Signal se gubi.")
         
