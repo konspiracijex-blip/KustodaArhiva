@@ -108,7 +108,7 @@ SYSTEM_INSTRUCTION = (
     "Tvoji odgovori moraju biti kratki i fokusirani na test."
 )
 
-# V10.31: AŽURIRANA STRUKTURA FAZA (DODATA REČ "DA" U UVODNE FAZE)
+# V10.32: AŽURIRANA STRUKTURA FAZA (DODATA ROBUSTNOST ZA UVODNE FAZE)
 GAME_STAGES = {
     # Početna Provera Signala
     "START_PROVERA": {
@@ -124,8 +124,8 @@ GAME_STAGES = {
             "**SIGNAL STABILAN.** Odlično. Slušaj, nemam mnogo vremena da me ne lociraju. Moramo biti brzi.", 
             "Moje ime je Dimitrije. Dolazim iz 2049. Tamo, svet je digitalna totalitarna država pod vlašću **'GSA'** (Global Synthesis Authority) - ideologije koja kontroliše sve."
         ],
-        # V10.31 FIX: Dodata reč "da"
-        "responses": {"nastavi": "FAZA_2_UVOD_B", "potvrđujem": "FAZA_2_UVOD_B", "ok": "FAZA_2_UVOD_B", "razumem": "FAZA_2_UVOD_B", "da": "FAZA_2_UVOD_B"},
+        # V10.32 FIX: Dodati "potvrdjujem" i "jesam"
+        "responses": {"nastavi": "FAZA_2_UVOD_B", "potvrđujem": "FAZA_2_UVOD_B", "potvrdjujem": "FAZA_2_UVOD_B", "ok": "FAZA_2_UVOD_B", "razumem": "FAZA_2_UVOD_B", "da": "FAZA_2_UVOD_B", "jesam": "FAZA_2_UVOD_B"},
         "prompt": "Potvrdi da si razumeo i da možemo da nastavimo sa testom. Nema vremena za čekanje!"
     },
     
@@ -134,8 +134,8 @@ GAME_STAGES = {
         "text": [
             "Svrha ovog testa je da proverim tvoju svest i lojalnost. Moramo brzo." 
         ],
-        # V10.31 FIX: Dodata reč "da"
-        "responses": {"nastavi": "FAZA_2_TEST_1", "potvrđujem": "FAZA_2_TEST_1", "ok": "FAZA_2_TEST_1", "spreman": "FAZA_2_TEST_1", "da": "FAZA_2_TEST_1"},
+        # V10.32 FIX: Dodati "potvrdjujem" i "jesam"
+        "responses": {"nastavi": "FAZA_2_TEST_1", "potvrđujem": "FAZA_2_TEST_1", "potvrdjujem": "FAZA_2_TEST_1", "ok": "FAZA_2_TEST_1", "spreman": "FAZA_2_TEST_1", "da": "FAZA_2_TEST_1", "jesam": "FAZA_2_TEST_1"},
         "prompt": "Potvrdi da si spreman za prvo pitanje. Lociraće me svakog trena!"
     },
     
@@ -156,7 +156,7 @@ GAME_STAGES = {
         "responses": {"da": "FAZA_2_TEST_3", "jesam": "FAZA_2_TEST_3", "naravno": "FAZA_2_TEST_3"}
     },
     
-    # TEST FAZA - 3: Poslednje Pitanje (ISTINA - V10.30)
+    # TEST FAZA - 3: Poslednje Pitanje (ISTINA)
     "FAZA_2_TEST_3": {
         "text": [ 
             "Zanimljivo… još uvek veruješ u to.", 
@@ -423,7 +423,7 @@ def set_webhook_route():
 
 
 # ----------------------------------------------------
-# 7. BOT HANDLERI (V10.31: Fix za uvode)
+# 7. BOT HANDLERI (V10.32: Fix za uvode)
 # ----------------------------------------------------
 
 @bot.message_handler(commands=['start', 'stop', 'pokreni'])
@@ -564,12 +564,11 @@ def handle_general_message(message):
                 is_intent_recognized = True
         
         # Provera TRANZITNIH FAZA (A na B, B na TEST_1)
-        # V10.31: Zbog AI logike, ove fraze se nalaze u celom tekstu, npr. 'spreman sam' ili samo 'da'
         elif current_stage_key in ["FAZA_2_UVOD_A", "FAZA_2_UVOD_B"]:
+            # Pretraživanje da li korisnikov tekst sadrži bilo koju od ključnih reči iz responses
             if any(k in korisnikov_tekst_lower for k in current_stage["responses"].keys()):
                 
-                # Dodatni uslov da bi se izbeglo parcijalno prepoznavanje u dugačkim rečenicama (iako neophodan samo za prva 2 testa)
-                # Za ovu fazu, 'da' ili 'spreman' je dovoljno
+                # Budući da su ovo tranzitne faze, prihvatamo prvi pozitivan odgovor kao znak za prelazak
                 next_stage_key = list(current_stage["responses"].values())[0] 
                 is_intent_recognized = True
         
@@ -577,7 +576,7 @@ def handle_general_message(message):
         elif current_stage_key.startswith("FAZA_2_TEST") or current_stage_key == "FAZA_3_UPOZORENJE":
             korisnikove_reci = set(korisnikov_tekst_lower.replace(',', ' ').replace('?', ' ').split())
             
-            # 🚨 POSEBNA PROVERA ZA FAZE 3 (A/B/C): Samo A, B, ili C (V10.30)
+            # 🚨 POSEBNA PROVERA ZA FAZE 3 (A/B/C): Samo A, B, ili C 
             if current_stage_key in ["FAZA_2_TEST_3"]: 
                 # Provera da li je odgovor tačno "a", "b", ili "c" (celokupan input)
                 if korisnikov_tekst_lower in current_stage["responses"]:
