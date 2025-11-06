@@ -39,7 +39,7 @@ except Exception as e:
 app = flask.Flask(__name__)
 
 # ----------------------------------------------------
-# 3. SQL ALCHEMY INICIJALIZACIJA (V10.15: PRIVREMENO VRAĆANJE MIGRACIJE)
+# 3. SQL ALCHEMY INICIJALIZACIJA (V10.17 - Uklonjen Migracioni Blok)
 # ----------------------------------------------------
 
 Session = None
@@ -69,14 +69,9 @@ def initialize_database():
         Engine = create_engine(DATABASE_URL)
         Session = sessionmaker(bind=Engine)
         
-        # --- 🚨 KRITIČNO: PRIVREMENI BLOK ZA MIGRACIJU (V10.15) 🚨 ---
-        # Briše staru tabelu (bez start_time) i ponovo je kreira, rešavajući UndefinedColumn.
-        # OVO MORATE UKLONITI NAKON JEDNOG USPEŠNOG POKRETANJA!
-        Base.metadata.drop_all(Engine) 
-        logging.warning("!!! PRIVREMENO: STARA TABELA player_states JE OBRISANA RADI MIGRACIJE POLJA start_time. OBRISITE Base.metadata.drop_all LINIJU IZ KODA NAKON JEDNOG USPEŠNOG POKRETANJA!") 
-        # -----------------------------------------------------------
+        # --- 🚨 PRIVREMENI BLOK ZA MIGRACIJU JE UKLONJEN 🚨 ---
+        # Tabele se kreiraju samo ako ne postoje (Base.metadata.create_all)
         
-        # Kreira tabelu (ako ne postoji)
         Base.metadata.create_all(Engine) 
         
         logging.info("Baza podataka i modeli uspešno inicijalizovani i tabele kreirane.")
@@ -373,7 +368,7 @@ def get_epilogue_message(end_key):
 
 
 # ----------------------------------------------------
-# 6. WEBHOOK RUTE (Isto kao V9.4)
+# 6. WEBHOOK RUTE (V10.16 - Ispravka Update.de_json)
 # ----------------------------------------------------
 
 @app.route('/' + BOT_TOKEN, methods=['POST'])
@@ -386,12 +381,12 @@ def webhook():
 
         try:
             json_string = flask.request.get_data().decode('utf-8')
-            update = telebot.types.Update.one_json(json_string)
             
-            if update.message or update.edited_message or update.callback_query or update.channel_post:
-                bot.process_new_updates([update])
-            else:
-                logging.info(f"Primljena neobrađena poruka tipa: {json.loads(json_string).keys()}")
+            # 🚨 ISPRAVKA GREŠKE: Zamenjeno telebot.types.Update.one_json sa de_json
+            update = telebot.types.Update.de_json(json_string)
+            
+            # Procesira sve tipove update-a (message, edited_message, callback_query, itd.)
+            bot.process_new_updates([update])
 
         except json.JSONDecodeError as e:
              logging.error(f"Greška pri parsiranju JSON-a: {e}")
@@ -425,7 +420,7 @@ def set_webhook_route():
 
 
 # ----------------------------------------------------
-# 7. BOT HANDLERI (V10.14 - Stabilna DB)
+# 7. BOT HANDLERI (V10.17 - Čista DB)
 # ----------------------------------------------------
 
 @bot.message_handler(commands=['start', 'stop', 'pokreni'])
@@ -630,7 +625,7 @@ def handle_general_message(message):
 
 
 # ----------------------------------------------------
-# 8. POKRETANJE APLIKACIJE (Isto kao V9.4)
+# 8. POKRETANJE APLIKACIJE
 # ----------------------------------------------------
 
 if __name__ != '__main__':
