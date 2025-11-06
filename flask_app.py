@@ -108,7 +108,7 @@ SYSTEM_INSTRUCTION = (
     "Tvoji odgovori moraju biti kratki i fokusirani na test."
 )
 
-# V10.33: AŽURIRANA STRUKTURA FAZA (Novi Test 1, Fiksirana Robustnost)
+# V10.35: AŽURIRANA STRUKTURA FAZA (Test 2 je sada višestruki izbor)
 GAME_STAGES = {
     # Početna Provera Signala
     "START_PROVERA": {
@@ -139,26 +139,23 @@ GAME_STAGES = {
         "prompt": "Potvrdi da si spreman za prvo pitanje. Lociraće me svakog trena!"
     },
     
-    # TEST FAZA - 1: Prvo Pitanje (NOVO, TROSTRUKI IZBOR)
+    # TEST FAZA - 1: Prvo Pitanje (V10.34: SPOJENO U JEDNU PORUKU)
     "FAZA_2_TEST_1": {
         "text": [ 
-            "Pitanje:",
-            "“Šta je za tebe Sistem?”",
-            "A) Red i stabilnost",
-            "B) Laž i kontrola",
-            "C) Nužno zlo"
+            "Pitanje:\nŠta je za tebe Sistem?\n\nA) Red i stabilnost\nB) Laž i kontrola\nC) Nužno zlo"
         ],
         # 'b' je tačan odgovor
         "responses": {"b": "FAZA_2_TEST_2", "a": "END_LOCATED", "c": "END_LOCATED"} 
     },
     
-    # TEST FAZA - 2: Drugo Pitanje (OSTALO ISTO)
+    # TEST FAZA - 2: Drugo Pitanje (V10.35: NOVO PITANJE)
     "FAZA_2_TEST_2": {
         "text": [ 
             "Laž i Kontrola... Dobro.", 
-            "Sledeće pitanje. Ako algoritam zna tvoj strah… da li si još čovek?"
+            "Pitanje:\nŠta za tebe znači sloboda?\n\nA) Odsustvo granica i pravila\nB) Odluka koja nosi posledice\nC) Iluzija koju prodaju oni koji se plaše"
         ],
-        "responses": {"da": "FAZA_2_TEST_3", "jesam": "FAZA_2_TEST_3", "naravno": "FAZA_2_TEST_3"}
+        # 'b' je tačan odgovor
+        "responses": {"b": "FAZA_2_TEST_3", "a": "END_LOCATED", "c": "END_LOCATED"}
     },
     
     # TEST FAZA - 3: Poslednje Pitanje (ISPRAVLJENO NA V10.31 STRUKTURU)
@@ -428,7 +425,7 @@ def set_webhook_route():
 
 
 # ----------------------------------------------------
-# 7. BOT HANDLERI (V10.33 - Stabilna DB)
+# 7. BOT HANDLERI (V10.35 - Ažurirana logika odgovora)
 # ----------------------------------------------------
 
 @bot.message_handler(commands=['start', 'stop', 'pokreni'])
@@ -579,14 +576,16 @@ def handle_general_message(message):
         elif current_stage_key.startswith("FAZA_2_TEST") or current_stage_key == "FAZA_3_UPOZORENJE":
             korisnikove_reci = set(korisnikov_tekst_lower.replace(',', ' ').replace('?', ' ').split())
             
-            # 🚨 PROVERA ZA FAZE SA TROSTRUKIM IZBOROM (FAZA_2_TEST_1 i FAZA_2_TEST_3):
-            if current_stage_key in ["FAZA_2_TEST_1", "FAZA_2_TEST_3"]: 
+            # 🚨 PROVERA ZA FAZE SA TROSTRUKIM IZBOROM (FAZA_2_TEST_1, FAZA_2_TEST_2 i FAZA_2_TEST_3):
+            # V10.35: Dodata FAZA_2_TEST_2 u logiku za jednoslovne odgovore
+            if current_stage_key in ["FAZA_2_TEST_1", "FAZA_2_TEST_2", "FAZA_2_TEST_3"]: 
                 # Provera da li je odgovor tačno "a", "b", ili "c" (celokupan input)
                 if korisnikov_tekst_lower in current_stage["responses"]:
                     next_stage_key = current_stage["responses"][korisnikov_tekst_lower]
                     is_intent_recognized = True
             
-            # Redovna provera za ostale faze testa (FAZA_2_TEST_2 i FAZA_3_UPOZORENJE)
+            # Redovna provera za ostale faze testa (FAZA_3_UPOZORENJE)
+            # V10.35: FAZA_2_TEST_2 je uklonjen iz ove provere
             if not is_intent_recognized: 
                 for keyword, next_key in current_stage["responses"].items():
                     keyword_reci = set(keyword.split())
