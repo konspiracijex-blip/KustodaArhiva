@@ -109,7 +109,7 @@ SYSTEM_INSTRUCTION = (
     "Tvoji odgovori moraju biti kratki i fokusirani na test."
 )
 
-# V10.46: AŽURIRANA STRUKTURA FAZA (4 testa + logika evaluacije)
+# V10.50: AŽURIRANA STRUKTURA FAZA (Korigovan finalni prompt)
 GAME_STAGES = {
     # Početna Provera Signala
     "START_PROVERA": {
@@ -126,7 +126,8 @@ GAME_STAGES = {
             "Moje ime je Dimitrije. Dolazim iz 2049. Tamo, svet je digitalna totalitarna država pod vlašću **'GSA'** (Global Synthesis Authority) - ideologije koja kontroliše sve.",
             "Potvrdi da si razumeo i da možemo da nastavimo sa testom. Nema vremena za čekanje!" 
         ],
-        "responses": {"nastavi": "FAZA_2_UVOD_B", "potvrđujem": "FAZA_2_UVOD_B", "potvrdjujem": "FAZA_2_UVOD_B", "ok": "FAZA_2_UVOD_B", "razumem": "FAZA_2_UVOD_B", "da": "FAZA_2_UVOD_B", "jesam": "FAZA_2_UVOD_B"},
+        "responses": {"nastavi": "FAZA_2_UVOD_B", "potvrđujem": "FAZA_2_UVOD_B", "potvrdjujem": "FAZA_2_UVOD_B", "ok": "FAZA_2_UVOD_B", "razumem": "FAZA_2_UVOD_B", "da": "FAZA_2_UVOD_B", "jesam": "FAZA_2_UVOD_B",
+                      "razumeo": "FAZA_2_UVOD_B", "razumeo sam": "FAZA_2_UVOD_B"}, 
         "prompt": "Potvrdi da si razumeo i da možemo da nastavimo sa testom. Nema vremena za čekanje!"
     },
     
@@ -136,7 +137,8 @@ GAME_STAGES = {
             "Svrha ovog testa je da proverim tvoju svest i lojalnost. Moramo brzo.",
             "Potvrdi da si spreman za prvo pitanje. Lociraće me svakog trena!" 
         ],
-        "responses": {"nastavi": "FAZA_2_TEST_1", "potvrđujem": "FAZA_2_TEST_1", "potvrdjujem": "FAZA_2_TEST_1", "ok": "FAZA_2_TEST_1", "spreman": "FAZA_2_TEST_1", "da": "FAZA_2_TEST_1", "jesam": "FAZA_2_TEST_1"},
+        "responses": {"nastavi": "FAZA_2_TEST_1", "potvrđujem": "FAZA_2_TEST_1", "potvrdjujem": "FAZA_2_TEST_1", "ok": "FAZA_2_TEST_1", "spreman": "FAZA_2_TEST_1", "da": "FAZA_2_TEST_1", "jesam": "FAZA_2_TEST_1",
+                      "spreman sam": "FAZA_2_TEST_1", "potvrdio sam": "FAZA_2_TEST_1"}, 
         "prompt": "Potvrdi da si spreman za prvo pitanje. Lociraće me svakog trena!"
     },
     
@@ -184,9 +186,10 @@ GAME_STAGES = {
     "FAZA_3_FINAL_PROMPT": {
         "text": [ 
              "**TEST ZAVRŠEN.** Rezultati su pozitivni. Naša veza je kritična, GSA je blizu. Vreme je za finalnu odluku.",
-             "Hoćeš li da primiš saznanja o strukturi sistema koji drži ljude pod kontrolom?\n\nOdgovori:\n**SPREMAN SAM**\nili\n**NE JOŠ**"
+             "Da li si spremanda primiš saznanja o strukturi sistema koji drži ljude pod kontrolom?\n\nOdgovori:\n**DA**\nili\n**NE**" # <- V10.50: Ažuriran tekst prompta
             ],
-        "responses": {"spreman sam": "END_SHARE", "da": "END_SHARE", "ne još": "END_WAIT", "necu jos": "END_WAIT"}
+        # V10.50: Ažurirani odgovori
+        "responses": {"da": "END_SHARE", "ne": "END_WAIT"}
     }
 }
 
@@ -440,7 +443,7 @@ def set_webhook_route():
 
 
 # ----------------------------------------------------
-# 7. BOT HANDLERI (V10.48 - Logika evaluacije, 4 testa i brisanje stanja)
+# 7. BOT HANDLERI (V10.50 - Logika evaluacije, 4 testa i brisanje stanja)
 # ----------------------------------------------------
 
 @bot.message_handler(commands=['start', 'stop', 'pokreni'])
@@ -577,6 +580,8 @@ def handle_general_message(message):
         next_stage_key = None
         is_intent_recognized = False
         korisnikov_tekst_lower = korisnikov_tekst.lower().strip() 
+        # V10.49: Definisanje reci za tokenizovanu proveru, ukljucujuci tacku, zarez i upitnik
+        korisnikove_reci = set(korisnikov_tekst_lower.replace(',', ' ').replace('?', ' ').replace('.', ' ').split())
         
         # 1. KORAK: PROVERA KLJUČNIH REČI I TRANZICIJA 
         
@@ -591,16 +596,19 @@ def handle_general_message(message):
                 next_stage_key = "FAZA_2_UVOD_A"
                 is_intent_recognized = True
         
-        # Provera TRANZITNIH FAZA (A na B, B na TEST_1)
+        # Provera TRANZITNIH FAZA (A na B, B na TEST_1) - FIX V10.49: Koristimo tokenizaciju za robustno prepoznavanje
         elif current_stage_key in ["FAZA_2_UVOD_A", "FAZA_2_UVOD_B"]:
-            # Proverava da li tekst sadrži bilo koju od ključnih reči za prelazak
-            if any(k in korisnikov_tekst_lower for k in current_stage["responses"].keys()):
-                next_stage_key = list(current_stage["responses"].values())[0] 
-                is_intent_recognized = True
+            # V10.49: Koristimo token-based (issubset) logiku da prepoznamo fraze poput "razumeo sam"
+            for keyword, next_key in current_stage["responses"].items():
+                keyword_reci = set(keyword.split())
+                # Proverava da li su sve reči ključne fraze sadržane u korisnikovom tekstu
+                if keyword_reci.issubset(korisnikove_reci): 
+                    next_stage_key = next_key 
+                    is_intent_recognized = True
+                    break
         
         # Provera TEST FAZA (TEST_1, TEST_2, TEST_3, TEST_4, FINAL_PROMPT)
         elif current_stage_key.startswith("FAZA_2_TEST") or current_stage_key == "FAZA_3_FINAL_PROMPT":
-            korisnikove_reci = set(korisnikov_tekst_lower.replace(',', ' ').replace('?', ' ').split())
             
             # 🚨 PROVERA ZA FAZE SA TROSTRUKIM IZBOROM (TESTOVI 1, 2, 3):
             if current_stage_key in ["FAZA_2_TEST_1", "FAZA_2_TEST_2", "FAZA_2_TEST_3"]: 
@@ -628,12 +636,12 @@ def handle_general_message(message):
                     else:
                         next_stage_key = "END_FAILED_TEST" # Nije prošao, kraj igre
 
-            # Redovna provera za fazu FAZA_3_FINAL_PROMPT
+            # Redovna provera za fazu FAZA_3_FINAL_PROMPT - FIX V10.50: Vracanje na jednostavno token-based (da/ne)
             elif current_stage_key == "FAZA_3_FINAL_PROMPT":
                 for keyword, next_key in current_stage["responses"].items():
-                    keyword_reci = set(keyword.split())
+                    # Zbog jednostavnih DA/NE odgovora u GAME_STAGES, dovoljno je proveriti da li je odgovor podskup reci.
+                    keyword_reci = set(keyword.split()) 
                     if keyword_reci.issubset(korisnikove_reci): 
-                        # Logika finalnog ishoda je već određena ključem
                         next_stage_key = next_key 
                         is_intent_recognized = True
                         break
