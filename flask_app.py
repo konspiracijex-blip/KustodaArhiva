@@ -442,7 +442,7 @@ def set_webhook_route():
 
 
 # ----------------------------------------------------
-# 7. BOT HANDLERI (V10.55 - Obogaćeni uvodni tekst)
+# 7. BOT HANDLERI (V10.56 - Silent Exit nakon brisanja stanja)
 # ----------------------------------------------------
 
 @bot.message_handler(commands=['start', 'stop', 'pokreni'])
@@ -552,10 +552,22 @@ def handle_general_message(message):
 
         player = session.query(PlayerState).filter_by(chat_id=chat_id).first()
 
-        # KRITIČNA PROVERA: Ako ne postoji igrač (stanje je obrisano)
-        if not player or player.current_riddle.startswith("END_"):
-            # V10.48: Uklanjanje eksplicitnog poziva na /start
+        # V10.56 FIX: Ako igrač ne postoji (stanje obrisano nakon završetka igre),
+        # bot bi trebao da prestane da odgovara na generičke poruke (Silent Exit).
+        if not player:
+            # Igracu je već poslata poruka o prekidu veze. Sada ignorišemo dalji input.
+            return # Silent exit, bez ponavljanja poruke o prekidu veze
+
+        # Ako igrač postoji ali je u 'END_' fazi (trebalo je biti obrisano, ali kao sigurnost)
+        if player.current_riddle.startswith("END_"):
             send_msg(message, "Veza je prekinuta. Linija je sada neaktivna.") 
+            return
+            
+        current_stage_key = player.current_riddle
+        current_stage = GAME_STAGES.get(current_stage_key)
+        
+        if not current_stage:
+            send_msg(message, "[GREŠKA: NEPOZNATA FAZA IGRE] Pokreni /start.")
             return
 
         # V10.8: Provera vremenskog limita
@@ -569,13 +581,6 @@ def handle_general_message(message):
             send_msg(message, get_epilogue_message("END_LOCATED"))
             return
             
-        current_stage_key = player.current_riddle
-        current_stage = GAME_STAGES.get(current_stage_key)
-        
-        if not current_stage:
-            send_msg(message, "[GREŠKA: NEPOZNATA FAZA IGRE] Pokreni /start.")
-            return
-
         next_stage_key = None
         is_intent_recognized = False
         korisnikov_tekst_lower = korisnikov_tekst.lower().strip() 
