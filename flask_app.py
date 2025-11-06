@@ -108,7 +108,7 @@ SYSTEM_INSTRUCTION = (
     "Tvoji odgovori moraju biti kratki i fokusirani na test."
 )
 
-# V10.30: AŽURIRANA STRUKTURA FAZA
+# V10.31: AŽURIRANA STRUKTURA FAZA (DODATA REČ "DA" U UVODNE FAZE)
 GAME_STAGES = {
     # Početna Provera Signala
     "START_PROVERA": {
@@ -124,7 +124,8 @@ GAME_STAGES = {
             "**SIGNAL STABILAN.** Odlično. Slušaj, nemam mnogo vremena da me ne lociraju. Moramo biti brzi.", 
             "Moje ime je Dimitrije. Dolazim iz 2049. Tamo, svet je digitalna totalitarna država pod vlašću **'GSA'** (Global Synthesis Authority) - ideologije koja kontroliše sve."
         ],
-        "responses": {"nastavi": "FAZA_2_UVOD_B", "potvrđujem": "FAZA_2_UVOD_B", "ok": "FAZA_2_UVOD_B", "razumem": "FAZA_2_UVOD_B"},
+        # V10.31 FIX: Dodata reč "da"
+        "responses": {"nastavi": "FAZA_2_UVOD_B", "potvrđujem": "FAZA_2_UVOD_B", "ok": "FAZA_2_UVOD_B", "razumem": "FAZA_2_UVOD_B", "da": "FAZA_2_UVOD_B"},
         "prompt": "Potvrdi da si razumeo i da možemo da nastavimo sa testom. Nema vremena za čekanje!"
     },
     
@@ -133,7 +134,8 @@ GAME_STAGES = {
         "text": [
             "Svrha ovog testa je da proverim tvoju svest i lojalnost. Moramo brzo." 
         ],
-        "responses": {"nastavi": "FAZA_2_TEST_1", "potvrđujem": "FAZA_2_TEST_1", "ok": "FAZA_2_TEST_1", "spreman": "FAZA_2_TEST_1"},
+        # V10.31 FIX: Dodata reč "da"
+        "responses": {"nastavi": "FAZA_2_TEST_1", "potvrđujem": "FAZA_2_TEST_1", "ok": "FAZA_2_TEST_1", "spreman": "FAZA_2_TEST_1", "da": "FAZA_2_TEST_1"},
         "prompt": "Potvrdi da si spreman za prvo pitanje. Lociraće me svakog trena!"
     },
     
@@ -421,7 +423,7 @@ def set_webhook_route():
 
 
 # ----------------------------------------------------
-# 7. BOT HANDLERI (V10.30: A/B/C i sekvenciranje)
+# 7. BOT HANDLERI (V10.31: Fix za uvode)
 # ----------------------------------------------------
 
 @bot.message_handler(commands=['start', 'stop', 'pokreni'])
@@ -562,8 +564,12 @@ def handle_general_message(message):
                 is_intent_recognized = True
         
         # Provera TRANZITNIH FAZA (A na B, B na TEST_1)
+        # V10.31: Zbog AI logike, ove fraze se nalaze u celom tekstu, npr. 'spreman sam' ili samo 'da'
         elif current_stage_key in ["FAZA_2_UVOD_A", "FAZA_2_UVOD_B"]:
             if any(k in korisnikov_tekst_lower for k in current_stage["responses"].keys()):
+                
+                # Dodatni uslov da bi se izbeglo parcijalno prepoznavanje u dugačkim rečenicama (iako neophodan samo za prva 2 testa)
+                # Za ovu fazu, 'da' ili 'spreman' je dovoljno
                 next_stage_key = list(current_stage["responses"].values())[0] 
                 is_intent_recognized = True
         
