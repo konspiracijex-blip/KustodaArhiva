@@ -28,7 +28,7 @@ if not BOT_TOKEN:
     logging.critical("KRITIČNA GREŠKA: BOT_TOKEN nije postavljen.")
     BOT_TOKEN = "DUMMY:TOKEN_FAIL" 
 
-WEBHOOK_URL = os.environ.get('RENDER_EXTERNAL_URL', 'https://placeholder.com/')
+WEBHOOK_URL = os.environ.get('RENDER_EXTERNAL_URL', '[https://placeholder.com/](https://placeholder.com/)')
 
 try:
     bot = telebot.TeleBot(BOT_TOKEN, threaded=False)
@@ -217,23 +217,18 @@ GLITCH_CHARS = "$#%&!@*^"
 def is_game_active(): return GAME_ACTIVE 
 
 def generate_glitch_text(length=30, max_lines=4):
-    """Generiše nasumičan tekst koji simulira grešku/glitch. V9.9"""
+    """Generiše nasumičan tekst koji simulira grešku/glitch. V10.58: Korišćenje Code Block formata za sigurnost."""
     num_lines = random.randint(2, max_lines) 
     glitch_parts = []
     
     for _ in range(num_lines):
         line_length = random.randint(10, length)
         line = "".join(random.choice(GLITCH_CHARS) for _ in range(line_length))
-        
-        # Dinamičko dodavanje formata
-        if random.random() < 0.5:
-             line = f"##{line}##"
-        elif random.random() < 0.2:
-             line = f"[{line}]"
-        
         glitch_parts.append(line)
-        
-    return "\n".join(glitch_parts)
+    
+    # V10.58 FIX: Zamotavanje u Code Block (```) da bi se izbegle Markdown greške
+    glitch_text = "\n".join(glitch_parts)
+    return f"```\n{glitch_text}\n```"
 
 def get_required_phrase(current_stage_key):
     # V10.7: Sada proveravamo i 'prompt' za tranzitne faze
@@ -442,7 +437,7 @@ def set_webhook_route():
 
 
 # ----------------------------------------------------
-# 7. BOT HANDLERI (V10.57 - Korekcija logike prelaska faze)
+# 7. BOT HANDLERI (V10.58 - Rešavanje Markdown greške u Glitch tekstu)
 # ----------------------------------------------------
 
 @bot.message_handler(commands=['start', 'stop', 'pokreni'])
@@ -460,11 +455,10 @@ def handle_commands(message):
             send_msg(message, "⚠️ UPOZORENJE: Trajno stanje (DB) nije dostupno. Igrate u test modu bez pamćenja napretka.")
             if message.text.lower() in ['/start', 'start']:
                 start_message_raw = GAME_STAGES["START_PROVERA"]["text"][0]
-                glitch_lines = generate_glitch_text(length=30, max_lines=4).strip().split('\n')
+                # V10.58: Korišćenje Code Blocka
+                glitch_block = generate_glitch_text(length=30, max_lines=4)
                 
-                messages_to_send = []
-                messages_to_send.extend(glitch_lines)
-                messages_to_send.append(start_message_raw)
+                messages_to_send = [glitch_block, start_message_raw]
                 
                 send_msg(message, messages_to_send)
             return
@@ -503,13 +497,11 @@ def handle_commands(message):
 
             session.commit()
             
-            # V10.7: Slanje samo Glitcha i Provere Signala (DB verzija)
+            # V10.58 FIX: Slanje Glitcha kao Code Blocka, zatim Provere Signala
             start_message_raw = GAME_STAGES["START_PROVERA"]["text"][0]
-            glitch_lines = generate_glitch_text(length=30, max_lines=4).strip().split('\n')
+            glitch_block = generate_glitch_text(length=30, max_lines=4)
             
-            messages_to_send = []
-            messages_to_send.extend(glitch_lines)
-            messages_to_send.append(start_message_raw)
+            messages_to_send = [glitch_block, start_message_raw]
             
             send_msg(message, messages_to_send)
 
